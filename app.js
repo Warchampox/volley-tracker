@@ -421,30 +421,14 @@ function trainActiveHTML() {
         const t = ex?.type || "weight";
         const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
-        let target = "";
-        if (e.target) {
-          // El target por defecto (nunca editado) no aporta información: se oculta.
-          const tg = e.target;
-          const isDefault = t === "time"
-            ? num(tg.sets) === 3 && num(tg.seconds ?? 30) === 30
-            : num(tg.sets) === 3 && num(tg.reps) === 8 && num(tg.weight) === 0;
-          if (!isDefault) {
-            target = t === "time"
-              ? `obj. ${tg.sets}×${tg.seconds ?? 30}s`
-              : `obj. ${tg.sets}×${tg.reps}${num(tg.weight) > 0 ? ` @ ${tg.weight}kg` : ""}`;
-          }
-        }
         return `<div class="vt-card">
           <div class="vt-card-top">
             <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              ${target ? `<span class="vt-muted-sm">${target}</span>` : ""}
-              <span class="vt-rest-mini vt-muted-sm">desc.
-                <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
-                  value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
-                  data-i="ex-rest" data-ex="${exIdx}"> s
-              </span>
-            </div>
+            <span class="vt-rest-mini vt-muted-sm">Descanso
+              <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
+                data-i="ex-rest" data-ex="${exIdx}"> s
+            </span>
           </div>
           ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
           <div class="vt-sets">
