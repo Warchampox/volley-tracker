@@ -193,9 +193,11 @@ function fmtSet(type, s) {
 let rest = null; // { ends, total, timer }
 let audioCtx = null;
 
-function startRest() {
+function startRest(seconds) {
   stopRest();
-  const secs = Math.round(num(settings.restSeconds));
+  // Prioridad: descanso del ejercicio (si es > 0), si no el global de Ajustes.
+  const own = Math.round(num(seconds));
+  const secs = own > 0 ? own : Math.round(num(settings.restSeconds));
   if (secs <= 0) return;
   rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250) };
   updateRestBar();
@@ -358,6 +360,7 @@ function editorHTML() {
         else fields = `
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
           ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}`;
+        fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
         return `<div class="vt-card">
           <div class="vt-card-top">
             <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
@@ -407,7 +410,10 @@ function trainActiveHTML() {
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
         <h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>
       </div>
-      <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+      <div style="display:flex;gap:8px">
+        <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
+        <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+      </div>
     </header>
     <div class="vt-list">
       ${s.exercises.map((e, exIdx) => {
@@ -417,17 +423,32 @@ function trainActiveHTML() {
         const prior = priorStats(e.exerciseId);
         let target = "";
         if (e.target) {
-          target = t === "time"
-            ? `obj. ${e.target.sets}×${e.target.seconds ?? 30}s`
-            : `obj. ${e.target.sets}×${e.target.reps}${num(e.target.weight) > 0 ? ` @ ${e.target.weight}kg` : ""}`;
+          // El target por defecto (nunca editado) no aporta información: se oculta.
+          const tg = e.target;
+          const isDefault = t === "time"
+            ? num(tg.sets) === 3 && num(tg.seconds ?? 30) === 30
+            : num(tg.sets) === 3 && num(tg.reps) === 8 && num(tg.weight) === 0;
+          if (!isDefault) {
+            target = t === "time"
+              ? `obj. ${tg.sets}×${tg.seconds ?? 30}s`
+              : `obj. ${tg.sets}×${tg.reps}${num(tg.weight) > 0 ? ` @ ${tg.weight}kg` : ""}`;
+          }
         }
         return `<div class="vt-card">
           <div class="vt-card-top">
             <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
-            ${target ? `<span class="vt-muted-sm">${target}</span>` : ""}
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              ${target ? `<span class="vt-muted-sm">${target}</span>` : ""}
+              <span class="vt-rest-mini vt-muted-sm">desc.
+                <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                  value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
+                  data-i="ex-rest" data-ex="${exIdx}"> s
+              </span>
+            </div>
           </div>
           ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
           <div class="vt-sets">
+            ${e.sets.length ? setCapsHTML(t) : ""}
             ${e.sets.map((st, setIdx) => setRowHTML(t, st, exIdx, setIdx, prior)).join("")}
           </div>
           <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
@@ -440,6 +461,39 @@ function trainActiveHTML() {
       <button class="vt-btn-primary vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
     </div>`;
 }
+
+// Encabezados de columnas sobre la primera serie, alineados con los inputs
+// replicando la estructura de la fila (check 30px + número 16px + inputs 58px).
+function setCapsHTML(type) {
+  const cap = (t) => `<span class="vt-cap">${t}</span>`;
+  const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
+  let inner;
+  if (type === "time") inner = cap("seg");
+  else if (type === "bodyweight") inner = cap("reps") + gap("reps") + cap("lastre kg") + gap("+kg");
+  else inner = cap("kg") + gap("×") + cap("reps");
+  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-set-num"></span>${inner}</div>`;
+}
+
+// "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
+function fmtClock(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+}
+
+// "47 min" o "1 h 12 min" para el historial.
+function fmtDurationMin(sec) {
+  const min = Math.max(1, Math.round(num(sec) / 60));
+  return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+}
+
+// Reloj único y global: escribe directo en el span para no re-dibujar (patrón #live-vol).
+setInterval(() => {
+  const el = document.getElementById("live-clock");
+  if (!el || !ui.activeSession) return;
+  el.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
+}, 1000);
 
 function setRowHTML(type, st, exIdx, setIdx, prior) {
   const pr = isPR(type, st, prior);
@@ -492,7 +546,7 @@ function historyHTML() {
           <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
             <div>
               <h3>${esc(s.routineName)}</h3>
-              <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.</p>
+              <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
             </div>
             ${icon(open ? "chevUp" : "chevDown", 18)}
           </button>
@@ -630,7 +684,7 @@ function settingsHTML() {
     </header>
     <div class="vt-card">
       <div class="vt-settings-row">
-        <div class="vt-settings-label">Descanso entre series<small>Segundos del cronómetro al marcar una serie</small></div>
+        <div class="vt-settings-label">Descanso entre series<small>Se usa cuando el ejercicio no define el suyo</small></div>
         <input type="number" inputmode="numeric" class="vt-input vt-mono" value="${num(settings.restSeconds)}" min="0" step="15" data-i="set-rest">
       </div>
       <div class="vt-settings-row">
@@ -786,6 +840,7 @@ function buildSessionFromRoutine(r) {
       return {
         exerciseId: re.exerciseId,
         target,
+        restSeconds: num(re.restSeconds) || 0,
         sets: Array.from({ length: n }, () => defaultSet(t, target, null)),
       };
     }),
@@ -810,6 +865,7 @@ function finishSession() {
   }
   const cleaned = {
     ...s,
+    durationSec: Math.round((Date.now() - new Date(s.date).getTime()) / 1000),
     exercises: s.exercises
       .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done) }))
       .filter((e) => e.sets.length > 0),
@@ -998,9 +1054,10 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "set-check": {
-      const st = ui.activeSession.exercises[+el.dataset.ex].sets[+el.dataset.set];
+      const ex = ui.activeSession.exercises[+el.dataset.ex];
+      const st = ex.sets[+el.dataset.set];
       st.done = !st.done;
-      if (st.done) startRest();
+      if (st.done) startRest(ex.restSeconds);
       render();
       break;
     }
@@ -1126,6 +1183,12 @@ document.addEventListener("input", (e) => {
       settings.restSeconds = Math.max(0, Math.round(num(el.value)));
       persistSettings();
       break;
+    case "ex-rest": {
+      // Solo afecta la sesión en curso, no la rutina guardada.
+      const ex = ui.activeSession?.exercises[+el.dataset.ex];
+      if (ex) ex.restSeconds = Math.max(0, Math.round(num(el.value)));
+      break;
+    }
   }
 });
 
