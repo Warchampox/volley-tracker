@@ -153,6 +153,7 @@ function priorStats(exId) {
     for (const e of s.exercises)
       if (e.exerciseId === exId)
         for (const st of e.sets) {
+          if (st.warmup) continue; // los máximos históricos solo consideran series efectivas
           maxW = Math.max(maxW, num(st.weight));
           maxR = Math.max(maxR, num(st.reps));
           maxS = Math.max(maxS, num(st.seconds));
@@ -163,7 +164,7 @@ function priorStats(exId) {
 
 // PR según tipo: peso máx / lastre máx (o reps máx si nunca hubo lastre) / tiempo máx.
 function isPR(type, st, prior) {
-  if (!st.done) return false;
+  if (!st.done || st.warmup) return false;
   if (type === "time") return num(st.seconds) > 0 && num(st.seconds) > prior.maxS;
   if (type === "bodyweight") {
     if (num(st.weight) > 0) return num(st.weight) > prior.maxW;
@@ -181,11 +182,12 @@ function lastSetsFor(exId) {
 }
 
 function fmtSet(type, s) {
+  const w = s.warmup ? "c" : "";
   const rpe = s.rpe ? ` @${s.rpe}` : "";
-  if (type === "time") return `${num(s.seconds)}s${rpe}`;
+  if (type === "time") return `${w}${num(s.seconds)}s${rpe}`;
   if (type === "bodyweight")
-    return num(s.weight) > 0 ? `+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${num(s.reps)}${rpe}`;
-  return `${num(s.weight)}×${num(s.reps)}${rpe}`;
+    return num(s.weight) > 0 ? `${w}+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
+  return `${w}${num(s.weight)}×${num(s.reps)}${rpe}`;
 }
 
 /* -------------------------- Cronómetro de descanso ------------------------------- */
@@ -433,7 +435,11 @@ function trainActiveHTML() {
           ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
           <div class="vt-sets">
             ${e.sets.length ? setCapsHTML(t) : ""}
-            ${e.sets.map((st, setIdx) => setRowHTML(t, st, exIdx, setIdx, prior)).join("")}
+            ${(() => {
+              let n = 0; // las efectivas se numeran 1..n; las de calentamiento muestran "C"
+              return e.sets.map((st, setIdx) =>
+                setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n))).join("");
+            })()}
           </div>
           <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
         </div>`;
@@ -455,7 +461,7 @@ function setCapsHTML(type) {
   if (type === "time") inner = cap("seg");
   else if (type === "bodyweight") inner = cap("reps") + gap("reps") + cap("lastre kg") + gap("+kg");
   else inner = cap("kg") + gap("×") + cap("reps");
-  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-set-num"></span>${inner}</div>`;
+  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
 }
 
 // "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
@@ -479,7 +485,7 @@ setInterval(() => {
   el.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
 }, 1000);
 
-function setRowHTML(type, st, exIdx, setIdx, prior) {
+function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   const pr = isPR(type, st, prior);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
   const attrs = (f) => `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}"`;
@@ -503,9 +509,10 @@ function setRowHTML(type, st, exIdx, setIdx, prior) {
   }
 
   return `
-    <div class="vt-set-row ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+    <div class="vt-set-row ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
       <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
-      <span class="vt-set-num">${setIdx + 1}</span>
+      <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
+      <span class="vt-set-num">${label}</span>
       ${fields}
       ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
       <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE y nota" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
@@ -583,7 +590,12 @@ function progressData(exId, metric) {
     if (!e || e.sets.length === 0) return;
     let v;
     if (metric === "volume") v = Math.round(e.sets.reduce((a, st) => a + setVol(t, st), 0));
-    else v = Math.max(...e.sets.map((st) => num(st[metric])));
+    else {
+      // Los máximos se calculan solo con series efectivas; el volumen incluye todo.
+      const eff = e.sets.filter((st) => !st.warmup);
+      if (!eff.length) return;
+      v = Math.max(...eff.map((st) => num(st[metric])));
+    }
     pts.push({ date: fmtDateShort(s.date), v });
   });
   return pts;
@@ -801,10 +813,12 @@ function emptyHTML(title, detail, action) {
 /* -------------------------------- Lógica de sesión -------------------------------- */
 
 function defaultSet(type, target, prevSet) {
+  // Si la serie anterior es calentamiento, la nueva nace calentamiento (otro aproche).
+  const warmup = !!(prevSet && prevSet.warmup);
   if (type === "time")
-    return { done: false, seconds: num(prevSet?.seconds) || num(target?.seconds) || 30, rpe: null, note: "" };
+    return { done: false, warmup, seconds: num(prevSet?.seconds) || num(target?.seconds) || 30, rpe: null, note: "" };
   return {
-    done: false,
+    done: false, warmup,
     reps: num(prevSet?.reps) || num(target?.reps) || 8,
     weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
     rpe: null, note: "",
@@ -1042,6 +1056,12 @@ document.addEventListener("click", (e) => {
       const st = ex.sets[+el.dataset.set];
       st.done = !st.done;
       if (st.done) startRest(ex.restSeconds);
+      render();
+      break;
+    }
+    case "set-warmup": {
+      const st = ui.activeSession.exercises[+el.dataset.ex].sets[+el.dataset.set];
+      st.warmup = !st.warmup;
       render();
       break;
     }
