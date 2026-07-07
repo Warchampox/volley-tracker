@@ -1219,3 +1219,11 @@ window.addEventListener("beforeunload", (e) => {
 });
 
 render();
+
+// Service worker: permite abrir la app sin conexión (los datos ya viven en localStorage).
+// Si falla (p. ej. abriendo el archivo directo con file://), la app sigue normal.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((err) => console.warn("SW no registrado:", err));
+  });
+}
