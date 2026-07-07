@@ -126,6 +126,8 @@ const PATHS = {
   back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
   note: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  playBtn: '<polygon points="6 4 20 12 6 20 6 4"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
 };
 
@@ -407,7 +409,7 @@ function trainActiveHTML() {
   const vol = sessionVolume(s, true);
 
   return `
-    <header class="vt-header">
+    <header class="vt-header vt-header-sticky">
       <div>
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
         <h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>
@@ -478,11 +480,35 @@ function fmtDurationMin(sec) {
   return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
 }
 
-// Reloj único y global: escribe directo en el span para no re-dibujar (patrón #live-vol).
+// Cronómetro inline de una serie tipo "time". Fuera de `ui` para no forzar re-render.
+// Solo una serie puede correr a la vez en toda la app.
+let runningTimer = null; // { exIdx, setIdx, startedAt, baseValue }
+
+const runningValue = () =>
+  runningTimer ? runningTimer.baseValue + Math.floor((Date.now() - runningTimer.startedAt) / 1000) : 0;
+
+// Detiene el cronómetro dejando el valor acumulado en la serie (editable a mano después).
+function stopSetTimer() {
+  if (!runningTimer) return;
+  const st = ui.activeSession?.exercises[runningTimer.exIdx]?.sets[runningTimer.setIdx];
+  if (st) st.seconds = runningValue();
+  runningTimer = null;
+}
+
+// Tick único y global: escribe directo en el DOM por id/selector, nunca render() (patrón #live-vol).
 setInterval(() => {
-  const el = document.getElementById("live-clock");
-  if (!el || !ui.activeSession) return;
-  el.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
+  const clock = document.getElementById("live-clock");
+  if (clock && ui.activeSession)
+    clock.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
+
+  if (!runningTimer) return;
+  const st = ui.activeSession?.exercises[runningTimer.exIdx]?.sets[runningTimer.setIdx];
+  if (!st) { runningTimer = null; return; }
+  st.seconds = runningValue();
+  const input = document.querySelector(
+    `input[data-i="set"][data-f="seconds"][data-ex="${runningTimer.exIdx}"][data-set="${runningTimer.setIdx}"]`);
+  // Si el input no está en el DOM (otra pestaña) no pasa nada; el valor sigue acumulando en el estado.
+  if (input && document.activeElement !== input) input.value = st.seconds;
 }, 1000);
 
 function setRowHTML(type, st, exIdx, setIdx, prior, label) {
@@ -492,9 +518,12 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
 
   let fields = "";
   if (type === "time") {
+    const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.seconds)}" ${attrs("seconds")}>
-      <span class="vt-x">seg</span>`;
+      <span class="vt-x">seg</span>
+      <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
+        aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
   } else if (type === "bodyweight") {
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.reps)}" ${attrs("reps")}>
@@ -846,6 +875,7 @@ function buildSessionFromRoutine(r) {
 }
 
 function finishSession() {
+  stopSetTimer(); // conserva lo acumulado de una serie cronometrándose
   const s = ui.activeSession;
   const total = s.exercises.reduce((a, e) => a + e.sets.length, 0);
   const done = s.exercises.reduce((a, e) => a + e.sets.filter((st) => st.done).length, 0);
@@ -955,6 +985,7 @@ document.addEventListener("click", (e) => {
 
   switch (a) {
     case "tab":
+      stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
       ui.tab = el.dataset.tab;
       ui.editingRoutine = null;
       ui.manageExercises = false;
@@ -1046,16 +1077,38 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "set-del": {
-      const ex = ui.activeSession.exercises[+el.dataset.ex];
-      ex.sets.splice(+el.dataset.set, 1);
+      const exI = +el.dataset.ex, setI = +el.dataset.set;
+      // Mantiene el cronómetro apuntando a la serie correcta si cambian los índices.
+      if (runningTimer && runningTimer.exIdx === exI) {
+        if (runningTimer.setIdx === setI) runningTimer = null;
+        else if (runningTimer.setIdx > setI) runningTimer.setIdx--;
+      }
+      ui.activeSession.exercises[exI].sets.splice(setI, 1);
       render();
       break;
     }
     case "set-check": {
-      const ex = ui.activeSession.exercises[+el.dataset.ex];
-      const st = ex.sets[+el.dataset.set];
+      const exI = +el.dataset.ex, setI = +el.dataset.set;
+      const ex = ui.activeSession.exercises[exI];
+      const st = ex.sets[setI];
       st.done = !st.done;
-      if (st.done) startRest(ex.restSeconds);
+      if (st.done) {
+        // Si esta misma serie estaba cronometrándose, se detiene y queda su valor.
+        if (runningTimer && runningTimer.exIdx === exI && runningTimer.setIdx === setI) stopSetTimer();
+        startRest(ex.restSeconds);
+      }
+      render();
+      break;
+    }
+    case "set-timer": {
+      const exI = +el.dataset.ex, setI = +el.dataset.set;
+      if (runningTimer && runningTimer.exIdx === exI && runningTimer.setIdx === setI) {
+        stopSetTimer();
+      } else {
+        stopSetTimer(); // solo una serie corriendo a la vez: la anterior se detiene sola
+        const st = ui.activeSession.exercises[exI].sets[setI];
+        runningTimer = { exIdx: exI, setIdx: setI, startedAt: Date.now(), baseValue: num(st.seconds) };
+      }
       render();
       break;
     }
@@ -1073,6 +1126,7 @@ document.addEventListener("click", (e) => {
     }
     case "session-discard":
       if (confirm("¿Descartar la sesión completa? No se guardará nada.")) {
+        runningTimer = null;
         ui.activeSession = null; ui.openNotes.clear(); stopRest(); render();
       }
       break;

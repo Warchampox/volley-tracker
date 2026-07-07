@@ -60,6 +60,18 @@ body {
   margin: 0;
   text-transform: uppercase;
 }
+/* Cabecera fija de la sesión activa: reloj y volumen siempre visibles al hacer scroll.
+   Sobre las tarjetas (y el footer sticky z=20), bajo nav (30), restbar (40) y modales (50). */
+.vt-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  margin: -20px -16px 18px;
+  padding: 16px 16px 10px;
+}
+
 .vt-header-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; text-transform: uppercase; margin: 0; }
 .vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; text-transform: uppercase; margin: 0; }
 
@@ -219,6 +231,17 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .vt-warmup.is-on { color: var(--amber); border-color: var(--amber); }
+
+.vt-timer-btn {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.vt-timer-btn.is-running { color: var(--amber); border-color: var(--amber); background: rgba(232, 163, 61, 0.12); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva */
 .vt-set-row.is-warmup.is-done { background: rgba(143, 160, 172, 0.08); border-color: rgba(143, 160, 172, 0.35); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
