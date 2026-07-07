@@ -355,7 +355,7 @@ function routinesHTML() {
 
   return `
     <header class="vt-header">
-      <div><p class="vt-eyebrow">Set 01 · Preparación</p><h1>Rutinas</h1></div>
+      ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
       <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
     </header>${list}`;
 }
@@ -442,7 +442,7 @@ function trainIdleHTML() {
         </button>`).join("")}</div>`;
   return `
     <header class="vt-header">
-      <div><p class="vt-eyebrow">Set 02 · Ejecución</p><h1>Entrenar</h1></div>
+      ${tabHeaderHTML("Set 02 · Ejecución", "Entrenar")}
     </header>${list}
     <button class="vt-btn-outline vt-flex-center" data-a="train-free">${icon("plus", 18)} Sesión libre</button>`;
 }
@@ -455,10 +455,10 @@ function trainActiveHTML() {
 
   return `
     <header class="vt-header vt-header-sticky">
-      <div>
+      <div class="vt-header-brand">${logoHTML()}<div>
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
         <h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>
-      </div>
+      </div></div>
       <div style="display:flex;gap:8px">
         <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
         <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
@@ -632,7 +632,7 @@ function historyHTML() {
 
   return `
     <header class="vt-header">
-      <div><p class="vt-eyebrow">Set 03 · Registro</p><h1>Historial</h1></div>
+      ${tabHeaderHTML("Set 03 · Registro", "Historial")}
     </header>${list}`;
 }
 
@@ -680,7 +680,7 @@ const metricUnit = (m) => (m === "seconds" ? "s" : m === "reps" ? "reps" : "kg")
 function progressHTML() {
   const ids = exercisesWithHistory();
   const head = `<header class="vt-header">
-    <div><p class="vt-eyebrow">Set 04 · Análisis</p><h1>Progreso</h1></div>
+    ${tabHeaderHTML("Set 04 · Análisis", "Progreso")}
   </header>`;
 
   if (ids.length === 0)
@@ -750,7 +750,7 @@ function mountChart() {
 function settingsHTML() {
   return `
     <header class="vt-header">
-      <div><p class="vt-eyebrow">Set 05 · Configuración</p><h1>Ajustes</h1></div>
+      ${tabHeaderHTML("Set 05 · Configuración", "Ajustes")}
     </header>
     <div class="vt-card">
       <div class="vt-settings-row">
@@ -886,6 +886,17 @@ function pickerListHTML() {
 
 function emptyHTML(title, detail, action) {
   return `<div class="vt-empty"><h3>${title}</h3><p>${detail}</p>${action}</div>`;
+}
+
+// Logo del club (opcional): si icons/club-logo.png no existe, se oculta solo.
+const logoHTML = () =>
+  `<img class="vt-club-logo" src="icons/club-logo.png" alt="" onerror="this.style.display='none'">`;
+
+// Encabezado de pestaña con espacio para el logo.
+function tabHeaderHTML(eyebrow, title) {
+  return `<div class="vt-header-brand">${logoHTML()}<div>
+    <p class="vt-eyebrow">${eyebrow}</p><h1>${title}</h1>
+  </div></div>`;
 }
 
 /* -------------------------------- Lógica de sesión -------------------------------- */

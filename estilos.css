@@ -1,15 +1,15 @@
 /* ============================ Volley Tracker ============================ */
 
 :root {
-  --bg: #12181F;
-  --surface: #1B232C;
-  --surface-2: #222B35;
-  --line: #2C3742;
-  --text: #F2EFE9;
+  --bg: #0B1220;
+  --surface: #121B2E;
+  --surface-2: #182338;
+  --line: #26334A;
+  --text: #FFFFFF;
   --text-dim: #8FA0AC;
-  --amber: #E8A33D;
-  --blue: #5A8DAE;
-  --green: #6FAE7C;
+  --amber: #E8A33D; /* reservado para PR */
+  --blue: #2F6FED;  /* acento principal de marca (U. de Chile) */
+  --green: #6FAE7C; /* reservado para serie completada */
   --red: #C1594F;
 }
 
@@ -44,12 +44,14 @@ body {
   justify-content: space-between;
   margin-bottom: 18px;
 }
+.vt-header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vt-club-logo { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .vt-eyebrow {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--amber);
+  color: var(--blue);
   margin: 0 0 2px;
 }
 .vt-header h1 {
@@ -86,7 +88,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 6px 12px;
-  color: var(--amber);
+  color: var(--blue);
   white-space: nowrap;
 }
 .vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -111,8 +113,8 @@ body {
 .vt-danger:hover { color: var(--red) !important; }
 
 .vt-btn-primary {
-  background: var(--amber);
-  color: #17110A;
+  background: var(--blue);
+  color: #FFFFFF;
   border: none;
   font-family: inherit;
   font-weight: 600;
@@ -145,7 +147,7 @@ body {
   align-items: center;
   gap: 6px;
 }
-.vt-btn-outline:hover { border-color: var(--amber); color: var(--amber); }
+.vt-btn-outline:hover { border-color: var(--blue); color: var(--blue); }
 .vt-flex { display: inline-flex; align-items: center; gap: 6px; }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }
@@ -219,7 +221,7 @@ body {
   font-family: inherit;
   width: 100%;
 }
-.vt-input:focus { outline: none; border-color: var(--amber); }
+.vt-input:focus { outline: none; border-color: var(--blue); }
 .vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-bottom: 14px; }
 .vt-mono { font-family: 'JetBrains Mono', monospace; }
 .vt-select { margin-bottom: 12px; }
@@ -243,7 +245,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
   font-size: 12px; font-weight: 600;
   background: transparent; border: none; border-radius: 0;
 }
-.vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
+.vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 /* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
 .vt-set-row {
   display: flex; align-items: center; gap: 7px;
@@ -263,7 +265,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
   background: transparent; border: none; border-radius: 0;
   font-weight: 600; font-size: 15px;
 }
-.vt-set-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
+.vt-set-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 
 /* Sin flechas de stepper sobre los números */
 input[type="number"]::-webkit-inner-spin-button,
@@ -293,7 +295,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.vt-warmup.is-on { color: var(--amber); border-color: var(--amber); }
+.vt-warmup.is-on { color: var(--blue); border-color: var(--blue); }
 
 .vt-timer-btn {
   width: 30px; height: 30px; flex-shrink: 0;
@@ -304,7 +306,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.vt-timer-btn.is-running { color: var(--amber); border-color: var(--amber); background: rgba(232, 163, 61, 0.12); }
+.vt-timer-btn.is-running { color: var(--blue); border-color: var(--blue); background: rgba(47, 111, 237, 0.15); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva */
 .vt-set-row.is-warmup.is-done { background: rgba(143, 160, 172, 0.08); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
@@ -315,7 +317,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   width: 64px; text-align: center; padding: 10px 4px;
   background: transparent; border: none; border-radius: 0; font-weight: 600;
 }
-.vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
+.vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 .vt-note-input { flex: 1; padding: 7px 10px; font-size: 12.5px; }
 .vt-note-line { color: var(--text-dim); font-size: 11.5px; font-style: italic; margin-top: 2px; }
 /* Nota de entrenador por ejercicio (instrucción, sin comillas) */
@@ -328,7 +330,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: inherit; font-size: 10.5px; padding: 4px 10px; border-radius: 20px;
   cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.vt-loadmode button.is-active { border-color: var(--amber); color: var(--amber); }
+.vt-loadmode button.is-active { border-color: var(--blue); color: var(--blue); }
 
 .vt-sticky-footer {
   position: sticky;
@@ -369,7 +371,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border-top: 2px solid transparent;
 }
 .vt-nav-item span { text-transform: uppercase; letter-spacing: 0.06em; }
-.vt-nav-item.is-active { color: var(--amber); border-top-color: var(--amber); }
+.vt-nav-item.is-active { color: var(--blue); border-top-color: var(--blue); }
 .vt-dot { position: absolute; top: 6px; right: 26%; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
 .vt-empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
@@ -412,7 +414,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text-dim); font-family: inherit;
   padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer;
 }
-.vt-metric-toggle button.is-active { border-color: var(--amber); color: var(--amber); }
+.vt-metric-toggle button.is-active { border-color: var(--blue); color: var(--blue); }
 
 .vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
@@ -429,7 +431,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   bottom: calc(66px + env(safe-area-inset-bottom));
   width: min(456px, calc(100% - 24px));
   background: var(--surface-2);
-  border: 1px solid var(--amber);
+  border: 1px solid var(--blue);
   border-radius: 12px;
   padding: 10px 14px;
   display: flex; align-items: center; gap: 12px;
@@ -438,9 +440,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 #restbar.is-hidden { display: none; }
 .vt-rest-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; }
-.vt-rest-time { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; color: var(--amber); min-width: 58px; }
+.vt-rest-time { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; color: var(--blue); min-width: 58px; }
 .vt-rest-track { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
-.vt-rest-fill { height: 100%; background: var(--amber); border-radius: 3px; transition: width 0.25s linear; }
+.vt-rest-fill { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.25s linear; }
 
 /* ------------------------------ Ajustes -------------------------------- */
 .vt-settings-row {
