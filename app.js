@@ -175,6 +175,24 @@ function isPR(type, st, prior) {
   return num(st.weight) > 0 && num(st.weight) > prior.maxW;
 }
 
+// Superseries: por índice devuelve null (suelto) o {letter, pos, isLast}.
+// Un grupo parte donde linkPrev es false y se extiende mientras el siguiente tenga linkPrev.
+// Solo los grupos de 2+ ejercicios llevan etiqueta (A1, A2..., B1...).
+function computeSupersetLabels(items) {
+  const labels = new Array(items.length).fill(null);
+  let letterIdx = 0, i = 0;
+  while (i < items.length) {
+    let j = i;
+    while (j + 1 < items.length && items[j + 1].linkPrev) j++;
+    if (j > i) {
+      const letter = String.fromCharCode(65 + letterIdx++);
+      for (let k = i; k <= j; k++) labels[k] = { letter, pos: k - i + 1, isLast: k === j };
+    }
+    i = j + 1;
+  }
+  return labels;
+}
+
 function lastSetsFor(exId) {
   for (const s of sessions) {
     const found = s.exercises.find((e) => e.exerciseId === exId && e.sets.length > 0);
@@ -344,6 +362,7 @@ function routinesHTML() {
 function editorHTML() {
   const r = ui.editingRoutine;
   const map = exMap();
+  const ssLabels = computeSupersetLabels(r.exercises);
   return `
     <header class="vt-header">
       <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 20)}</button>
@@ -365,12 +384,14 @@ function editorHTML() {
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
           ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}`;
         fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
-        return `<div class="vt-block" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
+        const lbl = ssLabels[idx];
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
-            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
+            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
             <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
           </div>
           <div class="vt-target-row">${fields}</div>
+          ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
         </div>`;
       }).join("")}
     </div>
@@ -407,6 +428,7 @@ function trainActiveHTML() {
   const s = ui.activeSession;
   const map = exMap();
   const vol = sessionVolume(s, true);
+  const ssLabels = computeSupersetLabels(s.exercises);
 
   return `
     <header class="vt-header vt-header-sticky">
@@ -425,9 +447,10 @@ function trainActiveHTML() {
         const t = ex?.type || "weight";
         const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
-        return `<div class="vt-block" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
+        const lbl = ssLabels[exIdx];
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
-            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
+            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
             <span class="vt-rest-mini vt-muted-sm">Descanso
               <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
                 value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
@@ -865,6 +888,7 @@ function buildSessionFromRoutine(r) {
         exerciseId: re.exerciseId,
         target,
         restSeconds: num(re.restSeconds) || 0,
+        linkPrev: !!re.linkPrev,
         sets: Array.from({ length: n }, () => defaultSet(t, target, null)),
       };
     }),
@@ -1029,6 +1053,12 @@ document.addEventListener("click", (e) => {
 
     /* Editor de rutina */
     case "editor-cancel": ui.editingRoutine = null; render(); break;
+    case "editor-link-toggle": {
+      const it = ui.editingRoutine.exercises[+el.dataset.idx];
+      it.linkPrev = !it.linkPrev;
+      render();
+      break;
+    }
     case "editor-remove":
       ui.editingRoutine.exercises.splice(+el.dataset.idx, 1);
       render();
@@ -1092,7 +1122,9 @@ document.addEventListener("click", (e) => {
       if (st.done) {
         // Si esta misma serie estaba cronometrándose, se detiene y queda su valor.
         if (runningTimer && runningTimer.exIdx === exI && runningTimer.setIdx === setI) stopSetTimer();
-        startRest(ex.restSeconds);
+        // En superserie, solo el último ejercicio del grupo dispara el descanso.
+        const lbl = computeSupersetLabels(ui.activeSession.exercises)[exI];
+        if (!lbl || lbl.isLast) startRest(ex.restSeconds);
       }
       render();
       break;
