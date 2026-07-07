@@ -1106,8 +1106,9 @@ document.addEventListener("click", (e) => {
         stopSetTimer();
       } else {
         stopSetTimer(); // solo una serie corriendo a la vez: la anterior se detiene sola
-        const st = ui.activeSession.exercises[exI].sets[setI];
-        runningTimer = { exIdx: exI, setIdx: setI, startedAt: Date.now(), baseValue: num(st.seconds) };
+        // El valor del input es el objetivo; el cronómetro siempre parte de 0 para medir el intento real.
+        ui.activeSession.exercises[exI].sets[setI].seconds = 0;
+        runningTimer = { exIdx: exI, setIdx: setI, startedAt: Date.now(), baseValue: 0 };
       }
       render();
       break;
