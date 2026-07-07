@@ -61,6 +61,9 @@ const fmtDateShort = (iso) =>
 
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 
+// Kg objetivo a partir de %1RM, redondeado al disco de 2.5 kg más cercano.
+const pctKg = (oneRM, pct) => Math.round(num(oneRM) * num(pct) / 100 / 2.5) * 2.5;
+
 /* ----------------------------------- Storage ----------------------------------- */
 
 const load = (k, fb) => {
@@ -375,15 +378,32 @@ function editorHTML() {
       ${r.exercises.map((it, idx) => {
         const ex = map[it.exerciseId];
         const t = ex?.type || "weight";
+        const isPct = it.loadMode === "percent";
+        const oneRM = num(map[it.exerciseId]?.oneRM);
         let fields = `
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
           ${numFieldHTML("Reps", "targetReps", idx, it.targetReps, 1)}`;
-        if (t === "weight") fields += numFieldHTML("Kg", "targetWeight", idx, it.targetWeight, 2.5);
-        else if (t === "bodyweight") fields += numFieldHTML("Lastre kg", "targetWeight", idx, it.targetWeight, 2.5);
-        else fields = `
+        if (t === "weight" || t === "bodyweight") {
+          fields += isPct
+            ? numFieldHTML("% 1RM", "targetPercent", idx, it.targetPercent ?? 70, 5)
+            : numFieldHTML(t === "weight" ? "Kg" : "Lastre kg", "targetWeight", idx, it.targetWeight, 2.5);
+        } else {
+          fields = `
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
           ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}`;
+        }
         fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
+        let loadmode = "";
+        if (t !== "time") {
+          const calc = !isPct ? "" : (oneRM > 0
+            ? `= ${pctKg(oneRM, it.targetPercent ?? 70)} kg (1RM ${oneRM} kg)`
+            : "Define el 1RM de este ejercicio en Ajustes → Ejercicios");
+          loadmode = `<div class="vt-loadmode">
+            <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg">KG</button>
+            <button class="${isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="percent">%1RM</button>
+            <span class="vt-muted-sm" id="pct-calc-${idx}" style="${oneRM > 0 ? "" : "color:var(--red)"}">${calc}</span>
+          </div>`;
+        }
         const lbl = ssLabels[idx];
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
@@ -391,6 +411,9 @@ function editorHTML() {
             <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
           </div>
           <div class="vt-target-row">${fields}</div>
+          ${loadmode}
+          <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
+            value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}">
           ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
         </div>`;
       }).join("")}
@@ -450,13 +473,14 @@ function trainActiveHTML() {
         const lbl = ssLabels[exIdx];
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
-            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
+            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
             <span class="vt-rest-mini vt-muted-sm">Descanso
               <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
                 value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
                 data-i="ex-rest" data-ex="${exIdx}"> s
             </span>
           </div>
+          ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
           ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
           <div class="vt-sets">
             ${e.sets.length ? setCapsHTML(t) : ""}
@@ -598,6 +622,7 @@ function historyHTML() {
                   <span style="color:${GROUP_COLORS[exGroup(e.exerciseId)]}">${esc(exName(e.exerciseId))}</span>
                   <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st)).join(", ")}</span>
                 </div>
+                ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
                 ${notes.length ? `<div class="vt-note-line">— ${notes.join(" · ")}</div>` : ""}`;
             }).join("")}
             <button class="vt-btn-ghost vt-danger vt-small" data-a="hist-del" data-id="${s.id}">${icon("trash", 14)} Eliminar sesión</button>
@@ -780,6 +805,7 @@ function exercisesManagerHTML() {
           <div class="vt-ex-row">
             <span class="vt-dotgroup" style="background:${GROUP_COLORS[g] || "var(--text-dim)"}"></span>
             <span class="vt-ex-name">${esc(e.name)}</span>
+            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
             <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
             <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
             <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
@@ -807,9 +833,12 @@ function exerciseModalHTML() {
             </select>
           </label>
           <label>Tipo de registro
-            <select class="vt-input" id="exm-type">
+            <select class="vt-input" id="exm-type" data-c="exm-type">
               ${Object.entries(TYPES).map(([id, t]) => `<option value="${id}" ${m.type === id ? "selected" : ""}>${t.label}</option>`).join("")}
             </select>
+          </label>
+          <label id="exm-onerm-label" style="${m.type === "time" ? "display:none" : ""}">1RM estimado (kg) — opcional, para cargas por %
+            <input type="number" inputmode="decimal" class="vt-input" id="exm-onerm" min="0" step="2.5" value="${m.oneRM ?? ""}">
           </label>
         </div>
         <div class="vt-modal-actions">
@@ -882,13 +911,23 @@ function buildSessionFromRoutine(r) {
     date: new Date().toISOString(),
     exercises: r.exercises.map((re) => {
       const t = exType(re.exerciseId);
-      const target = { sets: re.targetSets, reps: re.targetReps, weight: re.targetWeight, seconds: re.targetSeconds };
+      // En modo %1RM el peso se calcula AHORA con el 1RM vigente del catálogo,
+      // nunca con un valor congelado en la rutina. Sin 1RM cae a 0 sin romper.
+      let weight = re.targetWeight;
+      let percent;
+      if (re.loadMode === "percent") {
+        const orm = num(exMap()[re.exerciseId]?.oneRM);
+        percent = num(re.targetPercent);
+        weight = orm > 0 ? pctKg(orm, percent) : 0;
+      }
+      const target = { sets: re.targetSets, reps: re.targetReps, weight, seconds: re.targetSeconds, percent };
       const n = Math.max(1, Math.round(num(re.targetSets)) || 3);
       return {
         exerciseId: re.exerciseId,
         target,
         restSeconds: num(re.restSeconds) || 0,
         linkPrev: !!re.linkPrev,
+        note: re.note || "",
         sets: Array.from({ length: n }, () => defaultSet(t, target, null)),
       };
     }),
@@ -1053,6 +1092,13 @@ document.addEventListener("click", (e) => {
 
     /* Editor de rutina */
     case "editor-cancel": ui.editingRoutine = null; render(); break;
+    case "editor-loadmode": {
+      const it = ui.editingRoutine.exercises[+el.dataset.idx];
+      it.loadMode = el.dataset.mode;
+      if (it.loadMode === "percent" && it.targetPercent == null) it.targetPercent = 70;
+      render();
+      break;
+    }
     case "editor-link-toggle": {
       const it = ui.editingRoutine.exercises[+el.dataset.idx];
       it.linkPrev = !it.linkPrev;
@@ -1067,6 +1113,14 @@ document.addEventListener("click", (e) => {
       const r = ui.editingRoutine;
       if (!r.name.trim()) { alert("Ponle un nombre a la rutina."); break; }
       if (r.exercises.length === 0) { alert("Agrega al menos un ejercicio."); break; }
+      // Modo %1RM exige tener 1RM en el catálogo; el peso nunca se congela en la rutina.
+      const mapEx = exMap();
+      const sinRM = r.exercises.find((it) => it.loadMode === "percent" && !(num(mapEx[it.exerciseId]?.oneRM) > 0));
+      if (sinRM) {
+        alert(`"${mapEx[sinRM.exerciseId]?.name || "Un ejercicio"}" está en modo %1RM pero no tiene 1RM definido. Configúralo en Ajustes → Ejercicios.`);
+        break;
+      }
+      r.exercises.forEach((it) => { if (it.loadMode === "percent") delete it.targetWeight; });
       const stamped = { id: r.id, name: r.name.trim(), exercises: r.exercises, updatedAt: new Date().toISOString() };
       const i = routines.findIndex((x) => x.id === r.id);
       if (i >= 0) routines[i] = stamped; else routines = [stamped, ...routines];
@@ -1205,12 +1259,14 @@ document.addEventListener("click", (e) => {
       const group = document.getElementById("exm-group").value;
       const type = document.getElementById("exm-type").value;
       if (!name) { alert("Ponle un nombre al ejercicio."); break; }
+      const ormVal = num(document.getElementById("exm-onerm")?.value);
+      const oneRM = type !== "time" && ormVal > 0 ? ormVal : undefined;
       const m = ui.exerciseModal;
       if (m.id) {
         const i = exercises.findIndex((x) => x.id === m.id);
-        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type };
+        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM };
       } else {
-        exercises.push({ id: uid("cex"), name, group, type });
+        exercises.push({ id: uid("cex"), name, group, type, oneRM });
       }
       persistExercises();
       ui.exerciseModal = null;
@@ -1247,6 +1303,17 @@ document.addEventListener("input", (e) => {
     case "editor-target": {
       const it = ui.editingRoutine?.exercises[+el.dataset.idx];
       if (it) it[el.dataset.field] = num(el.value);
+      // Cálculo de kg en vivo al editar el % (sin render, patrón #live-vol).
+      if (it && el.dataset.field === "targetPercent") {
+        const span = document.getElementById("pct-calc-" + el.dataset.idx);
+        const orm = num(exMap()[it.exerciseId]?.oneRM);
+        if (span && orm > 0) span.textContent = `= ${pctKg(orm, it.targetPercent)} kg (1RM ${orm} kg)`;
+      }
+      break;
+    }
+    case "editor-note": {
+      const it = ui.editingRoutine?.exercises[+el.dataset.idx];
+      if (it) it.note = el.value;
       break;
     }
     case "set": {
@@ -1287,6 +1354,12 @@ document.addEventListener("change", (e) => {
     case "set-sound": settings.sound = el.checked; persistSettings(); break;
     case "set-vibrate": settings.vibrate = el.checked; persistSettings(); break;
     case "prog-ex": ui.progressEx = el.value; ui.progressMetric = null; render(); break;
+    case "exm-type": {
+      // El 1RM solo aplica a ejercicios de peso; se oculta en tipo tiempo (sin re-render).
+      const lbl = document.getElementById("exm-onerm-label");
+      if (lbl) lbl.style.display = el.value === "time" ? "none" : "";
+      break;
+    }
     case "import-file":
       if (el.files && el.files[0]) importJSON(el.files[0]);
       el.value = "";
