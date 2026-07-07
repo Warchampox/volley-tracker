@@ -313,7 +313,7 @@ function routinesHTML() {
         `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`)
     : `<div class="vt-list">${routines.map((r) => {
         const last = lastUsed(r.id);
-        return `<div class="vt-card">
+        return `<div class="vt-block">
           <div class="vt-card-top"><div>
             <h3>${esc(r.name) || "Sin nombre"}</h3>
             <p class="vt-muted">${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
@@ -365,7 +365,7 @@ function editorHTML() {
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
           ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}`;
         fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
-        return `<div class="vt-card">
+        return `<div class="vt-block" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
             <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
             <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
@@ -392,7 +392,7 @@ function trainIdleHTML() {
   const list = routines.length === 0
     ? emptyHTML("No tienes rutinas todavía", "Puedes partir con una sesión libre o crear una rutina primero.", "")
     : `<div class="vt-list">${routines.map((r) => `
-        <button class="vt-card vt-card-button" data-a="train-start" data-id="${r.id}" style="border:1px solid var(--line);background:var(--surface)">
+        <button class="vt-block vt-card-button" data-a="train-start" data-id="${r.id}">
           <h3>${esc(r.name)}</h3>
           <p class="vt-muted">${r.exercises.length} ejercicios</p>
         </button>`).join("")}</div>`;
@@ -425,7 +425,7 @@ function trainActiveHTML() {
         const t = ex?.type || "weight";
         const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
-        return `<div class="vt-card">
+        return `<div class="vt-block" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
           <div class="vt-card-top">
             <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</h3>
             <span class="vt-rest-mini vt-muted-sm">Descanso
@@ -461,7 +461,7 @@ function setCapsHTML(type) {
   const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
   let inner;
   if (type === "time") inner = cap("seg");
-  else if (type === "bodyweight") inner = cap("reps") + gap("reps") + cap("lastre kg") + gap("+kg");
+  else if (type === "bodyweight") inner = cap("reps") + cap("+kg");
   else inner = cap("kg") + gap("×") + cap("reps");
   return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
 }
@@ -521,15 +521,12 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
     const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.seconds)}" ${attrs("seconds")}>
-      <span class="vt-x">seg</span>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
   } else if (type === "bodyweight") {
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.reps)}" ${attrs("reps")}>
-      <span class="vt-x">reps</span>
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>
-      <span class="vt-x">+kg</span>`;
+      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>`;
   } else {
     fields = `
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>
@@ -562,7 +559,7 @@ function historyHTML() {
     : `<div class="vt-list">${sessions.map((s) => {
         const open = ui.openHistory === s.id;
         const volume = sessionVolume(s, false);
-        return `<div class="vt-card">
+        return `<div class="vt-block">
           <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
             <div>
               <h3>${esc(s.routineName)}</h3>
@@ -737,7 +734,7 @@ function settingsHTML() {
         </label>
       </div>
     </div>
-    <p class="vt-muted" style="text-align:center;margin-top:16px">Volley Tracker · datos guardados en este dispositivo</p>`;
+    <p class="vt-muted" style="text-align:center;margin-top:16px">Pesitas · datos guardados en este dispositivo</p>`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */

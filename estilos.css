@@ -73,7 +73,10 @@ body {
 }
 
 .vt-header-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; text-transform: uppercase; margin: 0; }
-.vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; text-transform: uppercase; margin: 0; }
+/* Nombre de rutina en la sesión activa: texto libre, sin mayúsculas forzadas.
+   Selector reforzado para ganarle a la regla general .vt-header h1 de títulos fijos. */
+.vt-header h1.vt-header-title-sm,
+.vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; margin: 0; text-transform: none; }
 
 .vt-scoreboard {
   font-family: 'JetBrains Mono', monospace;
@@ -86,7 +89,7 @@ body {
   color: var(--amber);
   white-space: nowrap;
 }
-.vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 400; letter-spacing: 0.06em; }
+.vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase; }
 
 .vt-btn-icon, .vt-btn-ghost {
   background: transparent;
@@ -103,7 +106,7 @@ body {
   gap: 5px;
 }
 .vt-btn-icon { background: var(--surface); border: 1px solid var(--line); }
-.vt-btn-ghost { color: var(--text-dim); padding: 6px; }
+.vt-btn-ghost { color: var(--text-dim); padding: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red) !important; }
 
@@ -114,6 +117,8 @@ body {
   font-family: inherit;
   font-weight: 600;
   font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   padding: 11px 18px;
   border-radius: 10px;
   cursor: pointer;
@@ -128,6 +133,8 @@ body {
   border: 1px dashed var(--line);
   color: var(--text-dim);
   font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   padding: 12px;
   border-radius: 10px;
   width: 100%;
@@ -145,11 +152,31 @@ body {
 .vt-small { padding: 7px 10px; font-size: 12.5px; width: auto; margin-top: 10px; }
 
 .vt-list { display: flex; flex-direction: column; gap: 12px; }
+.vt-list:has(.vt-block) { gap: 0; }
 .vt-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px;
+}
+
+/* Bloque plano tipo tabla (referencia Hevy): sin caja, acento lateral de 3px.
+   El color del acento lo pone cada ejercicio inline (color de grupo muscular). */
+.vt-block {
+  background: transparent;
+  border: none;
+  border-left: 3px solid var(--line);
+  border-radius: 0;
+  padding: 14px 4px 14px 14px;
+  margin-bottom: 22px;
+}
+.vt-block:last-child { margin-bottom: 0; }
+/* Los nombres de rutina/ejercicio son texto libre del usuario: sin mayúsculas forzadas. */
+.vt-block h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 19px; font-weight: 700;
+  margin: 0; letter-spacing: 0.01em;
+  text-transform: none;
 }
 .vt-card-button { width: 100%; text-align: left; cursor: pointer; color: inherit; font-family: inherit; }
 .vt-full-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 0; font: inherit; text-align: left; }
@@ -176,7 +203,7 @@ body {
   width: 100%;
 }
 .vt-input:focus { outline: none; border-color: var(--amber); }
-.vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-bottom: 14px; text-transform: uppercase; }
+.vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-bottom: 14px; }
 .vt-mono { font-family: 'JetBrains Mono', monospace; }
 .vt-select { margin-bottom: 12px; }
 select.vt-input { appearance: none; -webkit-appearance: none; }
@@ -191,21 +218,40 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 .vt-cap {
   width: 58px; text-align: center; white-space: nowrap;
   font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
 }
 .vt-rest-mini { display: inline-flex; align-items: center; gap: 4px; }
 .vt-rest-mini input {
-  width: 48px; padding: 4px 2px; text-align: center;
-  font-size: 12px;
+  width: 48px; padding: 6px 2px; text-align: center;
+  font-size: 12px; font-weight: 600;
+  background: transparent; border: none; border-radius: 0;
 }
+.vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
+/* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
 .vt-set-row {
   display: flex; align-items: center; gap: 7px;
-  padding: 4px 6px; border-radius: 10px;
-  border: 1px solid transparent;
+  padding: 7px 6px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
 }
-.vt-set-row.is-done { background: rgba(111, 174, 124, 0.10); border-color: rgba(111, 174, 124, 0.45); }
-.vt-set-row.is-pr { background: rgba(232, 163, 61, 0.12); border-color: rgba(232, 163, 61, 0.55); }
+.vt-sets .vt-set-row:last-child { border-bottom: none; }
+.vt-set-row.is-done { background: rgba(111, 174, 124, 0.10); border-left-color: var(--green); }
+.vt-set-row.is-pr { background: rgba(232, 163, 61, 0.12); border-left-color: var(--amber); }
 .vt-set-num { width: 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
-.vt-set-input { width: 58px; text-align: center; padding: 8px 4px; }
+/* Valores de serie como texto plano de tabla: sin caja; al enfocar, subrayado ámbar
+   (box-shadow inset: no mueve el layout). El tap target se mantiene con el padding. */
+.vt-set-input {
+  width: 58px; text-align: center; padding: 10px 4px;
+  background: transparent; border: none; border-radius: 0;
+  font-weight: 600; font-size: 15px;
+}
+.vt-set-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
+
+/* Sin flechas de stepper sobre los números */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-x { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
 .vt-pr { color: var(--amber); flex-shrink: 0; display: inline-flex; }
 
@@ -243,12 +289,16 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 }
 .vt-timer-btn.is-running { color: var(--amber); border-color: var(--amber); background: rgba(232, 163, 61, 0.12); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva */
-.vt-set-row.is-warmup.is-done { background: rgba(143, 160, 172, 0.08); border-color: rgba(143, 160, 172, 0.35); }
+.vt-set-row.is-warmup.is-done { background: rgba(143, 160, 172, 0.08); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
 .vt-cap-warm { width: 28px; flex-shrink: 0; }
 
 .vt-setline2 { display: flex; gap: 8px; padding: 2px 6px 6px 29px; align-items: center; }
-.vt-rpe-input { width: 64px; text-align: center; padding: 7px 4px; }
+.vt-rpe-input {
+  width: 64px; text-align: center; padding: 10px 4px;
+  background: transparent; border: none; border-radius: 0; font-weight: 600;
+}
+.vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--amber); background: transparent; }
 .vt-note-input { flex: 1; padding: 7px 10px; font-size: 12.5px; }
 .vt-note-line { color: var(--text-dim); font-size: 11.5px; font-style: italic; margin-top: 2px; }
 
@@ -290,6 +340,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
   position: relative;
   border-top: 2px solid transparent;
 }
+.vt-nav-item span { text-transform: uppercase; letter-spacing: 0.06em; }
 .vt-nav-item.is-active { color: var(--amber); border-top-color: var(--amber); }
 .vt-dot { position: absolute; top: 6px; right: 26%; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
@@ -369,14 +420,15 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
   padding: 13px 2px; border-bottom: 1px solid var(--line);
 }
 .vt-settings-row:last-child { border-bottom: none; }
-.vt-settings-label { font-size: 14px; }
-.vt-settings-label small { display: block; color: var(--text-dim); font-size: 11.5px; margin-top: 2px; }
+.vt-settings-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+.vt-settings-label small { display: block; color: var(--text-dim); font-size: 11.5px; margin-top: 2px; text-transform: none; letter-spacing: normal; }
 .vt-settings-row .vt-input { width: 90px; text-align: center; }
 .vt-switch { width: 22px; height: 22px; accent-color: var(--amber); cursor: pointer; }
 .vt-badge {
   font-size: 10.5px; padding: 2px 8px; border-radius: 20px;
   border: 1px solid var(--line); color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
 .vt-ex-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .vt-ex-row:last-child { border-bottom: none; }
