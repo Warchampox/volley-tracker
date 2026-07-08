@@ -25,6 +25,22 @@ body {
 
 #app { display: flex; justify-content: center; }
 
+/* Marca de agua: silueta de la U al fondo, fija al hacer scroll.
+   .vt-frame es position:relative y va después en el DOM, así que el
+   contenido siempre pinta por encima; los modales/nav tienen z-index propio. */
+body::before {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -52%);
+  width: min(72vw, 360px);
+  height: min(72vw, 360px);
+  background: url("icons/watermark-u.png") center / contain no-repeat;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
 .vt-frame {
   width: 100%;
   max-width: 480px;

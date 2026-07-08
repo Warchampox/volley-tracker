@@ -6,7 +6,7 @@
    app shell se sirve cache-first. No hay build tools: solo edita esta constante.
 ======================================================================================= */
 
-const CACHE_NAME = "pesitas-v7";
+const CACHE_NAME = "pesitas-v8";
 
 // App shell propio (mismo origen). "./" cubre la navegación a la raíz de la app.
 const APP_SHELL = [
@@ -21,6 +21,7 @@ const APP_SHELL = [
   "icons/apple-touch-icon.png",
   "icons/favicon-32.png",
   "icons/club-logo.png",
+  "icons/watermark-u.png",
 ];
 
 self.addEventListener("install", (e) => {
