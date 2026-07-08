@@ -37,7 +37,7 @@ body::before {
   width: min(72vw, 360px);
   height: min(72vw, 360px);
   background: url("icons/watermark-u.png") center / contain no-repeat;
-  opacity: 0.16;
+  opacity: 0.05;
   pointer-events: none;
 }
 
@@ -181,7 +181,7 @@ body::before {
 /* Bloque plano tipo tabla (referencia Hevy): sin caja, acento lateral de 3px.
    El color del acento lo pone cada ejercicio inline (color de grupo muscular). */
 .vt-block {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.035); /* tinte apenas perceptible; sin borde ni radio */
   border: none;
   border-left: 3px solid var(--line);
   border-radius: 0;
@@ -476,8 +476,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: 'JetBrains Mono', monospace; white-space: nowrap;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
-.vt-ex-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+/* Dos filas: nombre + acciones arriba, badges abajo — sin solapamientos con nombres largos. */
+.vt-ex-row { padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .vt-ex-row:last-child { border-bottom: none; }
+.vt-ex-row-top { display: flex; align-items: center; gap: 10px; }
+.vt-ex-badges { display: flex; gap: 6px; margin-top: 5px; padding-left: 18px; flex-wrap: wrap; }
 .vt-ex-name { flex: 1; font-size: 14px; min-width: 0; }
 .vt-ex-name small { display: block; color: var(--text-dim); font-size: 11px; }
 input[type="file"] { display: none; }

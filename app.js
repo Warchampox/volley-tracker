@@ -207,7 +207,7 @@ function lastSetsFor(exId) {
 function fmtSet(type, s) {
   const w = s.warmup ? "c" : "";
   const rpe = s.rpe ? ` @${s.rpe}` : "";
-  if (type === "time") return `${w}${num(s.seconds)}s${rpe}`;
+  if (type === "time") return `${w}${num(s.seconds)}s${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
   if (type === "bodyweight")
     return num(s.weight) > 0 ? `${w}+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
   return `${w}${num(s.weight)}×${num(s.reps)}${rpe}`;
@@ -390,7 +390,8 @@ function editorHTML() {
         } else {
           fields = `
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
-          ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}`;
+          ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}
+          ${numFieldHTML("Kg", "targetWeight", idx, it.targetWeight, 2.5)}`;
         }
         fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
         let loadmode = "";
@@ -507,7 +508,7 @@ function setCapsHTML(type) {
   const cap = (t) => `<span class="vt-cap">${t}</span>`;
   const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
   let inner;
-  if (type === "time") inner = cap("seg");
+  if (type === "time") inner = cap("seg") + cap("+kg");
   else if (type === "bodyweight") inner = cap("reps") + cap("+kg");
   else inner = cap("kg") + gap("×") + cap("reps");
   return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
@@ -568,6 +569,7 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
     const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.seconds)}" ${attrs("seconds")}>
+      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
   } else if (type === "bodyweight") {
@@ -803,12 +805,16 @@ function exercisesManagerHTML() {
         <h3 style="color:${GROUP_COLORS[g] || "var(--text)"};margin-bottom:4px">${esc(g)}</h3>
         ${byGroup[g].map((e) => `
           <div class="vt-ex-row">
-            <span class="vt-dotgroup" style="background:${GROUP_COLORS[g] || "var(--text-dim)"}"></span>
-            <span class="vt-ex-name">${esc(e.name)}</span>
-            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
-            <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
-            <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
-            <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
+            <div class="vt-ex-row-top">
+              <span class="vt-dotgroup" style="background:${GROUP_COLORS[g] || "var(--text-dim)"}"></span>
+              <span class="vt-ex-name">${esc(e.name)}</span>
+              <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
+              <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
+            </div>
+            <div class="vt-ex-badges">
+              ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
+              <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
+            </div>
           </div>`).join("")}
       </div>`).join("")}
     </div>`;
@@ -905,7 +911,12 @@ function defaultSet(type, target, prevSet) {
   // Si la serie anterior es calentamiento, la nueva nace calentamiento (otro aproche).
   const warmup = !!(prevSet && prevSet.warmup);
   if (type === "time")
-    return { done: false, warmup, seconds: num(prevSet?.seconds) || num(target?.seconds) || 30, rpe: null, note: "" };
+    return {
+      done: false, warmup,
+      seconds: num(prevSet?.seconds) || num(target?.seconds) || 30,
+      weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
+      rpe: null, note: "",
+    };
   return {
     done: false, warmup,
     reps: num(prevSet?.reps) || num(target?.reps) || 8,
