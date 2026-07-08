@@ -79,7 +79,7 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   exercises = DEFAULT_EXERCISES.map((e) => ({ ...e }));
   save("custom-exercises", exercises);
 }
-let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true }, load("settings", {}));
+let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [] }, load("settings", {}));
 
 const persistRoutines = () => save("routines", routines);
 const persistSessions = () => save("sessions", sessions);
@@ -679,11 +679,31 @@ function progressData(exId, metric) {
 
 const metricUnit = (m) => (m === "seconds" ? "s" : m === "reps" ? "reps" : "kg");
 
+// Panel "Tus máximos": hasta 5 ejercicios destacados con su 1RM editable inline.
+// El 1RM es el mismo dato del catálogo (exercises[i].oneRM), no una copia.
+function featuredHTML() {
+  const map = exMap();
+  const ids = (settings.featuredExercises || []).filter((id) => map[id]); // ids huérfanos se ignoran
+  const slots = ids.map((id) => `
+    <div class="vt-max-slot">
+      <span class="vt-max-name">${esc(map[id].name)}</span>
+      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
+        value="${num(map[id].oneRM) > 0 ? num(map[id].oneRM) : ""}" data-i="featured-rm" data-id="${id}">
+      <span class="vt-muted-sm">kg</span>
+      <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 14)}</button>
+    </div>`).join("");
+  return `<div class="vt-card" style="margin-bottom:14px">
+    <h3>Tus máximos</h3>
+    ${slots || `<p class="vt-muted">Destaca hasta 5 ejercicios y edita su 1RM aquí mismo.</p>`}
+    ${ids.length < 5 ? `<button class="vt-btn-outline vt-flex-center vt-small" style="width:100%" data-a="picker-open" data-ctx="featured">${icon("plus", 14)} Agregar</button>` : ""}
+  </div>`;
+}
+
 function progressHTML() {
   const ids = exercisesWithHistory();
   const head = `<header class="vt-header">
     ${tabHeaderHTML("Set 04 · Análisis", "Progreso")}
-  </header>`;
+  </header>` + featuredHTML();
 
   if (ids.length === 0)
     return head + emptyHTML("Todavía no hay datos", "Registra al menos una sesión para ver tu progreso acá.", "");
@@ -873,7 +893,11 @@ function pickerHTML() {
 
 function pickerListHTML() {
   const q = ui.pickerQuery.trim().toLowerCase();
-  const filtered = exercises.filter((e) => e.name.toLowerCase().includes(q));
+  let pool = exercises;
+  // Para "Tus máximos" solo tienen sentido ejercicios con peso, y no repetidos.
+  if (ui.picker === "featured")
+    pool = exercises.filter((e) => e.type !== "time" && !(settings.featuredExercises || []).includes(e.id));
+  const filtered = pool.filter((e) => e.name.toLowerCase().includes(q));
   let html = filtered.map((ex) => `
     <button class="vt-modal-row" data-a="picker-pick" data-id="${ex.id}">
       <span class="vt-dotgroup" style="background:${GROUP_COLORS[ex.group] || "var(--text-dim)"}"></span>
@@ -1250,6 +1274,11 @@ document.addEventListener("click", (e) => {
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
+    case "featured-remove":
+      settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
+      persistSettings();
+      render();
+      break;
 
     /* Ajustes / ejercicios */
     case "manage-open": ui.manageExercises = true; render(); break;
@@ -1271,6 +1300,8 @@ document.addEventListener("click", (e) => {
         persistExercises();
         routines = routines.map((r) => ({ ...r, exercises: r.exercises.filter((x) => x.exerciseId !== id) }));
         persistRoutines();
+        settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
+        persistSettings();
         render();
       }
       break;
@@ -1300,7 +1331,13 @@ document.addEventListener("click", (e) => {
 });
 
 function pickExercise(id) {
-  if (ui.picker === "editor" && ui.editingRoutine) {
+  if (ui.picker === "featured") {
+    settings.featuredExercises = settings.featuredExercises || [];
+    if (!settings.featuredExercises.includes(id) && settings.featuredExercises.length < 5) {
+      settings.featuredExercises.push(id);
+      persistSettings();
+    }
+  } else if (ui.picker === "editor" && ui.editingRoutine) {
     const t = exType(id);
     ui.editingRoutine.exercises.push({
       exerciseId: id, targetSets: 3, targetReps: 8, targetWeight: 0,
@@ -1360,6 +1397,16 @@ document.addEventListener("input", (e) => {
       settings.restSeconds = Math.max(0, Math.round(num(el.value)));
       persistSettings();
       break;
+    case "featured-rm": {
+      // Escribe directo en el catálogo, sin render para no perder el foco.
+      const ex = exercises.find((x) => x.id === el.dataset.id);
+      if (ex) {
+        const v = num(el.value);
+        if (v > 0) ex.oneRM = v; else delete ex.oneRM;
+        persistExercises();
+      }
+      break;
+    }
     case "ex-rest": {
       // Solo afecta la sesión en curso, no la rutina guardada.
       const ex = ui.activeSession?.exercises[+el.dataset.ex];
