@@ -1,14 +1,14 @@
 /* ============================ Volley Tracker ============================ */
 
 :root {
-  --bg: #0B1220;
-  --surface: #121B2E;
-  --surface-2: #182338;
-  --line: #26334A;
+  --bg: #0A0A0C;
+  --surface: #131316;
+  --surface-2: #1B1B1F;
+  --line: #2A2A2F;
   --text: #FFFFFF;
   --text-dim: #8FA0AC;
   --amber: #E8A33D; /* reservado para PR */
-  --blue: #2F6FED;  /* acento principal de marca (U. de Chile) */
+  --blue: #3B6FE0;  /* acento principal de marca (U. de Chile) */
   --green: #6FAE7C; /* reservado para serie completada */
   --red: #C1594F;
 }
@@ -24,22 +24,6 @@ body {
 }
 
 #app { display: flex; justify-content: center; }
-
-/* Marca de agua: silueta de la U al fondo, fija al hacer scroll.
-   .vt-frame es position:relative y va después en el DOM, así que el
-   contenido siempre pinta por encima; los modales/nav tienen z-index propio. */
-body::before {
-  content: "";
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -52%);
-  width: min(72vw, 360px);
-  height: min(72vw, 360px);
-  background: url("icons/watermark-u.png") center / contain no-repeat;
-  opacity: 0.05;
-  pointer-events: none;
-}
 
 .vt-frame {
   width: 100%;
@@ -123,7 +107,8 @@ body::before {
   font-size: 13px;
   gap: 5px;
 }
-.vt-btn-icon { background: var(--surface); border: 1px solid var(--line); }
+.vt-btn-icon { background: var(--surface); border: 1px solid var(--line); transition: filter 100ms ease; }
+.vt-btn-icon:active { filter: brightness(0.85); }
 .vt-btn-ghost { color: var(--text-dim); padding: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red) !important; }
@@ -144,7 +129,9 @@ body::before {
   align-items: center;
   gap: 6px;
   justify-content: center;
+  transition: filter 100ms ease;
 }
+.vt-btn-primary:active { filter: brightness(0.85); }
 .vt-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .vt-btn-outline {
   background: transparent;
@@ -181,7 +168,7 @@ body::before {
 /* Bloque plano tipo tabla (referencia Hevy): sin caja, acento lateral de 3px.
    El color del acento lo pone cada ejercicio inline (color de grupo muscular). */
 .vt-block {
-  background: rgba(255, 255, 255, 0.035); /* tinte apenas perceptible; sin borde ni radio */
+  background: transparent;
   border: none;
   border-left: 3px solid var(--line);
   border-radius: 0;
@@ -298,8 +285,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: transparent;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
+  transition: filter 100ms ease;
 }
 .vt-set-row.is-done .vt-check { background: var(--green); border-color: var(--green); color: #0E1512; }
+.vt-set-row.is-done .vt-check:active { filter: brightness(0.85); }
 
 .vt-warmup {
   width: 28px; height: 28px; flex-shrink: 0;
@@ -310,8 +299,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
+  transition: filter 100ms ease;
 }
 .vt-warmup.is-on { color: var(--blue); border-color: var(--blue); }
+.vt-warmup.is-on:active { filter: brightness(0.85); }
 
 .vt-timer-btn {
   width: 30px; height: 30px; flex-shrink: 0;
@@ -321,8 +312,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: var(--text-dim);
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
+  transition: filter 100ms ease;
 }
 .vt-timer-btn.is-running { color: var(--blue); border-color: var(--blue); background: rgba(47, 111, 237, 0.15); }
+.vt-timer-btn:active { filter: brightness(0.85); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva */
 .vt-set-row.is-warmup.is-done { background: rgba(143, 160, 172, 0.08); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
