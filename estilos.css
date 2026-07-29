@@ -15,12 +15,24 @@
 
 * { box-sizing: border-box; }
 
+html {
+  -webkit-tap-highlight-color: transparent; /* sin el flash azul de "seleccionar" al tocar */
+  -webkit-touch-callout: none; /* sin menú de "guardar imagen" al mantener presionado */
+}
+
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
   color: var(--text);
   background: var(--bg);
   min-height: 100vh;
+}
+
+/* Elementos interactivos no seleccionan texto (se siente como app, no como página web).
+   Los inputs de texto/número quedan afuera a propósito: ahí sí hace falta seleccionar. */
+button, svg {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #app { display: flex; justify-content: center; }
@@ -268,7 +280,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 .vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 /* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
 /* Swipe-to-delete: fondo rojo detrás, oculto (opacity:0) hasta que arranca el arrastre. */
-.vt-swipe-wrap { position: relative; overflow: hidden; }
+.vt-swipe-wrap { position: relative; overflow: hidden; touch-action: pan-y; }
 .vt-swipe-bg {
   position: absolute; inset: 0;
   background: var(--red);

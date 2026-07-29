@@ -330,6 +330,34 @@ function render() {
 let sortableEditor = null;
 let sortableSession = null;
 
+// El arrastre debe verse solo vertical (es una lista, no un tablero libre).
+// SortableJS (en forceFallback) mueve el "fantasma" siguiendo X e Y del dedo
+// escribiendo su transform en cada pointermove/touchmove/mousemove sobre
+// document. Registramos nuestro propio listener para esos mismos eventos
+// DESPUÉS de que Sortable arranca el drag (SortableJS ya registró los suyos
+// en ese punto), así el nuestro corre justo después del suyo en cada evento
+// y reescribe la matrix con e=0 (sin desplazamiento horizontal) antes de que
+// el navegador pinte el frame.
+function lockGhostVerticalOnce() {
+  const ghost = typeof Sortable !== "undefined" ? Sortable.ghost : null;
+  if (!ghost) return;
+  const t = getComputedStyle(ghost).transform;
+  if (t && t !== "none") {
+    const m = new DOMMatrix(t);
+    ghost.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, ${m.f})`;
+  }
+}
+function startGhostLock() {
+  document.addEventListener("pointermove", lockGhostVerticalOnce);
+  document.addEventListener("touchmove", lockGhostVerticalOnce);
+  document.addEventListener("mousemove", lockGhostVerticalOnce);
+}
+function stopGhostLock() {
+  document.removeEventListener("pointermove", lockGhostVerticalOnce);
+  document.removeEventListener("touchmove", lockGhostVerticalOnce);
+  document.removeEventListener("mousemove", lockGhostVerticalOnce);
+}
+
 function mountSortables() {
   if (sortableEditor) { sortableEditor.destroy(); sortableEditor = null; }
   if (sortableSession) { sortableSession.destroy(); sortableSession = null; }
@@ -341,7 +369,9 @@ function mountSortables() {
       handle: ".vt-drag-handle",
       animation: 150,
       forceFallback: true, // evita drag-and-drop nativo HTML5 (poco fiable en touch/PWA instalada)
+      onStart: startGhostLock,
       onEnd: (evt) => {
+        stopGhostLock();
         if (evt.oldIndex === evt.newIndex) return;
         const [moved] = ui.editingRoutine.exercises.splice(evt.oldIndex, 1);
         ui.editingRoutine.exercises.splice(evt.newIndex, 0, moved);
@@ -356,7 +386,9 @@ function mountSortables() {
       handle: ".vt-drag-handle",
       animation: 150,
       forceFallback: true,
+      onStart: startGhostLock,
       onEnd: (evt) => {
+        stopGhostLock();
         if (evt.oldIndex === evt.newIndex) return;
         const [moved] = ui.activeSession.exercises.splice(evt.oldIndex, 1);
         ui.activeSession.exercises.splice(evt.newIndex, 0, moved);
@@ -647,7 +679,6 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
         ${fields}
         ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
         <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE y nota" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
-        <button class="vt-btn-ghost vt-danger" data-a="set-del" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie">${icon("x", 14)}</button>
       </div>
     </div>
     ${open ? `<div class="vt-setline2">
@@ -1338,7 +1369,6 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "set-del": deleteSet(+el.dataset.ex, +el.dataset.set); break;
     case "set-check": {
       const exI = +el.dataset.ex, setI = +el.dataset.set;
       const ex = ui.activeSession.exercises[exI];
