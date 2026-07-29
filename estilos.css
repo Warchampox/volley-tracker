@@ -479,6 +479,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-modal-form label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
 .vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
+.vt-modal-actions .vt-btn-ghost { flex: 1; justify-content: center; }
+/* Modal de confirmación propio: variante danger sobre .vt-btn-primary. */
+.vt-btn-danger { background: var(--red); }
 
 /* Resumen al finalizar sesión: overlay de pantalla completa, no el
    bottom-sheet chico de picker/exerciseModal. */

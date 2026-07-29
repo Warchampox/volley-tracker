@@ -101,7 +101,16 @@ const ui = {
   exerciseModal: null,    // null | {id|null, name, group, type}
   openNotes: new Set(),   // "exIdx:setIdx" con línea RPE/nota abierta
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
+  confirmDialog: null,    // null | {message, danger, onYes}
 };
+
+// Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
+// el resto de la app). onYes se guarda y se ejecuta recién si el usuario
+// toca "Confirmar"/"Eliminar"; si cancela o cierra, no pasa nada.
+function askConfirm(message, onYes, danger = false) {
+  ui.confirmDialog = { message, danger, onYes };
+  render();
+}
 
 const exMap = () => Object.fromEntries(exercises.map((e) => [e.id, e]));
 const exType = (id) => exMap()[id]?.type || "weight";
@@ -319,7 +328,8 @@ function render() {
     </div>
     ${ui.picker ? pickerHTML() : ""}
     ${ui.exerciseModal ? exerciseModalHTML() : ""}
-    ${ui.sessionSummary ? sessionSummaryHTML() : ""}`;
+    ${ui.sessionSummary ? sessionSummaryHTML() : ""}
+    ${ui.confirmDialog ? confirmDialogHTML() : ""}`;
 
   updateRestBar();
   if (ui.tab === "progreso") mountChart();
@@ -451,7 +461,7 @@ function editorHTML() {
       <div style="width:40px"></div>
     </header>
     <input class="vt-input vt-input-title" placeholder="Nombre de la rutina (ej: Fuerza semana 1)"
-      value="${esc(r.name)}" data-i="editor-name">
+      value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
     <div class="vt-list" id="editor-exercise-list">
       ${r.exercises.map((it, idx) => {
         const ex = map[it.exerciseId];
@@ -495,7 +505,7 @@ function editorHTML() {
               <div class="vt-target-row">${fields}</div>
               ${loadmode}
               <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
-                value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}">
+                value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
               ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
             </div>
           </div>
@@ -511,7 +521,8 @@ function editorHTML() {
 function numFieldHTML(label, field, idx, value, step) {
   return `<label class="vt-numfield"><span>${label}</span>
     <input type="number" inputmode="decimal" class="vt-input vt-mono" value="${num(value)}" step="${step}"
-      data-i="editor-target" data-field="${field}" data-idx="${idx}"></label>`;
+      data-i="editor-target" data-field="${field}" data-idx="${idx}"
+      autocomplete="off" autocorrect="off" spellcheck="false" name="f_${field}_${idx}"></label>`;
 }
 
 /* --------------------------------- Vista Entrenar -------------------------------- */
@@ -565,7 +576,8 @@ function trainActiveHTML() {
                   <span class="vt-rest-mini vt-muted-sm">Descanso
                     <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
                       value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
-                      data-i="ex-rest" data-ex="${exIdx}"> s
+                      data-i="ex-rest" data-ex="${exIdx}"
+                      autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                   </span>
                   <button class="vt-btn-ghost vt-danger" data-a="session-ex-remove" data-ex="${exIdx}" aria-label="Quitar ejercicio de la sesión">${icon("trash", 15)}</button>
                 </div>
@@ -653,7 +665,13 @@ setInterval(() => {
 function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   const pr = isPR(type, st, prior);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
-  const attrs = (f) => `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}"`;
+  // numeric=false para el único campo de texto libre (nota): ahí sí sirve el
+  // autocorrect/spellcheck normal, el resto son valores numéricos donde Chrome
+  // a veces igual muestra la barra de autocompletar aunque autocomplete="off".
+  const attrs = (f, numeric = true) => {
+    const base = `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off"`;
+    return numeric ? `${base} autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"` : base;
+  };
 
   let fields = "";
   if (type === "time") {
@@ -689,7 +707,7 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
     ${open ? `<div class="vt-setline2">
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
         value="${st.rpe ?? ""}" ${attrs("rpe")}>
-      <input type="text" class="vt-input vt-note-input" placeholder="Nota (opcional)" value="${esc(st.note || "")}" ${attrs("note")}>
+      <input type="text" class="vt-input vt-note-input" placeholder="Nota (opcional)" value="${esc(st.note || "")}" ${attrs("note", false)}>
     </div>` : ""}`;
 }
 
@@ -781,7 +799,8 @@ function featuredHTML() {
     <div class="vt-max-slot">
       <span class="vt-max-name">${esc(map[id].name)}</span>
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
-        value="${num(map[id].oneRM) > 0 ? num(map[id].oneRM) : ""}" data-i="featured-rm" data-id="${id}">
+        value="${num(map[id].oneRM) > 0 ? num(map[id].oneRM) : ""}" data-i="featured-rm" data-id="${id}"
+        autocomplete="off" autocorrect="off" spellcheck="false" name="f_maxrm_${id}">
       <span class="vt-muted-sm">kg</span>
       <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 14)}</button>
     </div>`).join("");
@@ -870,15 +889,16 @@ function settingsHTML() {
     <div class="vt-card">
       <div class="vt-settings-row">
         <div class="vt-settings-label">Descanso entre series<small>Se usa cuando el ejercicio no define el suyo</small></div>
-        <input type="number" inputmode="numeric" class="vt-input vt-mono" value="${num(settings.restSeconds)}" min="0" step="15" data-i="set-rest">
+        <input type="number" inputmode="numeric" class="vt-input vt-mono" value="${num(settings.restSeconds)}" min="0" step="15" data-i="set-rest"
+          autocomplete="off" autocorrect="off" spellcheck="false" name="f_restseconds">
       </div>
       <div class="vt-settings-row">
         <div class="vt-settings-label">Sonido<small>Pitido al terminar el descanso</small></div>
-        <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound">
+        <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound" autocomplete="off">
       </div>
       <div class="vt-settings-row">
         <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
-        <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate">
+        <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
       </div>
     </div>
     <div class="vt-card" style="margin-top:12px">
@@ -893,7 +913,7 @@ function settingsHTML() {
       <div class="vt-settings-row">
         <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
         <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
-          <input type="file" accept=".json,application/json" data-c="import-file">
+          <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
         </label>
       </div>
     </div>
@@ -944,7 +964,7 @@ function exerciseModalHTML() {
         </div>
         <div class="vt-modal-form">
           <label>Nombre
-            <input type="text" class="vt-input" id="exm-name" value="${esc(m.name)}" placeholder="Ej: Curl femoral">
+            <input type="text" class="vt-input" id="exm-name" value="${esc(m.name)}" placeholder="Ej: Curl femoral" autocomplete="off">
           </label>
           <label>Grupo muscular
             <select class="vt-input" id="exm-group">
@@ -957,7 +977,8 @@ function exerciseModalHTML() {
             </select>
           </label>
           <label id="exm-onerm-label" style="${m.type === "time" ? "display:none" : ""}">1RM estimado (kg) — opcional, para cargas por %
-            <input type="number" inputmode="decimal" class="vt-input" id="exm-onerm" min="0" step="2.5" value="${m.oneRM ?? ""}">
+            <input type="number" inputmode="decimal" class="vt-input" id="exm-onerm" min="0" step="2.5" value="${m.oneRM ?? ""}"
+              autocomplete="off" autocorrect="off" spellcheck="false" name="f_exmonerm">
           </label>
         </div>
         <div class="vt-modal-actions">
@@ -975,7 +996,7 @@ function pickerHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <div class="vt-search">${icon("search", 16)}
-            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" autofocus>
+            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" autofocus autocomplete="off">
           </div>
           <button class="vt-btn-ghost" data-a="picker-close">${icon("x", 18)}</button>
         </div>
@@ -1006,6 +1027,24 @@ function pickerListHTML() {
 }
 
 /* ----------------------------------- Compartido ---------------------------------- */
+
+// Modal de confirmación propio (reemplaza confirm() nativo). Mismo lenguaje
+// visual que exerciseModalHTML/pickerHTML: bottom sheet con backdrop.
+function confirmDialogHTML() {
+  const d = ui.confirmDialog;
+  return `
+    <div class="vt-modal-backdrop" data-a="confirm-cancel">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-form">
+          <p style="margin:0">${esc(d.message)}</p>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-ghost" data-a="confirm-cancel">Cancelar</button>
+          <button class="vt-btn-primary ${d.danger ? "vt-btn-danger" : ""}" data-a="confirm-yes">${d.danger ? "Eliminar" : "Confirmar"}</button>
+        </div>
+      </div>
+    </div>`;
+}
 
 function emptyHTML(title, detail, action) {
   return `<div class="vt-empty"><h3>${title}</h3><p>${detail}</p>${action}</div>`;
@@ -1087,88 +1126,96 @@ function finishSession() {
   const done = s.exercises.reduce((a, e) => a + e.sets.filter((st) => st.done).length, 0);
 
   if (done === 0) {
-    if (confirm("No marcaste ninguna serie. ¿Descartar la sesión completa?")) {
+    askConfirm("No marcaste ninguna serie. ¿Descartar la sesión completa?", () => {
       ui.activeSession = null; stopRest(); render();
-    }
+    }, true);
     return;
   }
+
+  // Todo lo que antes iba después del confirm() de "series sin marcar" vive
+  // acá adentro: se ejecuta directo si no hay nada sin marcar, o como
+  // callback del modal de confirmación si sí lo hay.
+  const save = () => {
+    // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
+    // ejercicio terminaría comparándose contra sí mismo.
+    const map = exMap();
+    const prHits = [];
+    for (const e of s.exercises) {
+      const type = exType(e.exerciseId);
+      const prior = priorStats(e.exerciseId);
+      for (const st of e.sets) {
+        if (!st.done || st.warmup || !isPR(type, st, prior)) continue;
+        const hit = {
+          exerciseId: e.exerciseId,
+          exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
+          type,
+          weight: num(st.weight),
+          reps: num(st.reps),
+          seconds: num(st.seconds),
+        };
+        // Sugerencia de 1RM (Epley), solo confiable entre 1 y 12 reps.
+        if (type !== "time" && hit.weight > 0 && hit.reps >= 1 && hit.reps <= 12) {
+          const estimated = Math.round(hit.weight * (1 + hit.reps / 30) / 2.5) * 2.5;
+          const currentOneRM = num(map[e.exerciseId]?.oneRM);
+          if (estimated > currentOneRM) hit.suggestedOneRM = estimated;
+        }
+        prHits.push(hit);
+      }
+    }
+
+    const cleaned = {
+      ...s,
+      durationSec: Math.round((Date.now() - new Date(s.date).getTime()) / 1000),
+      exercises: s.exercises
+        .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done) }))
+        .filter((e) => e.sets.length > 0),
+    };
+
+    // Diff contra la rutina guardada (si esta sesión vino de una): solo
+    // informativo hasta que el usuario confirme sincronizarla desde el resumen.
+    // Nunca toca `cleaned` ni las sesiones ya guardadas.
+    let routineDiff = null;
+    if (s.routineId) {
+      const routine = routines.find((r) => r.id === s.routineId);
+      if (routine) {
+        const originalIds = new Set(routine.exercises.map((re) => re.exerciseId));
+        const finalIds = new Set(cleaned.exercises.map((e) => e.exerciseId));
+        const added = [...finalIds].filter((eid) => !originalIds.has(eid))
+          .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
+        const removed = [...originalIds].filter((eid) => !finalIds.has(eid))
+          .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
+        if (added.length > 0 || removed.length > 0) {
+          routineDiff = { routineId: routine.id, routineName: routine.name, added, removed };
+        }
+      }
+    }
+
+    sessions = [cleaned, ...sessions];
+    persistSessions();
+
+    ui.sessionSummary = {
+      routineName: cleaned.routineName,
+      date: cleaned.date,
+      durationSec: cleaned.durationSec,
+      volume: sessionVolume(cleaned, false),
+      setsCount: done,
+      prHits,
+      appliedUpdates: new Set(),
+      routineDiff,
+      routineSynced: false,
+    };
+    ui.activeSession = null;
+    ui.openNotes.clear();
+    stopRest();
+    render();
+  };
+
   const unchecked = total - done;
-  if (unchecked > 0 &&
-      !confirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`)) {
-    return;
+  if (unchecked > 0) {
+    askConfirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`, save, false);
+  } else {
+    save();
   }
-  // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
-  // ejercicio terminaría comparándose contra sí mismo.
-  const map = exMap();
-  const prHits = [];
-  for (const e of s.exercises) {
-    const type = exType(e.exerciseId);
-    const prior = priorStats(e.exerciseId);
-    for (const st of e.sets) {
-      if (!st.done || st.warmup || !isPR(type, st, prior)) continue;
-      const hit = {
-        exerciseId: e.exerciseId,
-        exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
-        type,
-        weight: num(st.weight),
-        reps: num(st.reps),
-        seconds: num(st.seconds),
-      };
-      // Sugerencia de 1RM (Epley), solo confiable entre 1 y 12 reps.
-      if (type !== "time" && hit.weight > 0 && hit.reps >= 1 && hit.reps <= 12) {
-        const estimated = Math.round(hit.weight * (1 + hit.reps / 30) / 2.5) * 2.5;
-        const currentOneRM = num(map[e.exerciseId]?.oneRM);
-        if (estimated > currentOneRM) hit.suggestedOneRM = estimated;
-      }
-      prHits.push(hit);
-    }
-  }
-
-  const cleaned = {
-    ...s,
-    durationSec: Math.round((Date.now() - new Date(s.date).getTime()) / 1000),
-    exercises: s.exercises
-      .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done) }))
-      .filter((e) => e.sets.length > 0),
-  };
-
-  // Diff contra la rutina guardada (si esta sesión vino de una): solo
-  // informativo hasta que el usuario confirme sincronizarla desde el resumen.
-  // Nunca toca `cleaned` ni las sesiones ya guardadas.
-  let routineDiff = null;
-  if (s.routineId) {
-    const routine = routines.find((r) => r.id === s.routineId);
-    if (routine) {
-      const originalIds = new Set(routine.exercises.map((re) => re.exerciseId));
-      const finalIds = new Set(cleaned.exercises.map((e) => e.exerciseId));
-      const added = [...finalIds].filter((eid) => !originalIds.has(eid))
-        .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
-      const removed = [...originalIds].filter((eid) => !finalIds.has(eid))
-        .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
-      if (added.length > 0 || removed.length > 0) {
-        routineDiff = { routineId: routine.id, routineName: routine.name, added, removed };
-      }
-    }
-  }
-
-  sessions = [cleaned, ...sessions];
-  persistSessions();
-
-  ui.sessionSummary = {
-    routineName: cleaned.routineName,
-    date: cleaned.date,
-    durationSec: cleaned.durationSec,
-    volume: sessionVolume(cleaned, false),
-    setsCount: done,
-    prHits,
-    appliedUpdates: new Set(),
-    routineDiff,
-    routineSynced: false,
-  };
-  ui.activeSession = null;
-  ui.openNotes.clear();
-  stopRest();
-  render();
 }
 
 // Pantalla de resumen al finalizar sesión: overlay de pantalla completa
@@ -1259,13 +1306,16 @@ function importJSON(file) {
 
     if (Array.isArray(data.sessions)) {
       // Respaldo completo: reemplaza todo.
-      if (!confirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?")) return;
-      if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
-      sessions = data.sessions; persistSessions();
-      if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
-      if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
-      alert("Respaldo restaurado ✔");
-    } else if (Array.isArray(data.routines) || Array.isArray(inExercises)) {
+      askConfirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
+        if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
+        sessions = data.sessions; persistSessions();
+        if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
+        if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
+        alert("Respaldo restaurado ✔");
+      }, true);
+      return;
+    }
+    if (Array.isArray(data.routines) || Array.isArray(inExercises)) {
       // Solo rutinas y/o ejercicios nuevos: se agregan sin borrar nada.
       let nEx = 0, nRt = 0;
       if (Array.isArray(inExercises)) {
@@ -1380,6 +1430,19 @@ document.addEventListener("click", (e) => {
       render();
       break;
 
+    /* Modal de confirmación propio */
+    case "confirm-yes": {
+      const dlg = ui.confirmDialog;
+      dlg?.onYes();
+      ui.confirmDialog = null;
+      render();
+      break;
+    }
+    case "confirm-cancel":
+      ui.confirmDialog = null;
+      render();
+      break;
+
     /* Rutinas */
     case "routine-new":
       ui.tab = "rutinas";
@@ -1401,19 +1464,22 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "routine-del":
-      if (confirm("¿Eliminar esta rutina? (el historial no se borra)")) {
+      askConfirm("¿Eliminar esta rutina? (el historial no se borra)", () => {
         routines = routines.filter((r) => r.id !== id);
         persistRoutines(); render();
-      }
+      }, true);
       break;
     case "routine-start": case "train-start": {
       const r = routines.find((x) => x.id === id);
       if (r) {
-        if (ui.activeSession && !confirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?")) break;
-        ui.activeSession = buildSessionFromRoutine(r);
-        ui.openNotes.clear();
-        ui.tab = "entrenar";
-        render();
+        const start = () => {
+          ui.activeSession = buildSessionFromRoutine(r);
+          ui.openNotes.clear();
+          ui.tab = "entrenar";
+          render();
+        };
+        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+        else start();
       }
       break;
     }
@@ -1472,24 +1538,31 @@ document.addEventListener("click", (e) => {
     }
 
     /* Sesión activa */
-    case "train-free":
-      if (ui.activeSession && !confirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?")) break;
-      ui.activeSession = { id: uid("ses"), routineId: null, routineName: "Sesión libre", date: new Date().toISOString(), exercises: [] };
-      ui.openNotes.clear();
-      render();
+    case "train-free": {
+      const start = () => {
+        ui.activeSession = { id: uid("ses"), routineId: null, routineName: "Sesión libre", date: new Date().toISOString(), exercises: [] };
+        ui.openNotes.clear();
+        render();
+      };
+      if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+      else start();
       break;
+    }
     case "session-ex-remove": {
       const exI = +el.dataset.ex;
       const ex = ui.activeSession.exercises[exI];
       const hasDone = ex.sets.some((st) => st.done);
-      if (hasDone && !confirm("Este ejercicio tiene series marcadas como hechas. ¿Quitarlo de la sesión de todas formas?")) break;
-      // Mismo cuidado que deleteSet: el cronómetro debe seguir apuntando al índice correcto.
-      if (runningTimer) {
-        if (runningTimer.exIdx === exI) runningTimer = null;
-        else if (runningTimer.exIdx > exI) runningTimer.exIdx--;
-      }
-      ui.activeSession.exercises.splice(exI, 1);
-      render();
+      const removeEx = () => {
+        // Mismo cuidado que deleteSet: el cronómetro debe seguir apuntando al índice correcto.
+        if (runningTimer) {
+          if (runningTimer.exIdx === exI) runningTimer = null;
+          else if (runningTimer.exIdx > exI) runningTimer.exIdx--;
+        }
+        ui.activeSession.exercises.splice(exI, 1);
+        render();
+      };
+      if (hasDone) askConfirm("Este ejercicio tiene series marcadas como hechas. ¿Quitarlo de la sesión de todas formas?", removeEx, true);
+      else removeEx();
       break;
     }
     case "set-add": {
@@ -1540,10 +1613,10 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "session-discard":
-      if (confirm("¿Descartar la sesión completa? No se guardará nada.")) {
+      askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;
         ui.activeSession = null; ui.openNotes.clear(); stopRest(); render();
-      }
+      }, true);
       break;
     case "session-finish": finishSession(); break;
     case "rest-cancel": stopRest(); break;
@@ -1586,10 +1659,10 @@ document.addEventListener("click", (e) => {
     /* Historial */
     case "hist-toggle": ui.openHistory = ui.openHistory === id ? null : id; render(); break;
     case "hist-del":
-      if (confirm("¿Eliminar esta sesión del historial?")) {
+      askConfirm("¿Eliminar esta sesión del historial?", () => {
         sessions = sessions.filter((s) => s.id !== id);
         persistSessions(); render();
-      }
+      }, true);
       break;
 
     /* Progreso */
@@ -1615,7 +1688,7 @@ document.addEventListener("click", (e) => {
       const msg = usedRoutines.length
         ? `Este ejercicio está en ${usedRoutines.length} rutina(s); también se quitará de ellas. El historial se conserva. ¿Eliminar?`
         : "¿Eliminar este ejercicio? El historial se conserva.";
-      if (confirm(msg)) {
+      askConfirm(msg, () => {
         exercises = exercises.filter((x) => x.id !== id);
         persistExercises();
         routines = routines.map((r) => ({ ...r, exercises: r.exercises.filter((x) => x.exerciseId !== id) }));
@@ -1623,7 +1696,7 @@ document.addEventListener("click", (e) => {
         settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
         persistSettings();
         render();
-      }
+      }, true);
       break;
     }
     case "ex-modal-cancel": ui.exerciseModal = null; render(); break;

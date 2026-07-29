@@ -111,3 +111,29 @@ Entradas nuevas al final. No reescribir lo anterior.
   distinta a la anterior y por tamaño (512×512) que corresponde.
   sw.js sube a goat-v4 (el ícono es parte del app shell cacheado).
 - Sin decisiones nuevas de arquitectura/diseño.
+
+## 2026-07-29 (cont. 4)
+- Se implementó: modal de confirmación propio (askConfirm/
+  confirmDialogHTML/ui.confirmDialog) que reemplaza TODOS los
+  confirm() nativos del código (10 sitios: routine-del, ex-del,
+  hist-del, session-discard, session-ex-remove, routine-start/
+  train-start, train-free, los dos de finishSession, y el de
+  importJSON). Mismo lenguaje visual que los modales existentes
+  (bottom sheet), con variante "danger" (fondo rojo) para las
+  acciones destructivas. finishSession quedó reestructurado con la
+  lógica de guardado dentro de un closure `save` para poder colgarla
+  del callback del modal sin romper el flujo anidado que ya tenía
+  (PRs, diff de rutina, sessionSummary).
+- Se agregó autocomplete="off" a todos los <input> de la app; a los
+  numéricos (kg/reps/seg/RPE/descanso/targets/1RM) además
+  autocorrect="off" spellcheck="false" y un name único no
+  descriptivo (ej. f_weight_0_1), que es lo que Chrome a veces
+  necesita para dejar de mostrar la barra de autocompletar sobre el
+  teclado en campos numéricos aunque autocomplete ya esté en off.
+- Pendiente de probar: verificado en el navegador — los 10 flujos de
+  confirmación (cancelar y confirmar, incluida la variante danger),
+  incluido un caso con confirm() "trampa" (lanza error si algo lo
+  llama) que nunca se disparó. Atributos de autocomplete confirmados
+  en el DOM para inputs de texto y numéricos. 5 pestañas sin errores
+  de consola. Falta confirmar en el teléfono real que ya no aparece
+  la barra de autocompletar de Chrome sobre el teclado.
