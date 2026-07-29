@@ -21,3 +21,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   el gesto táctil real en el teléfono de Martín.
 - Sin decisiones nuevas de arquitectura/diseño (cambios dentro de lo ya
   cerrado en CLAUDE.md).
+
+## 2026-07-28 (cont. 2)
+- Se corrigió: en pantallas angostas (~360px, teléfono real) la fila de
+  serie se desbordaba y el trofeo de PR / ícono de nota quedaban
+  recortados por el overflow:hidden del swipe — pasaba en todas las
+  filas, no solo en las de tipo "tiempo". Se achicó el gap/padding de
+  la fila y el ancho de los inputs de forma general, y además los
+  inputs y el botón de cronómetro en las filas de tipo "tiempo" (que
+  tienen un control más).
+- Pendiente de probar: verificado por medición de overflow y captura
+  en un viewport de 360px de ancho; falta confirmar en el teléfono
+  real de Martín.
+- Sin decisiones nuevas de arquitectura/diseño.

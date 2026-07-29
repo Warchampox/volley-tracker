@@ -294,14 +294,19 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 .vt-swipe-wrap.is-removing { transition: opacity 180ms ease; opacity: 0; }
 
 .vt-set-row {
-  display: flex; align-items: center; gap: 7px;
-  padding: 7px 6px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 4px;
   border-radius: 0;
   border-bottom: 1px solid var(--line);
   border-left: 2px solid transparent;
   background: var(--bg); /* opaco: evita que el fondo rojo del swipe se traslunca en reposo */
   transition: background-color 180ms ease, border-left-color 180ms ease, transform 200ms ease;
 }
+/* Nota (y RPE) con menos padding solo dentro de la fila de serie: en pantallas
+   angostas la fila (check + calentamiento + inputs + trofeo + nota) no cabía
+   con el padding por defecto de .vt-btn-ghost y se recortaba contra el
+   overflow:hidden del swipe. */
+.vt-set-row .vt-btn-ghost { padding: 4px; }
 .vt-sets .vt-set-row:last-child { border-bottom: none; }
 /* Tinte + fondo opaco en una sola declaración (dos capas): mismo resultado visual
    que antes, pero opaco de verdad para que el rojo del swipe no se transluzca. */
@@ -311,7 +316,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 /* Valores de serie como texto plano de tabla: sin caja; al enfocar, subrayado ámbar
    (box-shadow inset: no mueve el layout). El tap target se mantiene con el padding. */
 .vt-set-input {
-  width: 58px; text-align: center; padding: 10px 4px;
+  width: 52px; text-align: center; padding: 10px 4px;
   background: transparent; border: none; border-radius: 0;
   font-weight: 600; font-size: 15px;
 }
@@ -376,6 +381,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(143, 160, 172, 0.08), rgba(143, 160, 172, 0.08)), var(--bg); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
 .vt-cap-warm { width: 28px; flex-shrink: 0; }
+
+/* Fila tipo "tiempo": seg + peso + botón de cronómetro son un control más que
+   las demás filas, así que aun con la fila más angosta de arriba seguía sin
+   caber. Encoge además los inputs y el botón de cronómetro de esta variante. */
+.vt-set-row-time .vt-set-input-sm { width: 44px; }
+.vt-set-row-time .vt-timer-btn { width: 26px; height: 26px; }
 
 .vt-setline2 { display: flex; gap: 8px; padding: 2px 6px 6px 29px; align-items: center; }
 .vt-rpe-input {

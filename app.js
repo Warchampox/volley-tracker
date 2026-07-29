@@ -654,8 +654,8 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   if (type === "time") {
     const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.seconds)}" ${attrs("seconds")}>
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>
+      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.seconds)}" ${attrs("seconds")}>
+      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.weight)}" ${attrs("weight")}>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
   } else if (type === "bodyweight") {
@@ -672,7 +672,7 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   return `
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
         <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
         <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
         <span class="vt-set-num">${label}</span>
