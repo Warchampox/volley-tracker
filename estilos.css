@@ -480,6 +480,30 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
 
+/* Resumen al finalizar sesión: overlay de pantalla completa, no el
+   bottom-sheet chico de picker/exerciseModal. */
+.vt-summary-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: var(--bg);
+  display: flex; justify-content: center;
+  overflow-y: auto;
+}
+.vt-summary-inner { width: 100%; max-width: 480px; padding: 40px 16px 32px; }
+/* El nombre de rutina es texto libre del usuario: sin mayúsculas forzadas
+   (misma regla que .vt-block h3). */
+.vt-summary-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 26px;
+  margin: 4px 0 0; letter-spacing: 0.01em;
+  text-transform: none;
+}
+.vt-pr-hit { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.vt-pr-hit:last-child { border-bottom: none; padding-bottom: 0; }
+.vt-pr-hit-row { display: flex; align-items: center; gap: 8px; }
+.vt-pr-hit-name { flex: 1; font-size: 14px; min-width: 0; }
+.vt-pr-hit-value { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
+.vt-pr-hit-applied { color: var(--green); font-size: 12.5px; display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
+
 .vt-session-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .vt-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .vt-detail-row .vt-mono { text-align: right; }

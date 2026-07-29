@@ -100,6 +100,7 @@ const ui = {
   manageExercises: false,
   exerciseModal: null,    // null | {id|null, name, group, type}
   openNotes: new Set(),   // "exIdx:setIdx" con línea RPE/nota abierta
+  sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
 };
 
 const exMap = () => Object.fromEntries(exercises.map((e) => [e.id, e]));
@@ -317,7 +318,8 @@ function render() {
       </nav>
     </div>
     ${ui.picker ? pickerHTML() : ""}
-    ${ui.exerciseModal ? exerciseModalHTML() : ""}`;
+    ${ui.exerciseModal ? exerciseModalHTML() : ""}
+    ${ui.sessionSummary ? sessionSummaryHTML() : ""}`;
 
   updateRestBar();
   if (ui.tab === "progreso") mountChart();
@@ -537,7 +539,7 @@ function trainActiveHTML() {
 
   return `
     <header class="vt-header vt-header-sticky">
-      <div class="vt-header-brand">${logoHTML()}<div>
+      <div class="vt-header-brand"><div>
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
         <h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>
       </div></div>
@@ -1092,6 +1094,33 @@ function finishSession() {
       !confirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`)) {
     return;
   }
+  // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
+  // ejercicio terminaría comparándose contra sí mismo.
+  const map = exMap();
+  const prHits = [];
+  for (const e of s.exercises) {
+    const type = exType(e.exerciseId);
+    const prior = priorStats(e.exerciseId);
+    for (const st of e.sets) {
+      if (!st.done || st.warmup || !isPR(type, st, prior)) continue;
+      const hit = {
+        exerciseId: e.exerciseId,
+        exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
+        type,
+        weight: num(st.weight),
+        reps: num(st.reps),
+        seconds: num(st.seconds),
+      };
+      // Sugerencia de 1RM (Epley), solo confiable entre 1 y 12 reps.
+      if (type !== "time" && hit.weight > 0 && hit.reps >= 1 && hit.reps <= 12) {
+        const estimated = Math.round(hit.weight * (1 + hit.reps / 30) / 2.5) * 2.5;
+        const currentOneRM = num(map[e.exerciseId]?.oneRM);
+        if (estimated > currentOneRM) hit.suggestedOneRM = estimated;
+      }
+      prHits.push(hit);
+    }
+  }
+
   const cleaned = {
     ...s,
     durationSec: Math.round((Date.now() - new Date(s.date).getTime()) / 1000),
@@ -1101,11 +1130,64 @@ function finishSession() {
   };
   sessions = [cleaned, ...sessions];
   persistSessions();
+
+  ui.sessionSummary = {
+    routineName: cleaned.routineName,
+    date: cleaned.date,
+    durationSec: cleaned.durationSec,
+    volume: sessionVolume(cleaned, false),
+    setsCount: done,
+    prHits,
+    appliedUpdates: new Set(),
+  };
   ui.activeSession = null;
   ui.openNotes.clear();
   stopRest();
-  ui.tab = "historial";
   render();
+}
+
+// Pantalla de resumen al finalizar sesión: overlay de pantalla completa
+// (no el bottom-sheet chico de picker/exerciseModal).
+function sessionSummaryHTML() {
+  const sum = ui.sessionSummary;
+
+  const prSection = sum.prHits.length === 0
+    ? `<p class="vt-muted" style="text-align:center;margin-top:18px">Sin PRs esta vez</p>`
+    : `<div class="vt-card" style="margin-top:18px">
+        <h3>PRs de hoy</h3>
+        ${sum.prHits.map((hit) => {
+          const applied = sum.appliedUpdates.has(hit.exerciseId);
+          return `<div class="vt-pr-hit">
+            <div class="vt-pr-hit-row">
+              <span class="vt-pr">${icon("trophy", 16)}</span>
+              <span class="vt-pr-hit-name">${esc(hit.exerciseName)}</span>
+              <span class="vt-pr-hit-value vt-mono">${esc(fmtSet(hit.type, hit))}</span>
+            </div>
+            ${hit.suggestedOneRM ? (applied
+              ? `<p class="vt-pr-hit-applied">${icon("check", 13)} 1RM actualizado</p>`
+              : `<button class="vt-btn-outline vt-small" data-a="summary-apply-1rm" data-id="${hit.exerciseId}" data-value="${hit.suggestedOneRM}">Actualizar 1RM a ${hit.suggestedOneRM}kg</button>`
+            ) : ""}
+          </div>`;
+        }).join("")}
+      </div>`;
+
+  return `
+    <div class="vt-summary-overlay">
+      <div class="vt-summary-inner">
+        <p class="vt-eyebrow">${fmtDate(sum.date)}</p>
+        <h1 class="vt-summary-title">${esc(sum.routineName)}</h1>
+        <div class="vt-stat-row" style="margin-top:16px">
+          <div class="vt-stat"><span class="vt-stat-label">Duración</span>
+            <span class="vt-stat-value">${fmtDurationMin(sum.durationSec)}</span></div>
+          <div class="vt-stat"><span class="vt-stat-label">Volumen</span>
+            <span class="vt-stat-value">${Math.round(sum.volume).toLocaleString("es-CL")} kg</span></div>
+          <div class="vt-stat"><span class="vt-stat-label">Series</span>
+            <span class="vt-stat-value">${sum.setsCount}</span></div>
+        </div>
+        ${prSection}
+        <button class="vt-btn-primary vt-full" style="margin-top:20px" data-a="summary-close">Cerrar</button>
+      </div>
+    </div>`;
 }
 
 /* --------------------------------- Export / Import -------------------------------- */
@@ -1413,6 +1495,23 @@ document.addEventListener("click", (e) => {
       break;
     case "session-finish": finishSession(); break;
     case "rest-cancel": stopRest(); break;
+
+    /* Resumen de sesión */
+    case "summary-apply-1rm": {
+      const ex = exercises.find((e) => e.id === id);
+      if (ex) {
+        ex.oneRM = num(el.dataset.value);
+        persistExercises();
+        ui.sessionSummary.appliedUpdates.add(id);
+        render();
+      }
+      break;
+    }
+    case "summary-close":
+      ui.sessionSummary = null;
+      ui.tab = "historial";
+      render();
+      break;
 
     /* Historial */
     case "hist-toggle": ui.openHistory = ui.openHistory === id ? null : id; render(); break;

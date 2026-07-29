@@ -61,3 +61,21 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Decisión: icons/club-logo.png se dejó en el repo sin borrar (solo
   se quitaron las referencias en código) por si se quiere reusar o
   confirmar su borrado explícitamente más adelante.
+
+## 2026-07-29 (cont.)
+- Se implementó: pantalla de resumen al finalizar sesión (overlay de
+  pantalla completa, distinto del bottom-sheet chico de picker/
+  exerciseModal) con duración/volumen/series y la lista de PRs
+  logrados. Si un PR de peso×reps (reps entre 1 y 12) supera el 1RM
+  actual del catálogo, se sugiere el nuevo 1RM (fórmula de Epley) con
+  un botón para aplicarlo directo desde el resumen.
+- Bug encontrado y corregido de paso: el rebrand a GOAT de ayer quitó
+  la función logoHTML() pero dejó un segundo llamado suelto en
+  trainActiveHTML() (el header de la sesión activa tiene su propio
+  markup, no pasa por tabHeaderHTML) — esto rompía CUALQUIER inicio
+  de sesión de entrenamiento con un error silencioso. Ya está
+  arreglado y verificado.
+- Pendiente de probar: verificado el flujo completo en el navegador
+  (sesión sin PR, con PR y sugerencia de 1RM aplicada, y PR con
+  reps>12 sin sugerencia) y las 5 pestañas sin errores de consola;
+  falta probar en el teléfono real.
