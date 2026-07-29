@@ -103,3 +103,11 @@ Entradas nuevas al final. No reescribir lo anterior.
   Martín NO se reemplazó — en Descargas solo apareció una imagen de
   comparación lado a lado (maskable_fixed_check.png, 1044×512, no es
   el ícono en sí), no el archivo cuadrado 512×512 real.
+
+## 2026-07-29 (cont. 3)
+- Se reemplazó icons/icon-512-maskable.png con la versión corregida
+  (margen de seguridad más chico) que Martín dejó en
+  ~/Downloads/icons/icon-512-maskable.png. Confirmado por MD5 que es
+  distinta a la anterior y por tamaño (512×512) que corresponde.
+  sw.js sube a goat-v4 (el ícono es parte del app shell cacheado).
+- Sin decisiones nuevas de arquitectura/diseño.
