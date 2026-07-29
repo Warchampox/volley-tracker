@@ -90,6 +90,16 @@ button, svg {
    Selector reforzado para ganarle a la regla general .vt-header h1 de títulos fijos. */
 .vt-header h1.vt-header-title-sm,
 .vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; margin: 0; text-transform: none; }
+/* Nombre editable de una sesión libre: mismo tamaño/tipografía que el título
+   fijo de arriba, pero sin caja de formulario — se siente parte del header,
+   con un borde punteado abajo como única pista de que se puede tocar. */
+.vt-session-name-input {
+  display: block; width: 100%; min-width: 0;
+  background: transparent; border: none; border-bottom: 1px dashed var(--line);
+  color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+  font-size: 24px; padding: 0 0 2px;
+}
+.vt-session-name-input:focus { outline: none; border-bottom-color: var(--blue); }
 
 .vt-scoreboard {
   font-family: 'JetBrains Mono', monospace;
@@ -241,6 +251,18 @@ button, svg {
 .vt-tag-more { opacity: 0.6; }
 
 .vt-card-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+
+/* Carpetas de rutinas: encabezado colapsable + acciones, mismo estilo de
+   card de rutina (.vt-block) adentro cuando está expandida. */
+.vt-folder { margin-bottom: 22px; }
+.vt-folder-head-row { display: flex; align-items: center; gap: 4px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.vt-folder-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  background: transparent; border: none; color: var(--text); cursor: pointer;
+  padding: 4px 0; font: inherit; text-align: left;
+}
+/* Nombre de carpeta es texto libre del usuario: sin mayúsculas forzadas. */
+.vt-folder-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; text-transform: none; }
 
 .vt-input {
   background: var(--surface-2);

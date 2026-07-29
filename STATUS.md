@@ -137,3 +137,39 @@ Entradas nuevas al final. No reescribir lo anterior.
   en el DOM para inputs de texto y numéricos. 5 pestañas sin errores
   de consola. Falta confirmar en el teléfono real que ya no aparece
   la barra de autocompletar de Chrome sobre el teclado.
+
+## 2026-07-29 (cont. 5)
+- Se implementó: sesión libre con nombre automático por fecha
+  (`Sesión libre {fecha}`) editable en caliente durante el
+  entrenamiento (input integrado al header, solo si routineId es
+  null); "Guardar como rutina" en el resumen de fin de sesión, que
+  arma una plantilla de rutina a partir de los ejercicios/sets que
+  quedaron marcados (targetSets = cantidad de sets, targetReps/
+  targetWeight/targetSeconds = los del último set).
+- Se implementó: botón "Repetir" en cada card de Historial —
+  arranca una sesión libre nueva (buildSessionFromPastSession) con
+  los mismos ejercicios y los pesos/reps/segundos de esa vez, pero
+  sin marcar, sin RPE y sin nota; pide confirmación (modal propio)
+  si ya hay una sesión en curso.
+- Se implementó: carpetas de rutinas (routineFolders en localStorage,
+  cada rutina con folderId opcional). Crear/renombrar/eliminar
+  carpeta (eliminar no borra las rutinas, quedan sueltas), colapsar/
+  expandir (solo de la sesión de uso, no persiste), mover una rutina
+  a una carpeta desde un bottom-sheet que también permite crear la
+  carpeta ahí mismo y asigna automático. Export/import incluyen
+  routineFolders y el folderId de cada rutina.
+- Bug encontrado y corregido de paso: al guardar una rutina editada
+  (editor-save), el objeto "stamped" no copiaba folderId — cada vez
+  que se editaba y guardaba una rutina que estaba dentro de una
+  carpeta, salía silenciosamente de la carpeta. Ya está arreglado y
+  verificado (edité y guardé una rutina en carpeta, folderId se
+  mantuvo).
+- Pendiente de probar: verificado a fondo en el navegador — carpetas
+  (crear, mover 2 rutinas, colapsar/expandir, eliminar carpeta con
+  rutinas adentro, mover con "+ nueva carpeta" y auto-asignación),
+  sesión libre nombrable + guardar como rutina + verificado que NO
+  aparece en sesiones desde rutina guardada, repetir sesión pasada
+  (valores precargados sin marcar, sin RPE/nota, con confirmación si
+  hay sesión en curso), export/import de routineFolders (incluido
+  round-trip completo). 5 pestañas sin errores de consola. Falta
+  probar todo esto en el teléfono real.

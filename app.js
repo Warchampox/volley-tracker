@@ -80,11 +80,13 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   save("custom-exercises", exercises);
 }
 let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [] }, load("settings", {}));
+let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
 
 const persistRoutines = () => save("routines", routines);
 const persistSessions = () => save("sessions", sessions);
 const persistExercises = () => save("custom-exercises", exercises);
 const persistSettings = () => save("settings", settings);
+const persistFolders = () => save("routine-folders", routineFolders);
 
 /* ---------------------------------- Estado UI ---------------------------------- */
 
@@ -102,6 +104,9 @@ const ui = {
   openNotes: new Set(),   // "exIdx:setIdx" con línea RPE/nota abierta
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, danger, onYes}
+  collapsedFolders: new Set(), // ids de carpeta colapsadas — solo de la sesión de uso, no persiste
+  folderModal: null,      // null | {id|null, name}
+  movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
@@ -143,6 +148,8 @@ const PATHS = {
   pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
   grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
 };
 
 const icon = (name, s = 18) =>
@@ -329,7 +336,9 @@ function render() {
     ${ui.picker ? pickerHTML() : ""}
     ${ui.exerciseModal ? exerciseModalHTML() : ""}
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
-    ${ui.confirmDialog ? confirmDialogHTML() : ""}`;
+    ${ui.confirmDialog ? confirmDialogHTML() : ""}
+    ${ui.folderModal ? folderModalHTML() : ""}
+    ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}`;
 
   updateRestBar();
   if (ui.tab === "progreso") mountChart();
@@ -412,40 +421,106 @@ function mountSortables() {
 
 /* --------------------------------- Vista Rutinas -------------------------------- */
 
+function routineCardHTML(r, map, lastUsed) {
+  const last = lastUsed(r.id);
+  return `<div class="vt-block">
+    <div class="vt-card-top"><div>
+      <h3>${esc(r.name) || "Sin nombre"}</h3>
+      <p class="vt-muted">${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
+    </div></div>
+    <div class="vt-tags">
+      ${r.exercises.slice(0, 4).map((re) =>
+        `<span class="vt-tag" style="border-color:${GROUP_COLORS[map[re.exerciseId]?.group] || "var(--line)"}">${esc(map[re.exerciseId]?.name || "Ejercicio")}</span>`).join("")}
+      ${r.exercises.length > 4 ? `<span class="vt-tag vt-tag-more">+${r.exercises.length - 4}</span>` : ""}
+    </div>
+    <div class="vt-card-actions">
+      <button class="vt-btn-primary vt-flex" data-a="routine-start" data-id="${r.id}">${icon("play", 18)} Iniciar</button>
+      <button class="vt-btn-ghost" data-a="routine-edit" data-id="${r.id}" aria-label="Editar">${icon("pencil", 16)}</button>
+      <button class="vt-btn-ghost" data-a="routine-dup" data-id="${r.id}" aria-label="Duplicar">${icon("copy", 16)}</button>
+      <button class="vt-btn-ghost" data-a="routine-move" data-id="${r.id}" aria-label="Mover a carpeta">${icon("folder", 16)}</button>
+      <button class="vt-btn-ghost vt-danger" data-a="routine-del" data-id="${r.id}" aria-label="Eliminar">${icon("trash", 16)}</button>
+    </div>
+  </div>`;
+}
+
 function routinesHTML() {
   const map = exMap();
   const lastUsed = (rid) => { const s = sessions.find((s) => s.routineId === rid); return s ? s.date : null; };
 
-  const list = routines.length === 0
+  const loose = routines.filter((r) => !r.folderId);
+  const looseHTML = loose.length ? `<div class="vt-list">${loose.map((r) => routineCardHTML(r, map, lastUsed)).join("")}</div>` : "";
+
+  const foldersHTML = routineFolders.map((f) => {
+    const inFolder = routines.filter((r) => r.folderId === f.id);
+    const collapsed = ui.collapsedFolders.has(f.id);
+    return `<div class="vt-folder">
+      <div class="vt-folder-head-row">
+        <button class="vt-folder-toggle" data-a="folder-toggle" data-id="${f.id}">
+          ${icon(collapsed ? "chevDown" : "chevUp", 16)}
+          <span class="vt-folder-name">${esc(f.name)}</span>
+          <span class="vt-muted-sm">${inFolder.length} rutina${inFolder.length !== 1 ? "s" : ""}</span>
+        </button>
+        <button class="vt-btn-ghost" data-a="folder-edit" data-id="${f.id}" aria-label="Renombrar carpeta">${icon("pencil", 14)}</button>
+        <button class="vt-btn-ghost vt-danger" data-a="folder-del" data-id="${f.id}" aria-label="Eliminar carpeta">${icon("trash", 14)}</button>
+      </div>
+      ${collapsed ? "" : (inFolder.length
+        ? `<div class="vt-list">${inFolder.map((r) => routineCardHTML(r, map, lastUsed)).join("")}</div>`
+        : `<p class="vt-muted" style="padding:0 4px 14px">Sin rutinas todavía — usa el ícono de carpeta en una rutina para moverla acá.</p>`)}
+    </div>`;
+  }).join("");
+
+  const body = routines.length === 0 && routineFolders.length === 0
     ? emptyHTML("Aún no armas ninguna rutina",
         "Crea tu primera rutina de entrenamiento — sin límite de cuántas puedes guardar, aunque las cambies cada mes.",
         `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`)
-    : `<div class="vt-list">${routines.map((r) => {
-        const last = lastUsed(r.id);
-        return `<div class="vt-block">
-          <div class="vt-card-top"><div>
-            <h3>${esc(r.name) || "Sin nombre"}</h3>
-            <p class="vt-muted">${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
-          </div></div>
-          <div class="vt-tags">
-            ${r.exercises.slice(0, 4).map((re) =>
-              `<span class="vt-tag" style="border-color:${GROUP_COLORS[map[re.exerciseId]?.group] || "var(--line)"}">${esc(map[re.exerciseId]?.name || "Ejercicio")}</span>`).join("")}
-            ${r.exercises.length > 4 ? `<span class="vt-tag vt-tag-more">+${r.exercises.length - 4}</span>` : ""}
-          </div>
-          <div class="vt-card-actions">
-            <button class="vt-btn-primary vt-flex" data-a="routine-start" data-id="${r.id}">${icon("play", 18)} Iniciar</button>
-            <button class="vt-btn-ghost" data-a="routine-edit" data-id="${r.id}" aria-label="Editar">${icon("pencil", 16)}</button>
-            <button class="vt-btn-ghost" data-a="routine-dup" data-id="${r.id}" aria-label="Duplicar">${icon("copy", 16)}</button>
-            <button class="vt-btn-ghost vt-danger" data-a="routine-del" data-id="${r.id}" aria-label="Eliminar">${icon("trash", 16)}</button>
-          </div>
-        </div>`;
-      }).join("")}</div>`;
+    : looseHTML + foldersHTML;
 
   return `
     <header class="vt-header">
       ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
-      <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
-    </header>${list}`;
+      <div style="display:flex;gap:8px">
+        <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 20)}</button>
+        <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
+      </div>
+    </header>${body}`;
+}
+
+function folderModalHTML() {
+  const m = ui.folderModal;
+  return `
+    <div class="vt-modal-backdrop" data-a="folder-modal-cancel">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">${m.id ? "Renombrar carpeta" : "Nueva carpeta"}</h2>
+          <button class="vt-btn-ghost" data-a="folder-modal-cancel">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-form">
+          <label>Nombre
+            <input type="text" class="vt-input" id="fold-name" value="${esc(m.name)}" placeholder="Ej: Junio 2026" autocomplete="off">
+          </label>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-primary" data-a="folder-modal-save">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function moveRoutineHTML() {
+  return `
+    <div class="vt-modal-backdrop" data-a="move-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">Mover a carpeta</h2>
+          <button class="vt-btn-ghost" data-a="move-close">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-body">
+          <button class="vt-modal-row" data-a="move-pick" data-folder="">${icon("x", 15)} Sin carpeta</button>
+          ${routineFolders.map((f) => `<button class="vt-modal-row" data-a="move-pick" data-folder="${f.id}">${icon("folder", 15)} ${esc(f.name)}</button>`).join("")}
+          <button class="vt-modal-row vt-modal-add" data-a="move-new-folder">${icon("plus", 16)} Nueva carpeta</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* -------------------------------- Editor de rutina ------------------------------- */
@@ -552,7 +627,9 @@ function trainActiveHTML() {
     <header class="vt-header vt-header-sticky">
       <div class="vt-header-brand"><div>
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
-        <h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>
+        ${s.routineId === null
+          ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
+          : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div></div>
       <div style="display:flex;gap:8px">
         <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
@@ -720,13 +797,16 @@ function historyHTML() {
         const open = ui.openHistory === s.id;
         const volume = sessionVolume(s, false);
         return `<div class="vt-block">
-          <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
-            <div>
-              <h3>${esc(s.routineName)}</h3>
-              <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
-            </div>
-            ${icon(open ? "chevUp" : "chevDown", 18)}
-          </button>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
+              <div>
+                <h3>${esc(s.routineName)}</h3>
+                <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
+              </div>
+              ${icon(open ? "chevUp" : "chevDown", 18)}
+            </button>
+            <button class="vt-btn-ghost" data-a="session-repeat" data-id="${s.id}" aria-label="Repetir esta sesión">${icon("repeat", 16)}</button>
+          </div>
           ${open ? `<div class="vt-session-detail">
             ${s.exercises.map((e) => {
               const t = exType(e.exerciseId);
@@ -1119,6 +1199,39 @@ function buildSessionFromRoutine(r) {
   };
 }
 
+// Repetir una sesión pasada: arranca una sesión libre nueva (nunca vinculada
+// a una rutina) con los mismos ejercicios y los pesos/reps/segundos que se
+// hicieron esa vez, pero sin marcar, sin RPE y sin nota — lista para hoy.
+function buildSessionFromPastSession(pastSession) {
+  return {
+    id: uid("ses"),
+    routineId: null,
+    routineName: pastSession.routineName,
+    date: new Date().toISOString(),
+    exercises: pastSession.exercises.map((e) => {
+      const sets = e.sets.map((st) => ({
+        done: false,
+        warmup: st.warmup,
+        weight: st.weight,
+        reps: st.reps,
+        seconds: st.seconds,
+        rpe: null,
+        note: "",
+      }));
+      const lastSet = sets[sets.length - 1];
+      const target = { sets: sets.length, reps: lastSet?.reps, weight: lastSet?.weight, seconds: lastSet?.seconds };
+      return {
+        exerciseId: e.exerciseId,
+        target,
+        restSeconds: num(e.restSeconds) || 0,
+        linkPrev: !!e.linkPrev,
+        note: e.note || "",
+        sets,
+      };
+    }),
+  };
+}
+
 function finishSession() {
   stopSetTimer(); // conserva lo acumulado de una serie cronometrándose
   const s = ui.activeSession;
@@ -1194,6 +1307,7 @@ function finishSession() {
     persistSessions();
 
     ui.sessionSummary = {
+      routineId: cleaned.routineId,
       routineName: cleaned.routineName,
       date: cleaned.date,
       durationSec: cleaned.durationSec,
@@ -1203,6 +1317,11 @@ function finishSession() {
       appliedUpdates: new Set(),
       routineDiff,
       routineSynced: false,
+      // Snapshot de los ejercicios ya guardados (solo sets hechos): para cuando
+      // se muestra el resumen, ui.activeSession ya es null, así que "Guardar
+      // como rutina" necesita de dónde armar la plantilla.
+      exercisesSnapshot: cleaned.exercises,
+      savedAsRoutine: false,
     };
     ui.activeSession = null;
     ui.openNotes.clear();
@@ -1255,6 +1374,14 @@ function sessionSummaryHTML() {
         : `<button class="vt-btn-outline vt-small" data-a="summary-sync-routine">Actualizar rutina "${esc(sum.routineDiff.routineName)}" con estos cambios</button>`}
     </div>`;
 
+  const saveAsRoutineSection = sum.routineId !== null ? "" : `
+    <div class="vt-card" style="margin-top:18px">
+      <h3>Esta fue una sesión libre</h3>
+      ${sum.savedAsRoutine
+        ? `<p class="vt-pr-hit-applied">${icon("check", 13)} Guardada como rutina</p>`
+        : `<button class="vt-btn-outline vt-small" data-a="summary-save-as-routine">${icon("plus", 14)} Guardar como rutina</button>`}
+    </div>`;
+
   return `
     <div class="vt-summary-overlay">
       <div class="vt-summary-inner">
@@ -1270,6 +1397,7 @@ function sessionSummaryHTML() {
         </div>
         ${prSection}
         ${routineSection}
+        ${saveAsRoutineSection}
         <button class="vt-btn-primary vt-full" style="margin-top:20px" data-a="summary-close">Cerrar</button>
       </div>
     </div>`;
@@ -1283,6 +1411,7 @@ function exportJSON() {
     version: 1,
     exportedAt: new Date().toISOString(),
     routines,
+    "routine-folders": routineFolders,
     sessions,
     "custom-exercises": exercises,
     settings,
@@ -1303,11 +1432,13 @@ function importJSON(file) {
     catch { alert("El archivo no es un JSON válido."); return; }
 
     const inExercises = data["custom-exercises"] || data.exercises || null;
+    const inFolders = data["routine-folders"] || data.routineFolders || null;
 
     if (Array.isArray(data.sessions)) {
       // Respaldo completo: reemplaza todo.
       askConfirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
         if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
+        if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
         sessions = data.sessions; persistSessions();
         if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
         if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
@@ -1326,6 +1457,14 @@ function importJSON(file) {
           else { exercises.push({ group: "Custom", type: "weight", ...e }); nEx++; }
         }
         persistExercises();
+      }
+      if (Array.isArray(inFolders)) {
+        for (const f of inFolders) {
+          if (!f.id || !f.name) continue;
+          const i = routineFolders.findIndex((x) => x.id === f.id);
+          if (i >= 0) routineFolders[i] = f; else routineFolders.push(f);
+        }
+        persistFolders();
       }
       if (Array.isArray(data.routines)) {
         for (const r of data.routines) {
@@ -1484,6 +1623,71 @@ document.addEventListener("click", (e) => {
       break;
     }
 
+    /* Carpetas de rutinas */
+    case "folder-new": ui.folderModal = { id: null, name: "" }; render(); break;
+    case "folder-edit": {
+      const f = routineFolders.find((x) => x.id === id);
+      if (f) ui.folderModal = { ...f };
+      render();
+      break;
+    }
+    case "folder-del": {
+      const f = routineFolders.find((x) => x.id === id);
+      askConfirm(`¿Eliminar la carpeta "${f?.name || ""}"? Las rutinas adentro no se borran, quedan sin carpeta.`, () => {
+        routineFolders = routineFolders.filter((x) => x.id !== id);
+        persistFolders();
+        routines = routines.map((r) => r.folderId === id ? { ...r, folderId: null } : r);
+        persistRoutines();
+        ui.collapsedFolders.delete(id);
+        render();
+      }, true);
+      break;
+    }
+    case "folder-toggle":
+      if (ui.collapsedFolders.has(id)) ui.collapsedFolders.delete(id); else ui.collapsedFolders.add(id);
+      render();
+      break;
+    case "folder-modal-cancel": ui.folderModal = null; render(); break;
+    case "folder-modal-save": {
+      const name = document.getElementById("fold-name").value.trim();
+      if (!name) { alert("Ponle un nombre a la carpeta."); break; }
+      const m = ui.folderModal;
+      let folderId;
+      if (m.id) {
+        const f = routineFolders.find((x) => x.id === m.id);
+        if (f) f.name = name;
+        folderId = m.id;
+      } else {
+        const f = { id: uid("fold"), name };
+        routineFolders.push(f);
+        folderId = f.id;
+      }
+      persistFolders();
+      ui.folderModal = null;
+      // Si veníamos de "mover rutina" → "+ Nueva carpeta", la rutina se
+      // asigna directo a la carpeta recién creada.
+      if (ui.movingRoutineId) {
+        const r = routines.find((x) => x.id === ui.movingRoutineId);
+        if (r) { r.folderId = folderId; persistRoutines(); }
+        ui.movingRoutineId = null;
+      }
+      render();
+      break;
+    }
+    case "routine-move": ui.movingRoutineId = id; render(); break;
+    case "move-close": ui.movingRoutineId = null; render(); break;
+    case "move-new-folder": ui.folderModal = { id: null, name: "" }; render(); break;
+    case "move-pick": {
+      const r = routines.find((x) => x.id === ui.movingRoutineId);
+      if (r) {
+        r.folderId = el.dataset.folder || null;
+        persistRoutines();
+      }
+      ui.movingRoutineId = null;
+      render();
+      break;
+    }
+
     /* Editor de rutina */
     case "editor-cancel": ui.editingRoutine = null; render(); break;
     case "editor-loadmode": {
@@ -1515,7 +1719,7 @@ document.addEventListener("click", (e) => {
         break;
       }
       r.exercises.forEach((it) => { if (it.loadMode === "percent") delete it.targetWeight; });
-      const stamped = { id: r.id, name: r.name.trim(), exercises: r.exercises, updatedAt: new Date().toISOString() };
+      const stamped = { id: r.id, name: r.name.trim(), exercises: r.exercises, updatedAt: new Date().toISOString(), folderId: r.folderId ?? null };
       const i = routines.findIndex((x) => x.id === r.id);
       if (i >= 0) routines[i] = stamped; else routines = [stamped, ...routines];
       persistRoutines();
@@ -1540,7 +1744,7 @@ document.addEventListener("click", (e) => {
     /* Sesión activa */
     case "train-free": {
       const start = () => {
-        ui.activeSession = { id: uid("ses"), routineId: null, routineName: "Sesión libre", date: new Date().toISOString(), exercises: [] };
+        ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), exercises: [] };
         ui.openNotes.clear();
         render();
       };
@@ -1650,6 +1854,36 @@ document.addEventListener("click", (e) => {
       }
       break;
     }
+    case "summary-save-as-routine": {
+      const sum = ui.sessionSummary;
+      if (sum && !sum.savedAsRoutine) {
+        const newRoutine = {
+          id: uid("rt"),
+          name: sum.routineName,
+          folderId: null,
+          exercises: sum.exercisesSnapshot.map((e) => {
+            const t = exType(e.exerciseId);
+            const lastSet = e.sets[e.sets.length - 1];
+            return {
+              exerciseId: e.exerciseId,
+              targetSets: e.sets.length,
+              targetReps: num(lastSet.reps),
+              targetWeight: num(lastSet.weight),
+              targetSeconds: t === "time" ? num(lastSet.seconds) : undefined,
+              restSeconds: num(e.restSeconds) || 0,
+              linkPrev: !!e.linkPrev,
+              note: e.note || "",
+            };
+          }),
+          updatedAt: new Date().toISOString(),
+        };
+        routines = [newRoutine, ...routines];
+        persistRoutines();
+        ui.sessionSummary.savedAsRoutine = true;
+        render();
+      }
+      break;
+    }
     case "summary-close":
       ui.sessionSummary = null;
       ui.tab = "historial";
@@ -1664,6 +1898,20 @@ document.addEventListener("click", (e) => {
         persistSessions(); render();
       }, true);
       break;
+    case "session-repeat": {
+      const past = sessions.find((s) => s.id === id);
+      if (past) {
+        const start = () => {
+          ui.activeSession = buildSessionFromPastSession(past);
+          ui.openNotes.clear();
+          ui.tab = "entrenar";
+          render();
+        };
+        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+        else start();
+      }
+      break;
+    }
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
@@ -1751,6 +1999,9 @@ document.addEventListener("input", (e) => {
   switch (el.dataset.i) {
     case "editor-name":
       if (ui.editingRoutine) ui.editingRoutine.name = el.value;
+      break;
+    case "session-name":
+      if (ui.activeSession) ui.activeSession.routineName = el.value;
       break;
     case "editor-target": {
       const it = ui.editingRoutine?.exercises[+el.dataset.idx];
