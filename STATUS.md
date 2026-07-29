@@ -79,3 +79,27 @@ Entradas nuevas al final. No reescribir lo anterior.
   (sesión sin PR, con PR y sugerencia de 1RM aplicada, y PR con
   reps>12 sin sugerencia) y las 5 pestañas sin errores de consola;
   falta probar en el teléfono real.
+
+## 2026-07-29 (cont. 2)
+- Se implementó: botón para quitar un ejercicio entero de la sesión
+  activa (data-a="session-ex-remove", pide confirmación solo si ya
+  tiene alguna serie marcada como hecha). Y sincronización de la
+  rutina guardada desde el resumen de fin de sesión: si la sesión
+  vino de una rutina, se detectan ejercicios agregados/quitados
+  respecto a la rutina original y se ofrece un botón para aplicar
+  esos cambios a la rutina guardada (routines), nunca a sesiones ya
+  guardadas. Sesión libre (routineId null) nunca muestra esta sección.
+- El panel "Tus máximos" (Feature C del pedido) ya estaba
+  implementado de una sesión anterior — se verificó que cumple todo
+  lo pedido (tope de 5, tipo "tiempo" excluido del picker, desmarcar
+  no borra el ejercicio, edición inline sin perder foco) sin tocar
+  código.
+- Pendiente de probar: verificado en el navegador — agregar/quitar
+  ejercicio de sesión y sincronizar rutina (con confirmación
+  reabriendo el editor), tope de 5 destacados, export conserva
+  featuredExercises y oneRM, 5 pestañas sin errores de consola.
+  Falta probar en el teléfono real.
+- Pendiente: el ícono icon-512-maskable.png corregido que pidió
+  Martín NO se reemplazó — en Descargas solo apareció una imagen de
+  comparación lado a lado (maskable_fixed_check.png, 1044×512, no es
+  el ícono en sí), no el archivo cuadrado 512×512 real.

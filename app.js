@@ -561,11 +561,14 @@ function trainActiveHTML() {
             <div class="vt-block-body">
               <div class="vt-card-top">
                 <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
-                <span class="vt-rest-mini vt-muted-sm">Descanso
-                  <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
-                    value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
-                    data-i="ex-rest" data-ex="${exIdx}"> s
-                </span>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                  <span class="vt-rest-mini vt-muted-sm">Descanso
+                    <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                      value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
+                      data-i="ex-rest" data-ex="${exIdx}"> s
+                  </span>
+                  <button class="vt-btn-ghost vt-danger" data-a="session-ex-remove" data-ex="${exIdx}" aria-label="Quitar ejercicio de la sesión">${icon("trash", 15)}</button>
+                </div>
               </div>
               ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
               ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
@@ -1128,6 +1131,26 @@ function finishSession() {
       .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done) }))
       .filter((e) => e.sets.length > 0),
   };
+
+  // Diff contra la rutina guardada (si esta sesión vino de una): solo
+  // informativo hasta que el usuario confirme sincronizarla desde el resumen.
+  // Nunca toca `cleaned` ni las sesiones ya guardadas.
+  let routineDiff = null;
+  if (s.routineId) {
+    const routine = routines.find((r) => r.id === s.routineId);
+    if (routine) {
+      const originalIds = new Set(routine.exercises.map((re) => re.exerciseId));
+      const finalIds = new Set(cleaned.exercises.map((e) => e.exerciseId));
+      const added = [...finalIds].filter((eid) => !originalIds.has(eid))
+        .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
+      const removed = [...originalIds].filter((eid) => !finalIds.has(eid))
+        .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
+      if (added.length > 0 || removed.length > 0) {
+        routineDiff = { routineId: routine.id, routineName: routine.name, added, removed };
+      }
+    }
+  }
+
   sessions = [cleaned, ...sessions];
   persistSessions();
 
@@ -1139,6 +1162,8 @@ function finishSession() {
     setsCount: done,
     prHits,
     appliedUpdates: new Set(),
+    routineDiff,
+    routineSynced: false,
   };
   ui.activeSession = null;
   ui.openNotes.clear();
@@ -1171,6 +1196,18 @@ function sessionSummaryHTML() {
         }).join("")}
       </div>`;
 
+  const routineSection = !sum.routineDiff ? "" : `
+    <div class="vt-card" style="margin-top:18px">
+      <h3>Cambios respecto a tu rutina guardada</h3>
+      <ul class="vt-diff-list">
+        ${sum.routineDiff.added.map((x) => `<li class="vt-diff-added">+ ${esc(x.name)}</li>`).join("")}
+        ${sum.routineDiff.removed.map((x) => `<li class="vt-diff-removed">− ${esc(x.name)}</li>`).join("")}
+      </ul>
+      ${sum.routineSynced
+        ? `<p class="vt-pr-hit-applied">${icon("check", 13)} Rutina actualizada</p>`
+        : `<button class="vt-btn-outline vt-small" data-a="summary-sync-routine">Actualizar rutina "${esc(sum.routineDiff.routineName)}" con estos cambios</button>`}
+    </div>`;
+
   return `
     <div class="vt-summary-overlay">
       <div class="vt-summary-inner">
@@ -1185,6 +1222,7 @@ function sessionSummaryHTML() {
             <span class="vt-stat-value">${sum.setsCount}</span></div>
         </div>
         ${prSection}
+        ${routineSection}
         <button class="vt-btn-primary vt-full" style="margin-top:20px" data-a="summary-close">Cerrar</button>
       </div>
     </div>`;
@@ -1440,6 +1478,20 @@ document.addEventListener("click", (e) => {
       ui.openNotes.clear();
       render();
       break;
+    case "session-ex-remove": {
+      const exI = +el.dataset.ex;
+      const ex = ui.activeSession.exercises[exI];
+      const hasDone = ex.sets.some((st) => st.done);
+      if (hasDone && !confirm("Este ejercicio tiene series marcadas como hechas. ¿Quitarlo de la sesión de todas formas?")) break;
+      // Mismo cuidado que deleteSet: el cronómetro debe seguir apuntando al índice correcto.
+      if (runningTimer) {
+        if (runningTimer.exIdx === exI) runningTimer = null;
+        else if (runningTimer.exIdx > exI) runningTimer.exIdx--;
+      }
+      ui.activeSession.exercises.splice(exI, 1);
+      render();
+      break;
+    }
     case "set-add": {
       const ex = ui.activeSession.exercises[+el.dataset.ex];
       const t = exType(ex.exerciseId);
@@ -1503,6 +1555,24 @@ document.addEventListener("click", (e) => {
         ex.oneRM = num(el.dataset.value);
         persistExercises();
         ui.sessionSummary.appliedUpdates.add(id);
+        render();
+      }
+      break;
+    }
+    case "summary-sync-routine": {
+      const diff = ui.sessionSummary?.routineDiff;
+      const routine = diff && routines.find((r) => r.id === diff.routineId);
+      if (routine) {
+        diff.added.forEach((x) => {
+          const t = exType(x.id);
+          routine.exercises.push({
+            exerciseId: x.id, targetSets: 3, targetReps: 8, targetWeight: 0,
+            targetSeconds: t === "time" ? 30 : undefined,
+          });
+        });
+        routine.exercises = routine.exercises.filter((re) => !diff.removed.some((x) => x.id === re.exerciseId));
+        persistRoutines();
+        ui.sessionSummary.routineSynced = true;
         render();
       }
       break;

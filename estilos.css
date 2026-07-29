@@ -504,6 +504,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-pr-hit-value { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
 .vt-pr-hit-applied { color: var(--green); font-size: 12.5px; display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
 
+.vt-diff-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-family: 'JetBrains Mono', monospace; }
+.vt-diff-added { color: var(--blue); }
+.vt-diff-removed { color: var(--red); }
+
 .vt-session-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .vt-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .vt-detail-row .vt-mono { text-align: right; }
