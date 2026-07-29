@@ -31,3 +31,13 @@ Al compactar (automático o manual), preserva siempre:
 Nunca resumas ni parafrasees: valores hexadecimales, nombres de
 variables CSS, y las reglas de esta sección. Descarta en cambio
 la exploración/debugging intermedio que ya no aporta.
+
+## Bitácora de sesión
+Antes de terminar cada sesión, agrega 2-3 líneas a STATUS.md (al
+final, no reescribas lo anterior) con:
+- Qué se implementó
+- Qué quedó pendiente de probar
+- Cualquier decisión tomada que no esté ya en este archivo
+Si una decisión es duradera (afecta arquitectura o diseño futuro),
+además de anotarla en STATUS.md, súbela a la sección correspondiente
+de este archivo.
