@@ -132,6 +132,7 @@ const PATHS = {
   playBtn: '<polygon points="6 4 20 12 6 20 6 4"/>',
   pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
 };
 
 const icon = (name, s = 18) =>
@@ -320,6 +321,49 @@ function render() {
 
   updateRestBar();
   if (ui.tab === "progreso") mountChart();
+  mountSortables();
+}
+
+// Reordenar ejercicios por arrastre (manija .vt-drag-handle), en el editor de rutina
+// y en la sesión activa. Cada render() reconstruye el DOM, así que las instancias
+// anteriores se destruyen y se vuelven a crear sobre los nuevos contenedores.
+let sortableEditor = null;
+let sortableSession = null;
+
+function mountSortables() {
+  if (sortableEditor) { sortableEditor.destroy(); sortableEditor = null; }
+  if (sortableSession) { sortableSession.destroy(); sortableSession = null; }
+  if (typeof Sortable === "undefined") return; // CDN aún no cargó (o sin conexión la primera vez)
+
+  const editorList = document.getElementById("editor-exercise-list");
+  if (editorList) {
+    sortableEditor = Sortable.create(editorList, {
+      handle: ".vt-drag-handle",
+      animation: 150,
+      forceFallback: true, // evita drag-and-drop nativo HTML5 (poco fiable en touch/PWA instalada)
+      onEnd: (evt) => {
+        if (evt.oldIndex === evt.newIndex) return;
+        const [moved] = ui.editingRoutine.exercises.splice(evt.oldIndex, 1);
+        ui.editingRoutine.exercises.splice(evt.newIndex, 0, moved);
+        render();
+      },
+    });
+  }
+
+  const sessionList = document.getElementById("session-exercise-list");
+  if (sessionList) {
+    sortableSession = Sortable.create(sessionList, {
+      handle: ".vt-drag-handle",
+      animation: 150,
+      forceFallback: true,
+      onEnd: (evt) => {
+        if (evt.oldIndex === evt.newIndex) return;
+        const [moved] = ui.activeSession.exercises.splice(evt.oldIndex, 1);
+        ui.activeSession.exercises.splice(evt.newIndex, 0, moved);
+        render();
+      },
+    });
+  }
 }
 
 /* --------------------------------- Vista Rutinas -------------------------------- */
@@ -374,7 +418,7 @@ function editorHTML() {
     </header>
     <input class="vt-input vt-input-title" placeholder="Nombre de la rutina (ej: Fuerza semana 1)"
       value="${esc(r.name)}" data-i="editor-name">
-    <div class="vt-list">
+    <div class="vt-list" id="editor-exercise-list">
       ${r.exercises.map((it, idx) => {
         const ex = map[it.exerciseId];
         const t = ex?.type || "weight";
@@ -407,15 +451,20 @@ function editorHTML() {
         }
         const lbl = ssLabels[idx];
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
-          <div class="vt-card-top">
-            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
-            <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
+          <div class="vt-block-row">
+            <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
+            <div class="vt-block-body">
+              <div class="vt-card-top">
+                <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
+                <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
+              </div>
+              <div class="vt-target-row">${fields}</div>
+              ${loadmode}
+              <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
+                value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}">
+              ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
+            </div>
           </div>
-          <div class="vt-target-row">${fields}</div>
-          ${loadmode}
-          <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
-            value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}">
-          ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
         </div>`;
       }).join("")}
     </div>
@@ -465,7 +514,7 @@ function trainActiveHTML() {
         <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
       </div>
     </header>
-    <div class="vt-list">
+    <div class="vt-list" id="session-exercise-list">
       ${s.exercises.map((e, exIdx) => {
         const ex = map[e.exerciseId];
         const t = ex?.type || "weight";
@@ -473,25 +522,30 @@ function trainActiveHTML() {
         const prior = priorStats(e.exerciseId);
         const lbl = ssLabels[exIdx];
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
-          <div class="vt-card-top">
-            <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
-            <span class="vt-rest-mini vt-muted-sm">Descanso
-              <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
-                value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
-                data-i="ex-rest" data-ex="${exIdx}"> s
-            </span>
+          <div class="vt-block-row">
+            <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
+            <div class="vt-block-body">
+              <div class="vt-card-top">
+                <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
+                <span class="vt-rest-mini vt-muted-sm">Descanso
+                  <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                    value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
+                    data-i="ex-rest" data-ex="${exIdx}"> s
+                </span>
+              </div>
+              ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
+              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
+              <div class="vt-sets">
+                ${e.sets.length ? setCapsHTML(t) : ""}
+                ${(() => {
+                  let n = 0; // las efectivas se numeran 1..n; las de calentamiento muestran "C"
+                  return e.sets.map((st, setIdx) =>
+                    setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n))).join("");
+                })()}
+              </div>
+              <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
+            </div>
           </div>
-          ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
-          ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
-          <div class="vt-sets">
-            ${e.sets.length ? setCapsHTML(t) : ""}
-            ${(() => {
-              let n = 0; // las efectivas se numeran 1..n; las de calentamiento muestran "C"
-              return e.sets.map((st, setIdx) =>
-                setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n))).join("");
-            })()}
-          </div>
-          <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
         </div>`;
       }).join("")}
     </div>
@@ -584,14 +638,17 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   }
 
   return `
-    <div class="vt-set-row ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
-      <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
-      <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
-      <span class="vt-set-num">${label}</span>
-      ${fields}
-      ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
-      <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE y nota" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
-      <button class="vt-btn-ghost vt-danger" data-a="set-del" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie">${icon("x", 14)}</button>
+    <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
+      <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
+      <div class="vt-set-row ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+        <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
+        <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
+        <span class="vt-set-num">${label}</span>
+        ${fields}
+        ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
+        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE y nota" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
+        <button class="vt-btn-ghost vt-danger" data-a="set-del" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie">${icon("x", 14)}</button>
+      </div>
     </div>
     ${open ? `<div class="vt-setline2">
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
@@ -949,6 +1006,17 @@ function defaultSet(type, target, prevSet) {
   };
 }
 
+// Elimina una serie de la sesión activa. Compartido por el botón "×" y el swipe-to-delete.
+function deleteSet(exI, setI) {
+  // Mantiene el cronómetro apuntando a la serie correcta si cambian los índices.
+  if (runningTimer && runningTimer.exIdx === exI) {
+    if (runningTimer.setIdx === setI) runningTimer = null;
+    else if (runningTimer.setIdx > setI) runningTimer.setIdx--;
+  }
+  ui.activeSession.exercises[exI].sets.splice(setI, 1);
+  render();
+}
+
 function buildSessionFromRoutine(r) {
   return {
     id: uid("ses"),
@@ -1079,6 +1147,73 @@ function importJSON(file) {
   reader.readAsText(file);
 }
 
+/* ------------------------------- Swipe-to-delete de series ------------------------------- */
+// Deslizar una fila de serie hacia la izquierda revela un fondo rojo con basura;
+// soltar pasado el 40% del recorrido la elimina (misma acción que el botón "×").
+// No interfiere con el drag handle de reordenar ejercicios: son zonas de DOM distintas
+// (la manija vive en la cabecera del bloque, fuera de .vt-swipe-wrap).
+
+const SWIPE_MAX = 80;
+let swipeState = null; // { wrapEl, rowEl, exI, setI, startX, startY, dx, deciding, horizontal }
+
+document.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1) return;
+  const wrapEl = e.target.closest(".vt-swipe-wrap");
+  if (!wrapEl) return;
+  const rowEl = wrapEl.querySelector(".vt-set-row");
+  const t = e.touches[0];
+  swipeState = {
+    wrapEl, rowEl,
+    exI: +wrapEl.dataset.ex, setI: +wrapEl.dataset.set,
+    startX: t.clientX, startY: t.clientY, dx: 0,
+    deciding: true, horizontal: false,
+  };
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  if (!swipeState || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const deltaX = t.clientX - swipeState.startX;
+  const deltaY = t.clientY - swipeState.startY;
+
+  if (swipeState.deciding) {
+    if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return; // aún sin gesto claro
+    swipeState.deciding = false;
+    swipeState.horizontal = Math.abs(deltaX) > Math.abs(deltaY);
+    if (swipeState.horizontal) {
+      swipeState.wrapEl.classList.add("is-swiping");
+      swipeState.rowEl.style.transition = "none"; // sigue al dedo 1:1 durante el arrastre
+    }
+  }
+  if (!swipeState.horizontal) return; // gesto vertical: se deja scrollear la página normalmente
+
+  e.preventDefault(); // ya confirmado horizontal: evita que la página scrollee
+  const dx = Math.max(-SWIPE_MAX, Math.min(0, deltaX)); // solo hacia la izquierda
+  swipeState.dx = dx;
+  swipeState.rowEl.style.transform = `translateX(${dx}px)`;
+}, { passive: false });
+
+function endSwipe() {
+  if (!swipeState) return;
+  const { wrapEl, rowEl, exI, setI, dx, horizontal } = swipeState;
+  swipeState = null;
+  if (!horizontal) return;
+  rowEl.style.transition = ""; // vuelve a la transición suave definida en CSS
+
+  if (Math.abs(dx) > SWIPE_MAX * 0.4) {
+    // Pasado el umbral: fade + slide de salida, luego se elimina de verdad.
+    wrapEl.classList.add("is-removing");
+    rowEl.style.transform = `translateX(-100%)`;
+    setTimeout(() => deleteSet(exI, setI), 180);
+  } else {
+    wrapEl.classList.remove("is-swiping");
+    rowEl.style.transform = "translateX(0)";
+  }
+}
+
+document.addEventListener("touchend", endSwipe);
+document.addEventListener("touchcancel", endSwipe);
+
 /* ------------------------------------ Eventos ------------------------------------ */
 
 document.addEventListener("click", (e) => {
@@ -1203,17 +1338,7 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "set-del": {
-      const exI = +el.dataset.ex, setI = +el.dataset.set;
-      // Mantiene el cronómetro apuntando a la serie correcta si cambian los índices.
-      if (runningTimer && runningTimer.exIdx === exI) {
-        if (runningTimer.setIdx === setI) runningTimer = null;
-        else if (runningTimer.setIdx > setI) runningTimer.setIdx--;
-      }
-      ui.activeSession.exercises[exI].sets.splice(setI, 1);
-      render();
-      break;
-    }
+    case "set-del": deleteSet(+el.dataset.ex, +el.dataset.set); break;
     case "set-check": {
       const exI = +el.dataset.ex, setI = +el.dataset.set;
       const ex = ui.activeSession.exercises[exI];
