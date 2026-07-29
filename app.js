@@ -892,7 +892,7 @@ function settingsHTML() {
         </label>
       </div>
     </div>
-    <p class="vt-muted" style="text-align:center;margin-top:16px">Pesitas · datos guardados en este dispositivo</p>`;
+    <p class="vt-muted" style="text-align:center;margin-top:16px">GOAT · datos guardados en este dispositivo</p>`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -1006,13 +1006,9 @@ function emptyHTML(title, detail, action) {
   return `<div class="vt-empty"><h3>${title}</h3><p>${detail}</p>${action}</div>`;
 }
 
-// Logo del club (opcional): si icons/club-logo.png no existe, se oculta solo.
-const logoHTML = () =>
-  `<img class="vt-club-logo" src="icons/club-logo.png" alt="" onerror="this.style.display='none'">`;
-
-// Encabezado de pestaña con espacio para el logo.
+// Encabezado de pestaña.
 function tabHeaderHTML(eyebrow, title) {
-  return `<div class="vt-header-brand">${logoHTML()}<div>
+  return `<div class="vt-header-brand"><div>
     <p class="vt-eyebrow">${eyebrow}</p><h1>${title}</h1>
   </div></div>`;
 }

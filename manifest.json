@@ -1,6 +1,6 @@
 {
-  "name": "Pesitas",
-  "short_name": "Pesitas",
+  "name": "GOAT",
+  "short_name": "GOAT",
   "description": "Registro de entrenamientos de vóleibol: rutinas, series, descansos y progreso.",
   "start_url": "./index.html",
   "scope": "./",

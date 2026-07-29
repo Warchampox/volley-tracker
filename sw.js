@@ -1,12 +1,12 @@
-/* ============================== Pesitas — Service Worker ==============================
+/* ============================== GOAT — Service Worker ==============================
    IMPORTANTE PARA FUTUROS DEPLOYS:
-   Sube el número de CACHE_NAME ("pesitas-v2", "pesitas-v3", ...) cada vez que
+   Sube el número de CACHE_NAME ("goat-v2", "goat-v3", ...) cada vez que
    estilos.css o app.js cambien de forma significativa. Si no lo subes, los usuarios
    con la app instalada seguirán viendo la versión vieja indefinidamente, porque el
    app shell se sirve cache-first. No hay build tools: solo edita esta constante.
 ======================================================================================= */
 
-const CACHE_NAME = "pesitas-v14";
+const CACHE_NAME = "goat-v1";
 
 // App shell propio (mismo origen). "./" cubre la navegación a la raíz de la app.
 const APP_SHELL = [
@@ -20,7 +20,6 @@ const APP_SHELL = [
   "icons/icon-512-maskable.png",
   "icons/apple-touch-icon.png",
   "icons/favicon-32.png",
-  "icons/club-logo.png",
   "icons/watermark-u.png",
 ];
 
@@ -35,9 +34,11 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
+      // Cualquier caché de una versión anterior (incluidas las "pesitas-*" de
+      // antes del rebranding a GOAT) se borra — este origen solo cachea esta app.
       .then((keys) => Promise.all(
         keys
-          .filter((k) => k.startsWith("pesitas-") && k !== CACHE_NAME)
+          .filter((k) => k !== CACHE_NAME)
           .map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())

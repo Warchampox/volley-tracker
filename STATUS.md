@@ -1,4 +1,4 @@
-# Pesitas — bitácora de sesión
+# GOAT — bitácora de sesión
 
 Entradas nuevas al final. No reescribir lo anterior.
 
@@ -34,3 +34,30 @@ Entradas nuevas al final. No reescribir lo anterior.
   en un viewport de 360px de ancho; falta confirmar en el teléfono
   real de Martín.
 - Sin decisiones nuevas de arquitectura/diseño.
+
+## 2026-07-29
+- Se renombró la app de "Pesitas" a "GOAT": manifest.json (name/
+  short_name), <title> y meta apple-mobile-web-app-title en
+  index.html, el pie de página de Ajustes, y los encabezados de
+  CLAUDE.md/STATUS.md. Se quitó el placeholder del logo del club
+  (la función logoHTML, el <img> en tabHeaderHTML, la clase CSS
+  .vt-club-logo y la entrada en el app shell del service worker) —
+  ya no aplica con la nueva marca. sw.js pasa a versionar como
+  "goat-vN" (reinicia en v1) y la limpieza de cachés viejas en
+  `activate` ahora borra cualquier caché que no sea la actual (ya
+  no filtra por prefijo "pesitas-"), para que también limpie los
+  dispositivos que traían cachés "pesitas-*" de antes del rebrand.
+- Los 5 íconos (icon-192, icon-512, icon-512-maskable,
+  apple-touch-icon, favicon-32) se reemplazaron con el diseño del
+  plato azul "GOAT" que Martín subió en icons/goat-icon-final.zip
+  (Descargas). Tamaños y nombres verificados 1:1 contra lo esperado
+  por manifest.json/index.html; no hizo falta tocar esos archivos.
+- Pendiente de probar: verificado que el archivo en disco y el
+  servidor Python del preview sirven los bytes nuevos (comprobado
+  con curl directo); el pane de este entorno mostró una versión
+  cacheada y no se pudo forzar la purga desde ahí, pero es una
+  caché propia de la herramienta, no del sitio real. Falta
+  confirmar visualmente en GitHub Pages / el teléfono tras el push.
+- Decisión: icons/club-logo.png se dejó en el repo sin borrar (solo
+  se quitaron las referencias en código) por si se quiere reusar o
+  confirmar su borrado explícitamente más adelante.

@@ -57,7 +57,6 @@ button, svg {
   margin-bottom: 18px;
 }
 .vt-header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.vt-club-logo { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .vt-eyebrow {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;

@@ -1,4 +1,4 @@
-# Pesitas — reglas del proyecto
+# GOAT — reglas del proyecto
 
 ## Arquitectura (cerrada, no reabrir)
 - HTML/CSS/JS plano, sin build ni framework. 3 archivos: index.html,
