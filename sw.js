@@ -6,7 +6,7 @@
    app shell se sirve cache-first. No hay build tools: solo edita esta constante.
 ======================================================================================= */
 
-const CACHE_NAME = "goat-v9";
+const CACHE_NAME = "goat-v10";
 
 // App shell propio (mismo origen). "./" cubre la navegación a la raíz de la app.
 const APP_SHELL = [
@@ -24,11 +24,17 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
+  // Sin skipWaiting() acá: el worker nuevo queda en "waiting" hasta que
+  // app.js pida activarlo (mensaje SKIP_WAITING), después de que el usuario
+  // confirme "Recargar" en el aviso de actualización disponible.
   e.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {

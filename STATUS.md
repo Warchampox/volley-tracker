@@ -297,3 +297,35 @@ Entradas nuevas al final. No reescribir lo anterior.
   serie. Un ejercicio no unilateral (Sentadilla trasera) verificado
   sin cambios de comportamiento. 5 pestañas sin errores de consola.
   Falta probar en el teléfono real.
+
+## 2026-07-30 (cont.)
+- Se implementó: aviso de actualización disponible. sw.js ya no llama
+  self.skipWaiting() en "install" — el worker nuevo queda en "waiting"
+  hasta que app.js le manda el mensaje SKIP_WAITING (nuevo listener de
+  "message" en sw.js). "activate" (clients.claim + limpieza de cachés
+  viejas) no cambió.
+- app.js detecta la actualización de dos formas: si al registrar el SW
+  ya hay uno en "waiting" (se cerró la app antes de aplicar una
+  actualización previa), o vía "updatefound" + "statechange" del
+  worker instalándose a "installed" cuando YA existe
+  navigator.serviceWorker.controller (así no dispara en la primera
+  instalación, donde todavía no hay controller). En ambos casos llama
+  showUpdateToast(), que agrega un banner (#update-toast) directo al
+  body — a propósito fuera de render()/`ui`, para no interferir con el
+  resto del estado. Botón "Recargar": si hay sesión activa con series
+  marcadas sin guardar, pide confirmación (askConfirm, no confirm
+  nativo) antes de perder ese progreso; si confirma o no hay nada que
+  perder, manda SKIP_WAITING al worker en espera y escucha
+  "controllerchange" una sola vez para recargar sola.
+- sw.js sube a goat-v10.
+- Pendiente de probar: verificado a fondo en el navegador simulando
+  una actualización real (bump de CACHE_NAME + registration.update()
+  sin cerrar la app) — el banner aparece solo en la actualización real
+  (la primera instalación NO lo muestra), "Recargar" con sesión activa
+  pide confirmación y cancelar no recarga nada, sin sesión activa
+  aplica la actualización y recarga sola mostrando la caché nueva
+  (confirmado que la vieja se limpia). 5 pestañas sin errores de
+  consola. Falta probar en el teléfono real (especialmente qué tan
+  rápido el navegador detecta la actualización estando la PWA
+  instalada y en background, ya que el chequeo automático del SW no es
+  instantáneo).

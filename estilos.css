@@ -581,6 +581,32 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 10px 8px; }
 
+/* -------------------- Aviso de actualización disponible ------------------ */
+/* Barra delgada de ancho completo, pegada arriba de todo (por sobre el
+   header sticky de sesión y cualquier modal) — sin caja pesada, mismo
+   lenguaje visual que el resto del rediseño. Elemento de DOM aparte,
+   agregado/quitado directo desde JS (showUpdateToast), no pasa por render(). */
+#update-toast {
+  position: fixed;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+  border-radius: 0 0 10px 10px;
+  z-index: 100;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+}
+#update-toast button {
+  background: transparent; border: none; color: var(--blue);
+  font-family: inherit; font-weight: 600; font-size: 13px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer; padding: 4px 8px; flex-shrink: 0;
+}
+#update-toast button:active { filter: brightness(0.85); }
+
 /* ------------------------ Cronómetro de descanso ------------------------ */
 /* Barra delgada, ancho completo, pegada arriba de la nav (sin márgenes
    laterales, sin esquinas redondeadas abajo). La cuenta regresiva se ve en

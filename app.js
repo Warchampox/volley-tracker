@@ -2322,9 +2322,12 @@ document.addEventListener("focusin", (e) => {
   if (e.target.matches && e.target.matches(SELECT_ON_FOCUS)) e.target.select();
 });
 
+const sessionHasUnsavedProgress = () =>
+  !!(ui.activeSession && ui.activeSession.exercises.some((x) => x.sets.some((st) => st.done)));
+
 // Aviso si intenta cerrar la pestaña con una sesión sin guardar.
 window.addEventListener("beforeunload", (e) => {
-  if (ui.activeSession && ui.activeSession.exercises.some((x) => x.sets.some((st) => st.done))) {
+  if (sessionHasUnsavedProgress()) {
     e.preventDefault();
     e.returnValue = "";
   }
@@ -2332,10 +2335,57 @@ window.addEventListener("beforeunload", (e) => {
 
 render();
 
-// Service worker: permite abrir la app sin conexión (los datos ya viven en localStorage).
+/* ------------------------- Service worker y actualizaciones ------------------------- */
+// Permite abrir la app sin conexión (los datos ya viven en localStorage).
 // Si falla (p. ej. abriendo el archivo directo con file://), la app sigue normal.
+
+// Estado del aviso de actualización: fuera de `ui` a propósito — el banner
+// es un elemento de DOM aparte, agregado/quitado directo, para no forzar un
+// render() de toda la app ni interferir con el estado de `ui`.
+let updateAvailable = false;
+let swRegistration = null;
+
+function showUpdateToast() {
+  if (updateAvailable) return; // ya se está mostrando, no duplicar
+  updateAvailable = true;
+  const bar = document.createElement("div");
+  bar.id = "update-toast";
+  bar.innerHTML = `<span>Hay una versión nueva</span><button type="button">Recargar</button>`;
+  bar.querySelector("button").addEventListener("click", applyUpdate);
+  document.body.appendChild(bar);
+}
+
+function applyUpdate() {
+  const reload = () => {
+    const waiting = swRegistration?.waiting;
+    if (!waiting) { location.reload(); return; }
+    navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+    waiting.postMessage("SKIP_WAITING");
+  };
+  if (sessionHasUnsavedProgress()) {
+    askConfirm("Actualizar la app ahora perderá el progreso no guardado de la sesión en curso. ¿Continuar?", reload, false);
+  } else {
+    reload();
+  }
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((err) => console.warn("SW no registrado:", err));
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      swRegistration = reg;
+      // Por si se cerró la app antes de aplicar una actualización anterior.
+      if (reg.waiting) showUpdateToast();
+      reg.addEventListener("updatefound", () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener("statechange", () => {
+          // "installed" + ya hay un controller = actualización real, no la
+          // primera instalación (ahí todavía no hay controller).
+          if (installing.state === "installed" && navigator.serviceWorker.controller) {
+            showUpdateToast();
+          }
+        });
+      });
+    }).catch((err) => console.warn("SW no registrado:", err));
   });
 }
