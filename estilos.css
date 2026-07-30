@@ -406,7 +406,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Fila tipo "tiempo": seg + peso + botón de cronómetro son un control más que
    las demás filas, así que aun con la fila más angosta de arriba seguía sin
    caber. Encoge además los inputs y el botón de cronómetro de esta variante. */
-.vt-set-row-time .vt-set-input-sm { width: 44px; }
+.vt-set-row-time { gap: 3px; padding: 7px 2px; }
+.vt-set-row-time .vt-set-input-sm { width: 36px; }
+/* El campo de tiempo ahora muestra mm:ss ("01:00"), más ancho que un número
+   crudo — le da su propio tamaño en vez de compartir el de "peso". */
+.vt-set-input-clock { width: 60px; }
 .vt-set-row-time .vt-timer-btn { width: 26px; height: 26px; }
 
 .vt-setline2 { display: flex; gap: 8px; padding: 2px 6px 6px 29px; align-items: center; }

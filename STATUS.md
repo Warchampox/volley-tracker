@@ -173,3 +173,24 @@ Entradas nuevas al final. No reescribir lo anterior.
   hay sesión en curso), export/import de routineFolders (incluido
   round-trip completo). 5 pestañas sin errores de consola. Falta
   probar todo esto en el teléfono real.
+
+## 2026-07-29 (cont. 6)
+- Se implementó: formato mm:ss (h:mm:ss si pasa de una hora) para
+  todo lo que es tiempo — fila de serie tipo "tiempo", objetivo de
+  segundos en el editor de rutina, "Última vez", detalle de
+  historial y la barra de descanso. Nuevo helper parseClock(str)
+  (junto a fmtClock) que acepta "1:30" o "90" (sin ":", por
+  compatibilidad) y siempre devuelve segundos — el almacenamiento en
+  localStorage sigue siendo el número de segundos, solo cambió cómo
+  se muestra/tipea.
+- Al mostrar "01:00" en vez de "60" el input de segundos de la fila
+  necesitaba más ancho del que tenía (se cortaba a "01:0"); se le dio
+  su propio ancho (60px, clase vt-set-input-clock) y se compensó
+  achicando un poco más el input de peso y los márgenes de esa fila
+  específica para que siguiera cabiendo en pantallas angostas
+  (verificado sin desborde a 360px).
+- Pendiente de probar: verificado en el navegador — reloj en fila de
+  serie/editor/última vez/historial/descanso, cronómetro inline
+  sigue contando en vivo en mm:ss, "1:30" y "90" ambos guardan 90
+  segundos, PR sobre el valor numérico sigue funcionando. 5 pestañas
+  sin errores de consola. Falta probar en el teléfono real.

@@ -225,7 +225,7 @@ function lastSetsFor(exId) {
 function fmtSet(type, s) {
   const w = s.warmup ? "c" : "";
   const rpe = s.rpe ? ` @${s.rpe}` : "";
-  if (type === "time") return `${w}${num(s.seconds)}s${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
+  if (type === "time") return `${w}${fmtClock(num(s.seconds))}${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
   if (type === "bodyweight")
     return num(s.weight) > 0 ? `${w}+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
   return `${w}${num(s.weight)}×${num(s.reps)}${rpe}`;
@@ -275,7 +275,7 @@ function updateRestBar() {
   el.innerHTML = `
     <div>
       <div class="vt-rest-label">Descanso</div>
-      <div class="vt-rest-time">${left}s</div>
+      <div class="vt-rest-time">${fmtClock(left)}</div>
     </div>
     <div class="vt-rest-track"><div class="vt-rest-fill" style="width:${pct}%"></div></div>
     <button class="vt-btn-ghost" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 18)}</button>`;
@@ -553,7 +553,7 @@ function editorHTML() {
         } else {
           fields = `
           ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
-          ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5)}
+          ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5, true)}
           ${numFieldHTML("Kg", "targetWeight", idx, it.targetWeight, 2.5)}`;
         }
         fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
@@ -593,9 +593,12 @@ function editorHTML() {
     </div>`;
 }
 
-function numFieldHTML(label, field, idx, value, step) {
+function numFieldHTML(label, field, idx, value, step, isClock = false) {
+  const valueAttrs = isClock
+    ? `type="text" inputmode="numeric" value="${fmtClock(num(value))}"`
+    : `type="number" inputmode="decimal" value="${num(value)}" step="${step}"`;
   return `<label class="vt-numfield"><span>${label}</span>
-    <input type="number" inputmode="decimal" class="vt-input vt-mono" value="${num(value)}" step="${step}"
+    <input class="vt-input vt-mono" ${valueAttrs}
       data-i="editor-target" data-field="${field}" data-idx="${idx}"
       autocomplete="off" autocorrect="off" spellcheck="false" name="f_${field}_${idx}"></label>`;
 }
@@ -688,7 +691,7 @@ function setCapsHTML(type) {
   const cap = (t) => `<span class="vt-cap">${t}</span>`;
   const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
   let inner;
-  if (type === "time") inner = cap("seg") + cap("+kg");
+  if (type === "time") inner = cap("tiempo") + cap("+kg");
   else if (type === "bodyweight") inner = cap("reps") + cap("+kg");
   else inner = cap("kg") + gap("×") + cap("reps");
   return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
@@ -700,6 +703,18 @@ function fmtClock(sec) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   const p = (n) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+}
+
+// Inverso de fmtClock: "1:30" o "1:02:03" → segundos totales. Sin ":" se
+// trata como segundos puros (compatibilidad con quien tipea "90" directo).
+// El almacenamiento siempre es en segundos; esto es solo parseo de entrada.
+function parseClock(str) {
+  const s = String(str ?? "").trim();
+  if (!s.includes(":")) return Math.max(0, num(s));
+  const parts = s.split(":").map((p) => num(p));
+  if (parts.length === 2) return Math.max(0, parts[0] * 60 + parts[1]);
+  if (parts.length === 3) return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  return 0;
 }
 
 // "47 min" o "1 h 12 min" para el historial.
@@ -736,7 +751,7 @@ setInterval(() => {
   const input = document.querySelector(
     `input[data-i="set"][data-f="seconds"][data-ex="${runningTimer.exIdx}"][data-set="${runningTimer.setIdx}"]`);
   // Si el input no está en el DOM (otra pestaña) no pasa nada; el valor sigue acumulando en el estado.
-  if (input && document.activeElement !== input) input.value = st.seconds;
+  if (input && document.activeElement !== input) input.value = fmtClock(st.seconds);
 }, 1000);
 
 function setRowHTML(type, st, exIdx, setIdx, prior, label) {
@@ -754,7 +769,7 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   if (type === "time") {
     const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.seconds)}" ${attrs("seconds")}>
+      <input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-clock" value="${fmtClock(num(st.seconds))}" ${attrs("seconds")}>
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.weight)}" ${attrs("weight")}>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
@@ -2005,7 +2020,7 @@ document.addEventListener("input", (e) => {
       break;
     case "editor-target": {
       const it = ui.editingRoutine?.exercises[+el.dataset.idx];
-      if (it) it[el.dataset.field] = num(el.value);
+      if (it) it[el.dataset.field] = el.dataset.field === "targetSeconds" ? parseClock(el.value) : num(el.value);
       // Cálculo de kg en vivo al editar el % (sin render, patrón #live-vol).
       if (it && el.dataset.field === "targetPercent") {
         const span = document.getElementById("pct-calc-" + el.dataset.idx);
@@ -2025,6 +2040,7 @@ document.addEventListener("input", (e) => {
       const f = el.dataset.f;
       if (f === "note") st.note = el.value;
       else if (f === "rpe") st.rpe = el.value === "" ? null : num(el.value);
+      else if (f === "seconds") st.seconds = parseClock(el.value);
       else st[f] = num(el.value);
       // Actualiza el contador de volumen en vivo sin re-dibujar (para no perder el foco).
       const live = document.getElementById("live-vol");
