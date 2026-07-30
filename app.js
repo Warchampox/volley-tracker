@@ -141,6 +141,13 @@ const exMap = () => Object.fromEntries(exercises.map((e) => [e.id, e]));
 const exType = (id) => exMap()[id]?.type || "weight";
 const exName = (id) => exMap()[id]?.name || "(ejercicio eliminado)";
 const exGroup = (id) => exMap()[id]?.group || "Custom";
+const exUnilateral = (id) => !!exMap()[id]?.unilateral;
+
+// Reps por lado de una serie unilateral. Si el set es viejo (de antes de que
+// el ejercicio pasara a unilateral) y solo tiene `reps`, ambos lados caen a
+// ese valor — fallback de compatibilidad, no migra ni borra el dato original.
+const repsL = (st) => num(st.repsL ?? st.reps);
+const repsR = (st) => num(st.repsR ?? st.reps);
 
 /* ------------------------------------ Íconos ------------------------------------ */
 
@@ -179,19 +186,28 @@ const icon = (name, s = 18) =>
 /* --------------------------- Volumen, PRs y "última vez" -------------------------- */
 
 // Volumen = solo peso externo: peso×reps (normal), lastre×reps (corporal), 0 (tiempo).
-const setVol = (type, s) => (type === "time" ? 0 : (num(s.weight)) * (num(s.reps)));
+// Unilateral: el peso es compartido, pero suma las reps de ambos lados.
+const setVol = (type, s, unilateral) => {
+  if (type === "time") return 0;
+  if (unilateral) return num(s.weight) * (repsL(s) + repsR(s));
+  return num(s.weight) * num(s.reps);
+};
 
 const sessionVolume = (session, onlyDone) =>
   session.exercises.reduce((acc, e) => {
     const t = exType(e.exerciseId);
+    const uni = exUnilateral(e.exerciseId);
     return acc + e.sets.reduce((a, st) => {
       if (onlyDone && !st.done) return a;
-      return a + setVol(t, st);
+      return a + setVol(t, st, uni);
     }, 0);
   }, 0);
 
-// Máximos históricos (solo sesiones guardadas) para detectar PRs.
+// Máximos históricos (solo sesiones guardadas) para detectar PRs. En
+// unilateral, "reps" usa el lado más débil de cada serie — el logro real es
+// lo que se logró del lado que menos dio, no el más fuerte.
 function priorStats(exId) {
+  const uni = exUnilateral(exId);
   let maxW = 0, maxR = 0, maxS = 0, anyLastre = false;
   for (const s of sessions)
     for (const e of s.exercises)
@@ -199,7 +215,7 @@ function priorStats(exId) {
         for (const st of e.sets) {
           if (st.warmup) continue; // los máximos históricos solo consideran series efectivas
           maxW = Math.max(maxW, num(st.weight));
-          maxR = Math.max(maxR, num(st.reps));
+          maxR = Math.max(maxR, uni ? Math.min(repsL(st), repsR(st)) : num(st.reps));
           maxS = Math.max(maxS, num(st.seconds));
           if (num(st.weight) > 0) anyLastre = true;
         }
@@ -207,12 +223,14 @@ function priorStats(exId) {
 }
 
 // PR según tipo: peso máx / lastre máx (o reps máx si nunca hubo lastre) / tiempo máx.
-function isPR(type, st, prior) {
+// En bodyweight sin lastre, unilateral compara con el lado más débil.
+function isPR(type, st, prior, unilateral) {
   if (!st.done || st.warmup) return false;
   if (type === "time") return num(st.seconds) > 0 && num(st.seconds) > prior.maxS;
   if (type === "bodyweight") {
     if (num(st.weight) > 0) return num(st.weight) > prior.maxW;
-    return !prior.anyLastre && num(st.reps) > 0 && num(st.reps) > prior.maxR;
+    const r = unilateral ? Math.min(repsL(st), repsR(st)) : num(st.reps);
+    return !prior.anyLastre && r > 0 && r > prior.maxR;
   }
   return num(st.weight) > 0 && num(st.weight) > prior.maxW;
 }
@@ -243,10 +261,14 @@ function lastSetsFor(exId) {
   return null;
 }
 
-function fmtSet(type, s) {
+function fmtSet(type, s, unilateral) {
   const w = s.warmup ? "c" : "";
   const rpe = s.rpe ? ` @${s.rpe}` : "";
   if (type === "time") return `${w}${fmtClock(num(s.seconds))}${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
+  if (unilateral) {
+    const sides = `I${repsL(s)} D${repsR(s)}`;
+    return num(s.weight) > 0 ? `${w}${num(s.weight)}kg · ${sides}${rpe}` : `${w}${sides}${rpe}`;
+  }
   if (type === "bodyweight")
     return num(s.weight) > 0 ? `${w}+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
   return `${w}${num(s.weight)}×${num(s.reps)}${rpe}`;
@@ -665,6 +687,7 @@ function trainActiveHTML() {
       ${s.exercises.map((e, exIdx) => {
         const ex = map[e.exerciseId];
         const t = ex?.type || "weight";
+        const uni = !!ex?.unilateral;
         const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
         const lbl = ssLabels[exIdx];
@@ -687,13 +710,13 @@ function trainActiveHTML() {
               </div>
               ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
               ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:6px 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
-              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
+              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
               <div class="vt-sets">
-                ${e.sets.length ? setCapsHTML(t) : ""}
+                ${e.sets.length ? setCapsHTML(t, uni) : ""}
                 ${(() => {
                   let n = 0; // las efectivas se numeran 1..n; las de calentamiento muestran "C"
                   return e.sets.map((st, setIdx) =>
-                    setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n))).join("");
+                    setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n), uni)).join("");
                 })()}
               </div>
               <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
@@ -714,7 +737,7 @@ function trainActiveHTML() {
 // representan (no un ancho genérico) — ver .vt-set-input/-sm/-clock y
 // .vt-timer-btn en estilos.css. El gap/padding del contenedor también debe
 // calzar con el de .vt-set-row (o .vt-set-row-time) de ese mismo tipo.
-function setCapsHTML(type) {
+function setCapsHTML(type, unilateral) {
   const cap = (t, w) => `<span class="vt-cap" style="width:${w}px">${t}</span>`;
   const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
   let inner, rowClass = "";
@@ -723,6 +746,10 @@ function setCapsHTML(type) {
     // angosta) + hueco reservado para el botón de cronómetro (36px, .vt-timer-btn).
     inner = cap("tiempo", 60) + cap("+kg", 30) + `<span class="vt-cap-timerbtn" aria-hidden="true"></span>`;
     rowClass = "vt-set-caps-time";
+  } else if (unilateral) {
+    // kg (44px, .vt-set-input-uniw) + izq/der (36px c/u, .vt-set-input-uni).
+    inner = cap("kg", 44) + cap("izq", 36) + cap("der", 36);
+    rowClass = "vt-set-caps-uni";
   } else if (type === "bodyweight") {
     inner = cap("reps", 52) + cap("+kg", 52);
   } else {
@@ -788,8 +815,8 @@ setInterval(() => {
   if (input && document.activeElement !== input) input.value = fmtClock(st.seconds);
 }, 1000);
 
-function setRowHTML(type, st, exIdx, setIdx, prior, label) {
-  const pr = isPR(type, st, prior);
+function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
+  const pr = isPR(type, st, prior, unilateral);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
   const attrs = (f) =>
     `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
@@ -802,6 +829,12 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.weight)}" ${attrs("weight")}>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
+  } else if (unilateral) {
+    // Peso compartido + reps por lado (izq/der) en vez de un solo input de reps.
+    fields = `
+      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-uniw" value="${num(st.weight)}" ${attrs("weight")}>
+      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-uni" value="${repsL(st)}" ${attrs("repsL")}>
+      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-uni" value="${repsR(st)}" ${attrs("repsR")}>`;
   } else if (type === "bodyweight") {
     fields = `
       <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.reps)}" ${attrs("reps")}>
@@ -816,7 +849,7 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   return `
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${unilateral ? "vt-set-row-uni" : ""} ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
         <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
         <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
         <span class="vt-set-num">${label}</span>
@@ -853,10 +886,11 @@ function historyHTML() {
           ${open ? `<div class="vt-session-detail">
             ${s.exercises.map((e) => {
               const t = exType(e.exerciseId);
+              const uni = exUnilateral(e.exerciseId);
               const notes = e.sets.filter((st) => st.note).map((st) => esc(st.note));
               return `<div class="vt-detail-row">
                   <span style="color:${groupColor(exGroup(e.exerciseId))}">${esc(exName(e.exerciseId))}</span>
-                  <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st)).join(", ")}</span>
+                  <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st, uni)).join(", ")}</span>
                 </div>
                 ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
                 ${e.sessionNote ? `<div class="vt-note-line">— ${esc(e.sessionNote)}</div>` : ""}
@@ -895,17 +929,19 @@ function metricOptions(exId) {
 
 function progressData(exId, metric) {
   const t = exType(exId);
+  const uni = exUnilateral(exId);
   const pts = [];
   [...sessions].reverse().forEach((s) => {
     const e = s.exercises.find((x) => x.exerciseId === exId);
     if (!e || e.sets.length === 0) return;
     let v;
-    if (metric === "volume") v = Math.round(e.sets.reduce((a, st) => a + setVol(t, st), 0));
+    if (metric === "volume") v = Math.round(e.sets.reduce((a, st) => a + setVol(t, st, uni), 0));
     else {
       // Los máximos se calculan solo con series efectivas; el volumen incluye todo.
       const eff = e.sets.filter((st) => !st.warmup);
       if (!eff.length) return;
-      v = Math.max(...eff.map((st) => num(st[metric])));
+      // "reps" en unilateral usa el lado más débil, mismo criterio que el PR.
+      v = Math.max(...eff.map((st) => metric === "reps" && uni ? Math.min(repsL(st), repsR(st)) : num(st[metric])));
     }
     pts.push({ date: fmtDateShort(s.date), v });
   });
@@ -1150,6 +1186,10 @@ function exerciseModalHTML() {
             <input type="number" inputmode="decimal" class="vt-input" id="exm-onerm" min="0" step="2.5" value="${m.oneRM ?? ""}"
               autocomplete="off" autocorrect="off" spellcheck="false" name="f_exmonerm">
           </label>
+          <div class="vt-modal-toggle-row" id="exm-uni-row" style="${m.type === "time" ? "display:none" : ""}">
+            <span>Ejercicio unilateral</span>
+            <input type="checkbox" class="vt-switch" id="exm-unilateral" ${m.unilateral ? "checked" : ""} autocomplete="off">
+          </div>
         </div>
         <div class="vt-modal-actions">
           <button class="vt-btn-primary" data-a="ex-modal-save">Guardar</button>
@@ -1229,13 +1269,21 @@ function tabHeaderHTML(eyebrow, title) {
 
 /* -------------------------------- Lógica de sesión -------------------------------- */
 
-function defaultSet(type, target, prevSet) {
+function defaultSet(type, target, prevSet, unilateral) {
   // Si la serie anterior es calentamiento, la nueva nace calentamiento (otro aproche).
   const warmup = !!(prevSet && prevSet.warmup);
   if (type === "time")
     return {
       done: false, warmup,
       seconds: num(prevSet?.seconds) || num(target?.seconds) || 30,
+      weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
+      rpe: null,
+    };
+  if (unilateral)
+    return {
+      done: false, warmup,
+      repsL: (prevSet ? repsL(prevSet) : 0) || num(target?.reps) || 8,
+      repsR: (prevSet ? repsR(prevSet) : 0) || num(target?.reps) || 8,
       weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
       rpe: null,
     };
@@ -1285,7 +1333,7 @@ function buildSessionFromRoutine(r) {
         linkPrev: !!re.linkPrev,
         note: re.note || "",
         sessionNote: "",
-        sets: Array.from({ length: n }, () => defaultSet(t, target, null)),
+        sets: Array.from({ length: n }, () => defaultSet(t, target, null, exUnilateral(re.exerciseId))),
       };
     }),
   };
@@ -1307,6 +1355,8 @@ function buildSessionFromPastSession(pastSession) {
         warmup: st.warmup,
         weight: st.weight,
         reps: st.reps,
+        repsL: st.repsL,
+        repsR: st.repsR,
         seconds: st.seconds,
         rpe: null,
         note: "",
@@ -1349,15 +1399,20 @@ function finishSession() {
     const prHits = [];
     for (const e of s.exercises) {
       const type = exType(e.exerciseId);
+      const uni = exUnilateral(e.exerciseId);
       const prior = priorStats(e.exerciseId);
       for (const st of e.sets) {
-        if (!st.done || st.warmup || !isPR(type, st, prior)) continue;
+        if (!st.done || st.warmup || !isPR(type, st, prior, uni)) continue;
+        // Unilateral: reps del hit usa el lado más débil (mismo criterio que
+        // el PR); repsL/repsR se guardan aparte para el formato compacto de fmtSet.
         const hit = {
           exerciseId: e.exerciseId,
           exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
           type,
           weight: num(st.weight),
-          reps: num(st.reps),
+          reps: uni ? Math.min(repsL(st), repsR(st)) : num(st.reps),
+          repsL: uni ? repsL(st) : undefined,
+          repsR: uni ? repsR(st) : undefined,
           seconds: num(st.seconds),
         };
         // Sugerencia de 1RM (Epley), solo confiable entre 1 y 12 reps.
@@ -1449,7 +1504,7 @@ function sessionSummaryHTML() {
             <div class="vt-pr-hit-row">
               <span class="vt-pr">${icon("trophy", 16)}</span>
               <span class="vt-pr-hit-name">${esc(hit.exerciseName)}</span>
-              <span class="vt-pr-hit-value vt-mono">${esc(fmtSet(hit.type, hit))}</span>
+              <span class="vt-pr-hit-value vt-mono">${esc(fmtSet(hit.type, hit, exUnilateral(hit.exerciseId)))}</span>
             </div>
             ${hit.suggestedOneRM ? (applied
               ? `<p class="vt-pr-hit-applied">${icon("check", 13)} 1RM actualizado</p>`
@@ -1879,7 +1934,7 @@ document.addEventListener("click", (e) => {
     case "set-add": {
       const ex = ui.activeSession.exercises[+el.dataset.ex];
       const t = exType(ex.exerciseId);
-      ex.sets.push(defaultSet(t, ex.target, ex.sets[ex.sets.length - 1]));
+      ex.sets.push(defaultSet(t, ex.target, ex.sets[ex.sets.length - 1], exUnilateral(ex.exerciseId)));
       render();
       break;
     }
@@ -1971,10 +2026,12 @@ document.addEventListener("click", (e) => {
           exercises: sum.exercisesSnapshot.map((e) => {
             const t = exType(e.exerciseId);
             const lastSet = e.sets[e.sets.length - 1];
+            // repsL/repsR caen a num(lastSet.reps) vía fallback cuando el set
+            // no es unilateral, así que el promedio da lo mismo que antes.
             return {
               exerciseId: e.exerciseId,
               targetSets: e.sets.length,
-              targetReps: num(lastSet.reps),
+              targetReps: Math.round((repsL(lastSet) + repsR(lastSet)) / 2),
               targetWeight: num(lastSet.weight),
               targetSeconds: t === "time" ? num(lastSet.seconds) : undefined,
               restSeconds: num(e.restSeconds) || 0,
@@ -2063,12 +2120,14 @@ document.addEventListener("click", (e) => {
       if (!name) { alert("Ponle un nombre al ejercicio."); break; }
       const ormVal = num(document.getElementById("exm-onerm")?.value);
       const oneRM = type !== "time" && ormVal > 0 ? ormVal : undefined;
+      const uniVal = document.getElementById("exm-unilateral")?.checked;
+      const unilateral = type !== "time" && uniVal ? true : undefined;
       const m = ui.exerciseModal;
       if (m.id) {
         const i = exercises.findIndex((x) => x.id === m.id);
-        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM };
+        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral };
       } else {
-        exercises.push({ id: uid("cex"), name, group, type, oneRM });
+        exercises.push({ id: uid("cex"), name, group, type, oneRM, unilateral });
       }
       persistExercises();
       ui.exerciseModal = null;
@@ -2147,7 +2206,7 @@ function pickExercise(id) {
     });
   } else if (ui.picker === "session" && ui.activeSession) {
     const t = exType(id);
-    ui.activeSession.exercises.push({ exerciseId: id, target: null, sets: [defaultSet(t, null, null)] });
+    ui.activeSession.exercises.push({ exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] });
   }
   ui.picker = null;
   ui.pickerQuery = "";
@@ -2240,9 +2299,12 @@ document.addEventListener("change", (e) => {
     case "set-vibrate": settings.vibrate = el.checked; persistSettings(); break;
     case "prog-ex": ui.progressEx = el.value; ui.progressMetric = null; render(); break;
     case "exm-type": {
-      // El 1RM solo aplica a ejercicios de peso; se oculta en tipo tiempo (sin re-render).
+      // El 1RM y "unilateral" solo aplican a peso/corporal; se ocultan en
+      // tipo tiempo (sin re-render).
       const lbl = document.getElementById("exm-onerm-label");
       if (lbl) lbl.style.display = el.value === "time" ? "none" : "";
+      const uniRow = document.getElementById("exm-uni-row");
+      if (uniRow) uniRow.style.display = el.value === "time" ? "none" : "";
       break;
     }
     case "import-file":

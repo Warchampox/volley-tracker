@@ -265,3 +265,35 @@ Entradas nuevas al final. No reescribir lo anterior.
   5 pestañas sin errores de consola. Falta probar en el teléfono real
   (especialmente el tap target más grande del botón de cronómetro y
   el nuevo restbar de ancho completo).
+
+## 2026-07-30
+- Se implementó: ejercicios unilaterales. Nuevo campo `unilateral` en el
+  catálogo (toggle en el modal de ejercicio, oculto en tipo "tiempo").
+  Cuando está activo, la fila de serie muestra un peso compartido +
+  reps por lado (IZQ/DER, columnas propias en el encabezado) en vez de
+  un solo input de reps. El volumen suma ambos lados; el PR por reps
+  (bodyweight sin lastre) usa el lado MÁS DÉBIL, no el más fuerte — el
+  PR por peso no cambió, sigue igual que antes. "Última vez" e
+  historial muestran el formato compacto "10kg · I8 D10".
+- Se agregaron helpers repsL(st)/repsR(st) con fallback a `reps` para
+  sets viejos (de antes de marcar el ejercicio como unilateral) — no
+  se migra ni se borra el dato original, solo se lee con ese fallback.
+  Se propagó por todos los puntos que leían `.reps`: setVol,
+  priorStats, isPR, fmtSet, progressData (gráfico de Progreso),
+  defaultSet, buildSessionFromPastSession (repetir sesión) y "Guardar
+  como rutina" (targetReps ahora es el promedio de ambos lados, que
+  coincide con el valor viejo cuando el set no es unilateral).
+- Fila unilateral: mismo achique de gap/padding que la fila de tipo
+  "tiempo" (2px/7px 2px) para caber a 360px con el control extra;
+  verificado sin overflow y con columnas del encabezado alineadas
+  exacto (0px de diferencia) contra los inputs reales.
+- sw.js sube a goat-v9.
+- Pendiente de probar: verificado a fondo en el navegador — toggle
+  unilateral se guarda y se oculta/muestra según el tipo, fila de
+  serie con IZQ/DER sin desborde a 360px, volumen sumando ambos lados,
+  PR por reps usando el lado débil (probado caso que NO debía dar PR
+  y caso que sí), formato compacto en "Última vez"/historial/PR del
+  resumen, gráfico de "Reps máx." en Progreso usando el lado débil por
+  serie. Un ejercicio no unilateral (Sentadilla trasera) verificado
+  sin cambios de comportamiento. 5 pestañas sin errores de consola.
+  Falta probar en el teléfono real.

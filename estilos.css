@@ -430,6 +430,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    crudo — le da su propio tamaño en vez de compartir el de "peso". */
 .vt-set-input-clock { width: 60px; }
 
+/* Fila de ejercicio unilateral: peso + dos inputs de reps (izq/der) en vez
+   de peso + un input de reps — un control más, mismo achique de gap/padding
+   que la fila de tiempo para seguir cabiendo a 360px. */
+.vt-set-row-uni { gap: 2px; padding: 7px 2px; }
+.vt-set-input-uniw { width: 44px; }
+.vt-set-input-uni { width: 36px; }
+.vt-set-caps-uni { gap: 2px; padding: 0 2px; }
+
 .vt-setline2 { display: flex; gap: 8px; padding: 2px 6px 6px 29px; align-items: center; }
 .vt-rpe-input {
   width: 64px; text-align: center; padding: 10px 4px;
@@ -519,6 +527,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .vt-modal-form { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .vt-modal-form label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+.vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-dim); }
 .vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
 .vt-modal-actions .vt-btn-ghost { flex: 1; justify-content: center; }
