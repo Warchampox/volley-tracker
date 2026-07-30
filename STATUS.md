@@ -194,3 +194,74 @@ Entradas nuevas al final. No reescribir lo anterior.
   sigue contando en vivo en mm:ss, "1:30" y "90" ambos guardan 90
   segundos, PR sobre el valor numérico sigue funcionando. 5 pestañas
   sin errores de consola. Falta probar en el teléfono real.
+
+## 2026-07-29 (cont. 7)
+- Rediseño visual (estilo tabla, sin cajas donde ya no correspondía):
+  catálogo de ejercicios ahora agrupa por bloque con acento vertical
+  de color por grupo (no por fila) y encabezado en mayúscula con
+  tracking, igual lenguaje que el resto de la app; el header de sesión
+  (tiempo/volumen) perdió su caja y quedó flotando; la barra de
+  descanso pasó de tarjeta flotante con track+fill grueso a una barra
+  delgada de ancho completo pegada arriba de la nav, con una línea de
+  progreso fina en el borde superior (CSS var --rest-pct escrita desde
+  updateRestBar) en vez del track+fill.
+- Se auditó y corrigió la alineación de columnas (setCapsHTML vs
+  setRowHTML) para los tres tipos de ejercicio: el header de columnas
+  ahora usa el ancho EXACTO de cada input real (antes eran genéricos
+  y no calzaban, sobre todo en tipo "tiempo" donde faltaba reservar
+  espacio para el botón de cronómetro). También se encontró y corrigió
+  un desfase de 2px en TODOS los tipos: la fila real tiene un
+  border-left transparente de 2px (para el acento de estado) que el
+  header no replicaba.
+- Se agregó selección automática del contenido al enfocar inputs de
+  VALOR (peso/reps/seg/RPE/descanso/1RM/targets), vía un listener
+  global de "focusin" — nunca en campos de texto libre (nombres,
+  notas).
+- El botón de cronómetro de serie (play/pausa) creció a 36px de tap
+  target (antes 26-30px) y ahora pulsa/brilla mientras corre; el input
+  de segundos se pinta azul mientras esa serie se cronometra. Para que
+  la fila de tipo "tiempo" siguiera sin desbordar a 360px se achicó el
+  input de peso de esa fila (36px → 30px) y el gap entre controles
+  (3px → 2px).
+- Fix de lógica: "removed" en el diff de sincronización de rutina
+  (resumen de fin de sesión) ya NO se calcula comparando la rutina
+  original contra los ejercicios con series marcadas — eso hacía que
+  simplemente no completar un ejercicio se ofreciera como "quitarlo de
+  la rutina". Ahora la sesión activa trackea explicitlyRemoved (solo
+  se llena al usar el botón de basura de "quitar ejercicio de la
+  sesión") y el diff usa eso. "added" no cambió.
+- Grupos musculares dejaron de ser una constante fija: ahora viven en
+  localStorage ("exercise-groups", sembrado la primera vez con los
+  mismos 7 grupos/colores de antes para no romper nada). Nueva
+  pantalla "Grupos" (ícono de tag en Ajustes → Ejercicios): crear
+  grupo (nombre + color de una paleta de 7 que excluye ámbar/verde,
+  reservados para PR/serie completada), renombrar (cascada: actualiza
+  el campo group de todos los ejercicios que lo usaban), recolorear,
+  eliminar (Custom no se puede eliminar; al borrar un grupo sus
+  ejercicios pasan a Custom).
+- Notas por ejercicio en la sesión: nuevo campo sessionNote (distinto
+  de note, que es la nota del entrenador/rutina, de solo lectura) con
+  su propio ícono en la cabecera de cada bloque de ejercicio durante
+  el entrenamiento. El desplegable por serie (RPE/nota) quedó SOLO con
+  RPE — ya no se crean notas nuevas a nivel de serie. Datos viejos con
+  nota por serie se siguen mostrando igual en el historial, sin migrar
+  ni borrar nada.
+- Bug encontrado y corregido durante la verificación (no llegó a
+  pushearse roto): el input de nombre del modal "Nuevo/editar grupo"
+  no estaba sincronizado con el estado — al elegir un color se
+  disparaba un render() completo que reconstruía el modal desde
+  ui.groupModal.name (todavía vacío) y el nombre recién tipeado se
+  perdía. Se agregó tracking data-i="group-name" como en los demás
+  campos de texto de la app.
+- sw.js sube a goat-v8 (cambios grandes en app.js/estilos.css).
+- Pendiente de probar: verificado a fondo en el navegador — las 3
+  correcciones/features de lógica (removed explícito con caso positivo
+  y negativo, grupos crear/renombrar-con-cascada/eliminar-con-
+  reasignación, nota de ejercicio guardada y visible en historial),
+  alineación de columnas medida por JS (0px de diferencia en los 3
+  tipos, sin overflow horizontal a 360px), timer con clase is-running
+  y animación confirmadas por CSS computado, select-on-focus
+  confirmado en input de valor y descartado en campo de texto libre.
+  5 pestañas sin errores de consola. Falta probar en el teléfono real
+  (especialmente el tap target más grande del botón de cronómetro y
+  el nuevo restbar de ancho completo).

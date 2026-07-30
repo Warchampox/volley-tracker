@@ -12,17 +12,22 @@ const TYPES = {
   time:       { label: "Tiempo (s)" },
 };
 
-const GROUPS = ["Piernas", "Pliometría", "Empuje", "Tracción", "Hombro", "Core", "Custom"];
+// Semilla de grupos (solo se usa la primera vez que corre la app, para no
+// romper nada existente). Después de eso, la fuente de verdad es
+// exerciseGroups (persistido) — ver más abajo.
+const DEFAULT_GROUPS = [
+  { name: "Piernas", color: "var(--amber)" },
+  { name: "Pliometría", color: "var(--green)" },
+  { name: "Empuje", color: "var(--blue)" },
+  { name: "Tracción", color: "var(--blue)" },
+  { name: "Hombro", color: "var(--red)" },
+  { name: "Core", color: "var(--text-dim)" },
+  { name: "Custom", color: "var(--text-dim)" },
+];
 
-const GROUP_COLORS = {
-  Piernas: "var(--amber)",
-  "Pliometría": "var(--green)",
-  Empuje: "var(--blue)",
-  "Tracción": "var(--blue)",
-  Hombro: "var(--red)",
-  Core: "var(--text-dim)",
-  Custom: "var(--text-dim)",
-};
+// Paleta para grupos NUEVOS creados por el usuario — excluye ámbar y verde,
+// reservados exclusivamente para PR y serie completada (ver CLAUDE.md).
+const GROUP_PALETTE = ["#3B6FE0", "#C1594F", "#8FA0AC", "#9B6FE0", "#4FB8C1", "#E0763B", "#C14FA0"];
 
 const DEFAULT_EXERCISES = [
   { id: "ex_sentadilla_trasera", name: "Sentadilla trasera", group: "Piernas", type: "weight" },
@@ -81,12 +86,24 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
 }
 let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [] }, load("settings", {}));
 let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
+let exerciseGroups = load("exercise-groups", null); // [{name, color}]
+if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
+  exerciseGroups = DEFAULT_GROUPS.map((g) => ({ ...g }));
+  save("exercise-groups", exerciseGroups);
+}
 
 const persistRoutines = () => save("routines", routines);
 const persistSessions = () => save("sessions", sessions);
 const persistExercises = () => save("custom-exercises", exercises);
 const persistSettings = () => save("settings", settings);
 const persistFolders = () => save("routine-folders", routineFolders);
+const persistGroups = () => save("exercise-groups", exerciseGroups);
+
+// El grupo se identifica por nombre (no hay id) — mismo modelo que ya usaban
+// GROUPS/GROUP_COLORS antes de persistirse. Sin fallback baked-in: cada
+// call site decide su propio valor por defecto, igual que antes.
+const groupNames = () => exerciseGroups.map((g) => g.name);
+const groupColor = (name) => exerciseGroups.find((g) => g.name === name)?.color;
 
 /* ---------------------------------- Estado UI ---------------------------------- */
 
@@ -100,8 +117,11 @@ const ui = {
   progressEx: null,
   progressMetric: null,
   manageExercises: false,
+  manageGroups: false,
   exerciseModal: null,    // null | {id|null, name, group, type}
+  groupModal: null,       // null | {originalName|null, name, color}
   openNotes: new Set(),   // "exIdx:setIdx" con línea RPE/nota abierta
+  openExNotes: new Set(), // exIdx con la nota de ejercicio (sessionNote) abierta
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, danger, onYes}
   collapsedFolders: new Set(), // ids de carpeta colapsadas — solo de la sesión de uso, no persiste
@@ -150,6 +170,7 @@ const PATHS = {
   grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  tag: '<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/>',
 };
 
 const icon = (name, s = 18) =>
@@ -272,13 +293,13 @@ function updateRestBar() {
   const left = Math.ceil(leftMs / 1000);
   const pct = Math.max(0, Math.min(100, (leftMs / (rest.total * 1000)) * 100));
   el.className = "";
+  el.style.setProperty("--rest-pct", pct + "%");
   el.innerHTML = `
-    <div>
+    <div class="vt-rest-info">
       <div class="vt-rest-label">Descanso</div>
       <div class="vt-rest-time">${fmtClock(left)}</div>
     </div>
-    <div class="vt-rest-track"><div class="vt-rest-fill" style="width:${pct}%"></div></div>
-    <button class="vt-btn-ghost" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 18)}</button>`;
+    <button class="vt-rest-cancel" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 20)}</button>`;
 }
 
 function beep() {
@@ -319,7 +340,7 @@ function render() {
   else if (ui.tab === "entrenar") view = ui.activeSession ? trainActiveHTML() : trainIdleHTML();
   else if (ui.tab === "historial") view = historyHTML();
   else if (ui.tab === "progreso") view = progressHTML();
-  else if (ui.tab === "ajustes") view = ui.manageExercises ? exercisesManagerHTML() : settingsHTML();
+  else if (ui.tab === "ajustes") view = ui.manageGroups ? groupsManagerHTML() : (ui.manageExercises ? exercisesManagerHTML() : settingsHTML());
 
   $app.innerHTML = `
     <div class="vt-frame">
@@ -338,7 +359,8 @@ function render() {
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
-    ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}`;
+    ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}
+    ${ui.groupModal ? groupModalHTML() : ""}`;
 
   updateRestBar();
   if (ui.tab === "progreso") mountChart();
@@ -430,7 +452,7 @@ function routineCardHTML(r, map, lastUsed) {
     </div></div>
     <div class="vt-tags">
       ${r.exercises.slice(0, 4).map((re) =>
-        `<span class="vt-tag" style="border-color:${GROUP_COLORS[map[re.exerciseId]?.group] || "var(--line)"}">${esc(map[re.exerciseId]?.name || "Ejercicio")}</span>`).join("")}
+        `<span class="vt-tag" style="border-color:${groupColor(map[re.exerciseId]?.group) || "var(--line)"}">${esc(map[re.exerciseId]?.name || "Ejercicio")}</span>`).join("")}
       ${r.exercises.length > 4 ? `<span class="vt-tag vt-tag-more">+${r.exercises.length - 4}</span>` : ""}
     </div>
     <div class="vt-card-actions">
@@ -569,12 +591,12 @@ function editorHTML() {
           </div>`;
         }
         const lbl = ssLabels[idx];
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${groupColor(ex?.group) || "var(--line)"}">
           <div class="vt-block-row">
             <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
             <div class="vt-block-body">
               <div class="vt-card-top">
-                <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
+                <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
                 <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
               </div>
               <div class="vt-target-row">${fields}</div>
@@ -634,7 +656,7 @@ function trainActiveHTML() {
           ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:22px">
         <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
         <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
       </div>
@@ -646,12 +668,12 @@ function trainActiveHTML() {
         const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
         const lbl = ssLabels[exIdx];
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${GROUP_COLORS[ex?.group] || "var(--line)"}">
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${groupColor(ex?.group) || "var(--line)"}">
           <div class="vt-block-row">
             <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
             <div class="vt-block-body">
               <div class="vt-card-top">
-                <h3 style="color:${GROUP_COLORS[ex?.group] || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
+                <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
                 <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
                   <span class="vt-rest-mini vt-muted-sm">Descanso
                     <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
@@ -659,10 +681,12 @@ function trainActiveHTML() {
                       data-i="ex-rest" data-ex="${exIdx}"
                       autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                   </span>
+                  <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
                   <button class="vt-btn-ghost vt-danger" data-a="session-ex-remove" data-ex="${exIdx}" aria-label="Quitar ejercicio de la sesión">${icon("trash", 15)}</button>
                 </div>
               </div>
               ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
+              ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:6px 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
               ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x)).join(", ")}</p>` : ""}
               <div class="vt-sets">
                 ${e.sets.length ? setCapsHTML(t) : ""}
@@ -685,16 +709,26 @@ function trainActiveHTML() {
     </div>`;
 }
 
-// Encabezados de columnas sobre la primera serie, alineados con los inputs
-// replicando la estructura de la fila (check 30px + número 16px + inputs 58px).
+// Encabezados de columnas sobre la primera serie, alineados con los inputs.
+// Los anchos de cada columna deben ser EXACTAMENTE los del input real que
+// representan (no un ancho genérico) — ver .vt-set-input/-sm/-clock y
+// .vt-timer-btn en estilos.css. El gap/padding del contenedor también debe
+// calzar con el de .vt-set-row (o .vt-set-row-time) de ese mismo tipo.
 function setCapsHTML(type) {
-  const cap = (t) => `<span class="vt-cap">${t}</span>`;
+  const cap = (t, w) => `<span class="vt-cap" style="width:${w}px">${t}</span>`;
   const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
-  let inner;
-  if (type === "time") inner = cap("tiempo") + cap("+kg");
-  else if (type === "bodyweight") inner = cap("reps") + cap("+kg");
-  else inner = cap("kg") + gap("×") + cap("reps");
-  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
+  let inner, rowClass = "";
+  if (type === "time") {
+    // seg (60px, .vt-set-input-clock) + kg (30px, .vt-set-input-sm en fila
+    // angosta) + hueco reservado para el botón de cronómetro (36px, .vt-timer-btn).
+    inner = cap("tiempo", 60) + cap("+kg", 30) + `<span class="vt-cap-timerbtn" aria-hidden="true"></span>`;
+    rowClass = "vt-set-caps-time";
+  } else if (type === "bodyweight") {
+    inner = cap("reps", 52) + cap("+kg", 52);
+  } else {
+    inner = cap("kg", 52) + gap("×") + cap("reps", 52);
+  }
+  return `<div class="vt-set-caps ${rowClass}" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
 }
 
 // "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
@@ -757,19 +791,14 @@ setInterval(() => {
 function setRowHTML(type, st, exIdx, setIdx, prior, label) {
   const pr = isPR(type, st, prior);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
-  // numeric=false para el único campo de texto libre (nota): ahí sí sirve el
-  // autocorrect/spellcheck normal, el resto son valores numéricos donde Chrome
-  // a veces igual muestra la barra de autocompletar aunque autocomplete="off".
-  const attrs = (f, numeric = true) => {
-    const base = `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off"`;
-    return numeric ? `${base} autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"` : base;
-  };
+  const attrs = (f) =>
+    `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
 
   let fields = "";
   if (type === "time") {
     const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
     fields = `
-      <input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-clock" value="${fmtClock(num(st.seconds))}" ${attrs("seconds")}>
+      <input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClock(num(st.seconds))}" ${attrs("seconds")}>
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.weight)}" ${attrs("weight")}>
       <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
@@ -793,13 +822,12 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label) {
         <span class="vt-set-num">${label}</span>
         ${fields}
         ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
-        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE y nota" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
+        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
       </div>
     </div>
     ${open ? `<div class="vt-setline2">
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
         value="${st.rpe ?? ""}" ${attrs("rpe")}>
-      <input type="text" class="vt-input vt-note-input" placeholder="Nota (opcional)" value="${esc(st.note || "")}" ${attrs("note", false)}>
     </div>` : ""}`;
 }
 
@@ -827,10 +855,11 @@ function historyHTML() {
               const t = exType(e.exerciseId);
               const notes = e.sets.filter((st) => st.note).map((st) => esc(st.note));
               return `<div class="vt-detail-row">
-                  <span style="color:${GROUP_COLORS[exGroup(e.exerciseId)]}">${esc(exName(e.exerciseId))}</span>
+                  <span style="color:${groupColor(exGroup(e.exerciseId))}">${esc(exName(e.exerciseId))}</span>
                   <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st)).join(", ")}</span>
                 </div>
                 ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
+                ${e.sessionNote ? `<div class="vt-note-line">— ${esc(e.sessionNote)}</div>` : ""}
                 ${notes.length ? `<div class="vt-note-line">— ${notes.join(" · ")}</div>` : ""}`;
             }).join("")}
             <button class="vt-btn-ghost vt-danger vt-small" data-a="hist-del" data-id="${s.id}">${icon("trash", 14)} Eliminar sesión</button>
@@ -1026,15 +1055,17 @@ function exercisesManagerHTML() {
     <header class="vt-header">
       <button class="vt-btn-icon" data-a="manage-close" aria-label="Volver">${icon("back", 20)}</button>
       <h1 class="vt-header-title">Ejercicios</h1>
-      <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 20)}</button>
+      <div style="display:flex;gap:8px">
+        <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 18)}</button>
+        <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 20)}</button>
+      </div>
     </header>
     <div class="vt-list">
-      ${groups.map((g) => `<div class="vt-card">
-        <h3 style="color:${GROUP_COLORS[g] || "var(--text)"};margin-bottom:4px">${esc(g)}</h3>
+      ${groups.map((g) => `<div class="vt-group-block" style="border-left-color:${groupColor(g) || "var(--line)"}">
+        <h3 class="vt-group-title">${esc(g)}</h3>
         ${byGroup[g].map((e) => `
           <div class="vt-ex-row">
             <div class="vt-ex-row-top">
-              <span class="vt-dotgroup" style="background:${GROUP_COLORS[g] || "var(--text-dim)"}"></span>
               <span class="vt-ex-name">${esc(e.name)}</span>
               <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
               <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
@@ -1045,6 +1076,50 @@ function exercisesManagerHTML() {
             </div>
           </div>`).join("")}
       </div>`).join("")}
+    </div>`;
+}
+
+function groupsManagerHTML() {
+  return `
+    <header class="vt-header">
+      <button class="vt-btn-icon" data-a="groups-close" aria-label="Volver">${icon("back", 20)}</button>
+      <h1 class="vt-header-title">Grupos</h1>
+      <button class="vt-btn-icon" data-a="group-new" aria-label="Nuevo grupo">${icon("plus", 20)}</button>
+    </header>
+    <div class="vt-list">
+      ${exerciseGroups.map((g) => `
+        <div class="vt-ex-row">
+          <div class="vt-ex-row-top">
+            <span class="vt-dotgroup" style="background:${g.color}"></span>
+            <span class="vt-ex-name">${esc(g.name)}</span>
+            <button class="vt-btn-ghost" data-a="group-edit" data-name="${esc(g.name)}" aria-label="Editar">${icon("pencil", 15)}</button>
+            ${g.name !== "Custom" ? `<button class="vt-btn-ghost vt-danger" data-a="group-del" data-name="${esc(g.name)}" aria-label="Eliminar">${icon("trash", 15)}</button>` : ""}
+          </div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function groupModalHTML() {
+  const m = ui.groupModal;
+  return `
+    <div class="vt-modal-backdrop" data-a="group-modal-cancel">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">${m.originalName ? "Editar grupo" : "Nuevo grupo"}</h2>
+          <button class="vt-btn-ghost" data-a="group-modal-cancel">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-form">
+          <label>Nombre
+            <input type="text" class="vt-input" id="grp-name" value="${esc(m.name)}" placeholder="Ej: Espalda" data-i="group-name" autocomplete="off">
+          </label>
+          <div class="vt-swatches">
+            ${GROUP_PALETTE.map((c) => `<button type="button" class="vt-swatch ${m.color === c ? "is-active" : ""}" data-a="group-color-pick" data-color="${c}" style="background:${c}" aria-label="Elegir color"></button>`).join("")}
+          </div>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-primary" data-a="group-modal-save">Guardar</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -1063,7 +1138,7 @@ function exerciseModalHTML() {
           </label>
           <label>Grupo muscular
             <select class="vt-input" id="exm-group">
-              ${GROUPS.map((g) => `<option value="${g}" ${m.group === g ? "selected" : ""}>${g}</option>`).join("")}
+              ${groupNames().map((g) => `<option value="${g}" ${m.group === g ? "selected" : ""}>${g}</option>`).join("")}
             </select>
           </label>
           <label>Tipo de registro
@@ -1109,7 +1184,7 @@ function pickerListHTML() {
   const filtered = pool.filter((e) => e.name.toLowerCase().includes(q));
   let html = filtered.map((ex) => `
     <button class="vt-modal-row" data-a="picker-pick" data-id="${ex.id}">
-      <span class="vt-dotgroup" style="background:${GROUP_COLORS[ex.group] || "var(--text-dim)"}"></span>
+      <span class="vt-dotgroup" style="background:${groupColor(ex.group) || "var(--text-dim)"}"></span>
       ${esc(ex.name)}
       <span class="vt-muted-sm">${esc(ex.group)}</span>
     </button>`).join("");
@@ -1162,13 +1237,13 @@ function defaultSet(type, target, prevSet) {
       done: false, warmup,
       seconds: num(prevSet?.seconds) || num(target?.seconds) || 30,
       weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
-      rpe: null, note: "",
+      rpe: null,
     };
   return {
     done: false, warmup,
     reps: num(prevSet?.reps) || num(target?.reps) || 8,
     weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
-    rpe: null, note: "",
+    rpe: null,
   };
 }
 
@@ -1189,6 +1264,7 @@ function buildSessionFromRoutine(r) {
     routineId: r.id,
     routineName: r.name,
     date: new Date().toISOString(),
+    explicitlyRemoved: [], // {id, name} de ejercicios sacados con el botón de basura durante la sesión
     exercises: r.exercises.map((re) => {
       const t = exType(re.exerciseId);
       // En modo %1RM el peso se calcula AHORA con el 1RM vigente del catálogo,
@@ -1208,6 +1284,7 @@ function buildSessionFromRoutine(r) {
         restSeconds: num(re.restSeconds) || 0,
         linkPrev: !!re.linkPrev,
         note: re.note || "",
+        sessionNote: "",
         sets: Array.from({ length: n }, () => defaultSet(t, target, null)),
       };
     }),
@@ -1223,6 +1300,7 @@ function buildSessionFromPastSession(pastSession) {
     routineId: null,
     routineName: pastSession.routineName,
     date: new Date().toISOString(),
+    explicitlyRemoved: [],
     exercises: pastSession.exercises.map((e) => {
       const sets = e.sets.map((st) => ({
         done: false,
@@ -1241,6 +1319,7 @@ function buildSessionFromPastSession(pastSession) {
         restSeconds: num(e.restSeconds) || 0,
         linkPrev: !!e.linkPrev,
         note: e.note || "",
+        sessionNote: "",
         sets,
       };
     }),
@@ -1310,8 +1389,10 @@ function finishSession() {
         const finalIds = new Set(cleaned.exercises.map((e) => e.exerciseId));
         const added = [...finalIds].filter((eid) => !originalIds.has(eid))
           .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
-        const removed = [...originalIds].filter((eid) => !finalIds.has(eid))
-          .map((eid) => ({ id: eid, name: map[eid]?.name || "(ejercicio eliminado)" }));
+        // "removed" es SOLO lo que se sacó a propósito con el botón de basura
+        // durante la sesión (explicitlyRemoved) — no completar un ejercicio
+        // (sin tocar ese botón) nunca ofrece "quitarlo" de la rutina.
+        const removed = (s.explicitlyRemoved || []).filter((x) => originalIds.has(x.id));
         if (added.length > 0 || removed.length > 0) {
           routineDiff = { routineId: routine.id, routineName: routine.name, added, removed };
         }
@@ -1340,6 +1421,7 @@ function finishSession() {
     };
     ui.activeSession = null;
     ui.openNotes.clear();
+    ui.openExNotes.clear();
     stopRest();
     render();
   };
@@ -1581,6 +1663,7 @@ document.addEventListener("click", (e) => {
       ui.tab = el.dataset.tab;
       ui.editingRoutine = null;
       ui.manageExercises = false;
+      ui.manageGroups = false;
       render();
       break;
 
@@ -1629,6 +1712,7 @@ document.addEventListener("click", (e) => {
         const start = () => {
           ui.activeSession = buildSessionFromRoutine(r);
           ui.openNotes.clear();
+          ui.openExNotes.clear();
           ui.tab = "entrenar";
           render();
         };
@@ -1759,12 +1843,19 @@ document.addEventListener("click", (e) => {
     /* Sesión activa */
     case "train-free": {
       const start = () => {
-        ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), exercises: [] };
+        ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), explicitlyRemoved: [], exercises: [] };
         ui.openNotes.clear();
+        ui.openExNotes.clear();
         render();
       };
       if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
       else start();
+      break;
+    }
+    case "session-note-toggle": {
+      const exI = +el.dataset.ex;
+      ui.openExNotes.has(exI) ? ui.openExNotes.delete(exI) : ui.openExNotes.add(exI);
+      render();
       break;
     }
     case "session-ex-remove": {
@@ -1777,6 +1868,7 @@ document.addEventListener("click", (e) => {
           if (runningTimer.exIdx === exI) runningTimer = null;
           else if (runningTimer.exIdx > exI) runningTimer.exIdx--;
         }
+        (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
         ui.activeSession.exercises.splice(exI, 1);
         render();
       };
@@ -1834,7 +1926,7 @@ document.addEventListener("click", (e) => {
     case "session-discard":
       askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;
-        ui.activeSession = null; ui.openNotes.clear(); stopRest(); render();
+        ui.activeSession = null; ui.openNotes.clear(); ui.openExNotes.clear(); stopRest(); render();
       }, true);
       break;
     case "session-finish": finishSession(); break;
@@ -1919,6 +2011,7 @@ document.addEventListener("click", (e) => {
         const start = () => {
           ui.activeSession = buildSessionFromPastSession(past);
           ui.openNotes.clear();
+          ui.openExNotes.clear();
           ui.tab = "entrenar";
           render();
         };
@@ -1982,6 +2075,59 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
+
+    /* Grupos de ejercicios */
+    case "groups-open": ui.manageGroups = true; render(); break;
+    case "groups-close": ui.manageGroups = false; render(); break;
+    case "group-new": ui.groupModal = { originalName: null, name: "", color: GROUP_PALETTE[0] }; render(); break;
+    case "group-edit": {
+      const g = exerciseGroups.find((x) => x.name === el.dataset.name);
+      if (g) ui.groupModal = { originalName: g.name, name: g.name, color: g.color };
+      render();
+      break;
+    }
+    case "group-del": {
+      const name = el.dataset.name;
+      askConfirm(`¿Eliminar el grupo "${name}"? Los ejercicios que lo usaban pasan a "Custom".`, () => {
+        exerciseGroups = exerciseGroups.filter((g) => g.name !== name);
+        persistGroups();
+        exercises = exercises.map((e) => e.group === name ? { ...e, group: "Custom" } : e);
+        persistExercises();
+        render();
+      }, true);
+      break;
+    }
+    case "group-color-pick": ui.groupModal.color = el.dataset.color; render(); break;
+    case "group-modal-cancel": ui.groupModal = null; render(); break;
+    case "group-modal-save": {
+      const name = document.getElementById("grp-name").value.trim();
+      if (!name) { alert("Ponle un nombre al grupo."); break; }
+      const m = ui.groupModal;
+      if (m.originalName) {
+        if (name !== m.originalName && exerciseGroups.some((g) => g.name === name)) {
+          alert("Ya existe un grupo con ese nombre.");
+          break;
+        }
+        const g = exerciseGroups.find((x) => x.name === m.originalName);
+        if (g) {
+          if (name !== m.originalName) {
+            exercises = exercises.map((e) => e.group === m.originalName ? { ...e, group: name } : e);
+            persistExercises();
+          }
+          g.name = name;
+          g.color = m.color;
+          persistGroups();
+        }
+      } else {
+        if (exerciseGroups.some((g) => g.name === name)) { alert("Ya existe un grupo con ese nombre."); break; }
+        exerciseGroups.push({ name, color: m.color });
+        persistGroups();
+      }
+      ui.groupModal = null;
+      render();
+      break;
+    }
+
     case "export": exportJSON(); break;
   }
 });
@@ -2034,6 +2180,11 @@ document.addEventListener("input", (e) => {
       if (it) it.note = el.value;
       break;
     }
+    case "group-name":
+      // Sincronizado con el estado (y no solo leído al guardar) porque elegir
+      // un color dispara render() y reconstruye el input desde ui.groupModal.name.
+      if (ui.groupModal) ui.groupModal.name = el.value;
+      break;
     case "set": {
       const st = ui.activeSession?.exercises[+el.dataset.ex]?.sets[+el.dataset.set];
       if (!st) break;
@@ -2073,6 +2224,11 @@ document.addEventListener("input", (e) => {
       if (ex) ex.restSeconds = Math.max(0, Math.round(num(el.value)));
       break;
     }
+    case "session-note": {
+      const ex = ui.activeSession?.exercises[+el.dataset.ex];
+      if (ex) ex.sessionNote = el.value;
+      break;
+    }
   }
 });
 
@@ -2094,6 +2250,14 @@ document.addEventListener("change", (e) => {
       el.value = "";
       break;
   }
+});
+
+// Tocar un input de VALOR selecciona su contenido completo (para reemplazarlo
+// de un tiro, sin borrar a mano). Nunca en campos de texto libre (nombre de
+// rutina/ejercicio, notas) — ahí molestaría. focusin (no focus) porque sí burbujea.
+const SELECT_ON_FOCUS = ".vt-set-input, .vt-rpe-input, .vt-rest-mini input, .vt-numfield input, #exm-onerm, .vt-max-input";
+document.addEventListener("focusin", (e) => {
+  if (e.target.matches && e.target.matches(SELECT_ON_FOCUS)) e.target.select();
 });
 
 // Aviso si intenta cerrar la pestaña con una sesión sin guardar.
