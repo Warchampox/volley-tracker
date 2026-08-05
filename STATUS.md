@@ -447,3 +447,26 @@ Entradas nuevas al final. No reescribir lo anterior.
   propio en el ejercicio NO arranca descanso automático, y que
   definiéndole 20s a un ejercicio sí lo arranca con ese valor. Falta
   probar en el teléfono real.
+
+## 2026-08-05
+- Fix de ícono/splash: se reemplazaron icons/icon-192.png,
+  icon-512.png, apple-touch-icon.png y favicon-32.png (mismo disco
+  azul "GOAT", archivos entregados por Martín) — icon-512-maskable.png
+  no se tocó. manifest.json tenía background_color/theme_color en
+  #0B1220, que NO coincidía con --bg (#0A0A0C en estilos.css): eso
+  causaba el borde/rectángulo visible alrededor del ícono en la
+  pantalla de carga. Se corrigió a #0A0A0C en ambos campos, y también
+  en el <meta name="theme-color"> de index.html (mismo rol, tenía el
+  mismo valor viejo — no estaba pedido explícitamente pero quedaba
+  inconsistente si no se igualaba). sw.js goat-v12 → v13 (los íconos
+  van en APP_SHELL, cache-first).
+- Verificado: hash de cada ícono en disco = hash servido por el
+  servidor local = hash del zip original (los 4 archivos llegaron
+  intactos); manifest.json e index.html sirven #0A0A0C. El panel de
+  navegador usado para verificar tiene un caché propio por URL que no
+  se pudo invalidar (ni con unregister de SW + clear caches + tab
+  nueva) — se confirmó por curl directo al servidor en vez de pelear
+  con ese caché, así que no afecta lo que se sube. Pendiente: Martín
+  tiene que borrar el acceso directo instalado y agregarlo de nuevo en
+  su teléfono para confirmar visualmente que la pantalla de carga
+  queda sin el rectángulo — eso no se puede probar desde acá.
