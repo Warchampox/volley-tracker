@@ -329,3 +329,59 @@ Entradas nuevas al final. No reescribir lo anterior.
   rápido el navegador detecta la actualización estando la PWA
   instalada y en background, ya que el chequeo automático del SW no es
   instantáneo).
+
+## 2026-08-04
+- Reestructuración grande, de un solo pedido con 9 puntos:
+  1. Modelo: `setType` (null/"warmup"/"dropset"/"failed") reemplaza el
+     booleano `warmup` — un set viejo con warmup=true y sin setType se
+     lee como "warmup" en runtime (getSetType), nunca se migra el dato
+     guardado. Se eliminó por completo el campo `note` a nivel de
+     serie (sesiones viejas con st.note lo siguen mostrando en el
+     historial, tal cual). Variables CSS nuevas --superset (morado,
+     acento de superserie) y --dropset (naranja), reservadas como
+     ámbar/verde. settings.openFolders nuevo.
+  2. "Pegar JSON": importJSON(file) se separó en
+     processImportedData(data) reutilizable; nuevo modal con textarea
+     en Ajustes junto al botón de archivo.
+  3. Crear ejercicio desde cualquier picker (incluido "reemplazar" y
+     "destacados") abre el modal completo en vez de crear con
+     defaults, y al guardar se agrega solo a la rutina/sesión de
+     origen.
+  4. Se fusionaron las pestañas Rutinas y Entrenar en una sola
+     ("Entrenar" en el nav, contenido interno sigue diciendo
+     "Rutinas"): con sesión activa no minimizada muestra
+     trainActiveHTML, si no la lista de rutinas (que ahora incluye
+     "+ Sesión libre"). Nuevo botón minimizar en el header sticky de
+     la sesión → barra flotante propia (#minimized-bar) con nombre/
+     reloj/volumen en vivo, en el mismo wrapper fijo que el restbar
+     (#floating-stack, se apilan solas sin pisarse).
+  5. El ícono de la fila de serie que abre RPE pasó de una nota a un
+     gauge/velocímetro; el resaltado ámbar depende solo de st.rpe.
+  6. La fila de serie cambió de orden: botón único de tipo/número
+     (Normal/C/D/F, con selector chico de 4 opciones) → check →
+     valores → RPE. Se quitó el botón de calentamiento aparte.
+  7. Nuevo modo "Organizar ejercicios" (editor de rutina y sesión
+     activa): filas compactas con círculo de selección, barra de
+     acciones (eliminar/agrupar en superserie/reemplazar). Reemplaza
+     por completo los íconos sueltos de eliminar ejercicio y el toggle
+     "🔗 vincular con anterior". El acento morado de superserie ahora
+     envuelve todo el bloque del grupo, no solo la etiqueta A1/A2.
+  8. Ejercicios completos (todas las series no-calentamiento done) se
+     colapsan solos al marcarlos; hay un chevron manual además para
+     colapsar/expandir a mano; el modo Organizar ignora el colapso
+     mientras está activo.
+  9. Carpetas de rutinas: el colapso/expansión pasa de un Set en
+     memoria a settings.openFolders (persistido) — por defecto todas
+     colapsadas.
+- sw.js sube a goat-v11.
+- Pendiente de probar: verificado a fondo en el navegador (viewport
+  360px) — importar por texto pegado, crear ejercicio desde picker se
+  agrega automático, agrupar 3 ejercicios no consecutivos en
+  superserie con reajuste correcto de linkPrev, reemplazar con cambio
+  de tipo sin campos rotos, eliminar en Organizar pide confirmación
+  solo si hay series hechas y llena explicitlyRemoved, drop set cuenta
+  para volumen pero no para PR, colapso automático + chevron manual,
+  minimizar/restaurar sesión sin perder cronómetros ni series, carpeta
+  abierta persiste tras recargar la página de verdad. Sin errores de
+  consola en las 4 pestañas resultantes. Falta probar en el teléfono
+  real.

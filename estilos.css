@@ -11,6 +11,8 @@
   --blue: #3B6FE0;  /* acento principal de marca (U. de Chile) */
   --green: #6FAE7C; /* reservado para serie completada */
   --red: #C1594F;
+  --superset: #9B7FE0; /* reservado EXCLUSIVO para el acento de grupos de superserie */
+  --dropset: #E0793B;  /* reservado EXCLUSIVO para el estado "drop set" de una serie */
 }
 
 * { box-sizing: border-box; }
@@ -198,18 +200,10 @@ button, svg {
 .vt-block.vt-linked-next { margin-bottom: 5px; }
 .vt-ss-badge {
   font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600;
-  border: 1px solid var(--blue); color: var(--blue);
+  border: 1px solid var(--superset); color: var(--superset);
   padding: 1px 7px; border-radius: 20px; margin-right: 7px;
   vertical-align: 2px; letter-spacing: 0.04em;
 }
-.vt-link-toggle {
-  margin-top: 10px;
-  background: transparent; border: 1px solid var(--line); color: var(--text-dim);
-  font-family: inherit; font-size: 11px; padding: 5px 10px; border-radius: 20px;
-  cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em;
-  display: inline-flex; gap: 5px; align-items: center;
-}
-.vt-link-toggle.is-on { border-color: var(--blue); color: var(--blue); }
 
 /* Los nombres de rutina/ejercicio son texto libre del usuario: sin mayúsculas forzadas. */
 .vt-block h3 {
@@ -234,6 +228,57 @@ button, svg {
 .vt-drag-handle:active { cursor: grabbing; }
 .sortable-ghost { opacity: 0.35; }
 .sortable-chosen .vt-block-body { opacity: 0.9; }
+
+/* ---------------------- Modo "Organizar ejercicios" ---------------------- */
+/* Fila compacta: manija + nombre + círculo de selección — nada más. */
+.vt-organize-name {
+  flex: 1; min-width: 0; padding-top: 3px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vt-select-circle {
+  width: 26px; height: 26px; flex-shrink: 0; margin-top: 1px;
+  border-radius: 50%; border: 1.5px solid var(--line);
+  background: var(--surface-2); color: transparent;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  transition: filter 100ms ease, transform 100ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+.vt-select-circle:active { transform: scale(0.96); }
+.vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.vt-select-circle.is-on::after { content: "✓"; font-size: 13px; line-height: 1; }
+
+/* Barra de acciones sobre la selección — mismo nivel visual que las otras
+   barras flotantes, pero sticky/fixed independiente (z-index propio, entre
+   las barras flotantes y los modales). */
+.vt-organize-bar {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 480px;
+  background: var(--surface-2);
+  border-radius: 10px 10px 0 0;
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  z-index: 45;
+  box-shadow: 0 -4px 18px rgba(0,0,0,0.35);
+}
+.vt-organize-count { font-size: 13px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+.vt-organize-actions { display: flex; gap: 4px; }
+
+/* ------------------- Ejercicio colapsado (sesión activa) ----------------- */
+.vt-collapsed-row {
+  width: 100%; background: transparent; border: none; color: inherit; font: inherit;
+  display: flex; align-items: center; gap: 8px; padding: 10px 4px; cursor: pointer; text-align: left;
+}
+.vt-collapsed-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700;
+}
+.vt-collapsed-check {
+  width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%;
+  background: var(--green); color: #0E1512;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 
 .vt-card-button { width: 100%; text-align: left; cursor: pointer; color: inherit; font-family: inherit; }
 .vt-full-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 0; font: inherit; text-align: left; }
@@ -289,8 +334,8 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
    de .vt-set-row, si no las columnas quedan 2px desalineadas contra la fila real. */
 .vt-set-caps { display: flex; align-items: center; gap: 5px; padding: 0 4px; margin-bottom: -2px; border-left: 2px solid transparent; }
 .vt-set-caps-time { gap: 2px; padding: 0 2px; }
+.vt-cap-settype { width: 30px; flex-shrink: 0; }
 .vt-cap-check { width: 30px; flex-shrink: 0; }
-.vt-set-caps .vt-set-num { width: 16px; flex-shrink: 0; }
 .vt-cap {
   text-align: center; white-space: nowrap; flex-shrink: 0;
   font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim);
@@ -340,7 +385,6 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
    que antes, pero opaco de verdad para que el rojo del swipe no se transluzca. */
 .vt-set-row.is-done { background: linear-gradient(rgba(111, 174, 124, 0.10), rgba(111, 174, 124, 0.10)), var(--bg); border-left-color: var(--green); }
 .vt-set-row.is-pr { background: linear-gradient(rgba(232, 163, 61, 0.12), rgba(232, 163, 61, 0.12)), var(--bg); border-left-color: var(--amber); }
-.vt-set-num { width: 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
 /* Valores de serie como texto plano de tabla: sin caja; al enfocar, subrayado ámbar
    (box-shadow inset: no mueve el layout). El tap target se mantiene con el padding. */
 .vt-set-input {
@@ -377,20 +421,35 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-done .vt-check { background: var(--green); border-color: var(--green); color: #0E1512; }
 .vt-set-row.is-done .vt-check:active { filter: brightness(0.85); }
 
-.vt-warmup {
-  width: 28px; height: 28px; flex-shrink: 0;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: transparent;
+/* Botón único de tipo/número de serie (reemplaza el número suelto + el
+   toggle de calentamiento aparte). Muestra el número en reposo (Normal) o
+   la letra C/D/F con el color de ese estado; un tap abre el selector chico
+   (.vt-type-picker) de las 4 opciones. */
+.vt-settype-btn {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 9px;
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
   color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: filter 100ms ease, transform 100ms ease, color 180ms ease, border-color 180ms ease;
 }
-.vt-warmup:active { transform: scale(0.96); }
-.vt-warmup.is-on { color: var(--blue); border-color: var(--blue); }
-.vt-warmup.is-on:active { filter: brightness(0.85); }
+.vt-settype-btn:active { transform: scale(0.96); }
+.vt-settype-btn.is-warmup { color: var(--blue); border-color: var(--blue); }
+.vt-settype-btn.is-dropset { color: var(--dropset); border-color: var(--dropset); }
+.vt-settype-btn.is-failed { color: var(--red); border-color: var(--red); }
+
+.vt-type-picker { display: flex; gap: 6px; padding: 4px 6px 8px; }
+.vt-type-picker-opt {
+  flex: 1; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+  padding: 8px; border-radius: 8px; cursor: pointer;
+}
+.vt-type-picker-opt.is-warmup { color: var(--blue); border-color: var(--blue); }
+.vt-type-picker-opt.is-dropset { color: var(--dropset); border-color: var(--dropset); }
+.vt-type-picker-opt.is-failed { color: var(--red); border-color: var(--red); }
 
 .vt-timer-btn {
   width: 36px; height: 36px; flex-shrink: 0;
@@ -418,7 +477,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    técnica de dos capas que is-done/is-pr para quedar opaca detrás del swipe). */
 .vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(143, 160, 172, 0.08), rgba(143, 160, 172, 0.08)), var(--bg); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
-.vt-cap-warm { width: 28px; flex-shrink: 0; }
 
 /* Fila tipo "tiempo": seg + peso + botón de cronómetro son un control más que
    las demás filas, así que aun con la fila más angosta de arriba seguía sin
@@ -527,6 +585,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .vt-modal-form { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .vt-modal-form label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+.vt-textarea { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; resize: vertical; min-height: 160px; }
 .vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-dim); }
 .vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
@@ -607,21 +666,29 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 #update-toast button:active { filter: brightness(0.85); }
 
-/* ------------------------ Cronómetro de descanso ------------------------ */
+/* ------------ Barras flotantes: descanso + sesión minimizada ------------ */
+/* Wrapper fijo compartido: cada barra vive dentro como bloque normal (no
+   position:fixed cada una), así se apilan solas sin coordinar posiciones —
+   cuando una está oculta (display:none) el gap deja de contarla. */
+#floating-stack {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 480px;
+  z-index: 40;
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
 /* Barra delgada, ancho completo, pegada arriba de la nav (sin márgenes
    laterales, sin esquinas redondeadas abajo). La cuenta regresiva se ve en
    una línea fina sobre el borde superior (--rest-pct, escrita desde JS en
    updateRestBar), no en el track+fill grueso de antes. */
 #restbar {
-  position: fixed;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(64px + env(safe-area-inset-bottom));
-  width: 100%; max-width: 480px;
+  position: relative;
   background: var(--surface-2);
   border-radius: 10px 10px 0 0;
   padding: 12px 16px;
   display: flex; align-items: center; gap: 12px;
-  z-index: 40;
   overflow: hidden;
   box-shadow: 0 -4px 18px rgba(0,0,0,0.35);
 }
@@ -642,6 +709,26 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   padding: 6px; display: inline-flex; align-items: center; justify-content: center;
 }
 .vt-rest-cancel:active { color: var(--text); }
+
+/* Sesión minimizada: pill flotante, redondeada en las 4 esquinas (a
+   diferencia de restbar, no está pegada a nada por abajo). */
+#minimized-bar.is-hidden { display: none; }
+.vt-minibar-btn {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  cursor: pointer; color: inherit; font: inherit; text-align: left;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+}
+.vt-minibar-btn:active { filter: brightness(0.9); }
+.vt-minibar-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px;
+}
+.vt-minibar-stats {
+  flex-shrink: 0; display: flex; gap: 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--blue); font-weight: 600;
+}
 
 /* ------------------------------ Ajustes -------------------------------- */
 .vt-settings-row {

@@ -84,7 +84,7 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   exercises = DEFAULT_EXERCISES.map((e) => ({ ...e }));
   save("custom-exercises", exercises);
 }
-let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [] }, load("settings", {}));
+let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [], openFolders: [] }, load("settings", {}));
 let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
 let exerciseGroups = load("exercise-groups", null); // [{name, color}]
 if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
@@ -111,22 +111,28 @@ const ui = {
   tab: "rutinas",
   editingRoutine: null,   // copia de la rutina en edición, o null
   activeSession: null,    // sesión en curso, o null
-  picker: null,           // null | "editor" | "session"
+  sessionMinimized: false, // sesión activa pero minimizada a la barra flotante
+  picker: null,           // null | "editor" | "session" | "featured" | "replace"
   pickerQuery: "",
   openHistory: null,
   progressEx: null,
   progressMetric: null,
   manageExercises: false,
   manageGroups: false,
-  exerciseModal: null,    // null | {id|null, name, group, type}
+  exerciseModal: null,    // null | {id|null, name, group, type, pickerCtx?}
   groupModal: null,       // null | {originalName|null, name, color}
-  openNotes: new Set(),   // "exIdx:setIdx" con línea RPE/nota abierta
+  openNotes: new Set(),   // "exIdx:setIdx" con línea RPE abierta
   openExNotes: new Set(), // exIdx con la nota de ejercicio (sessionNote) abierta
+  openTypeSelector: null, // "exIdx:setIdx" con el selector de tipo de serie abierto, o null
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, danger, onYes}
-  collapsedFolders: new Set(), // ids de carpeta colapsadas — solo de la sesión de uso, no persiste
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
+  pasteJsonModal: false,  // modal de "Pegar JSON"
+  exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
+  selectedExercises: new Set(), // índices seleccionados en modo Organizar
+  replaceExerciseIdx: null,     // índice del ejercicio a reemplazar (picker en contexto "replace")
+  collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
@@ -148,6 +154,13 @@ const exUnilateral = (id) => !!exMap()[id]?.unilateral;
 // ese valor — fallback de compatibilidad, no migra ni borra el dato original.
 const repsL = (st) => num(st.repsL ?? st.reps);
 const repsR = (st) => num(st.repsR ?? st.reps);
+
+// Tipo de serie: null (normal) | "warmup" | "dropset" | "failed". Un set
+// viejo con warmup=true y sin setType se lee como "warmup" — fallback de
+// lectura en runtime, nunca se migra el dato guardado. Los sets nuevos
+// siempre escriben setType (nunca warmup).
+const getSetType = (st) => st.setType ?? (st.warmup ? "warmup" : null);
+const typePrefix = (t) => t === "warmup" ? "c" : t === "dropset" ? "D" : t === "failed" ? "F" : "";
 
 /* ------------------------------------ Íconos ------------------------------------ */
 
@@ -178,6 +191,9 @@ const PATHS = {
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
   tag: '<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/>',
+  clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
 };
 
 const icon = (name, s = 18) =>
@@ -213,7 +229,7 @@ function priorStats(exId) {
     for (const e of s.exercises)
       if (e.exerciseId === exId)
         for (const st of e.sets) {
-          if (st.warmup) continue; // los máximos históricos solo consideran series efectivas
+          if (getSetType(st)) continue; // C/D/F quedan fuera de los máximos históricos
           maxW = Math.max(maxW, num(st.weight));
           maxR = Math.max(maxR, uni ? Math.min(repsL(st), repsR(st)) : num(st.reps));
           maxS = Math.max(maxS, num(st.seconds));
@@ -224,8 +240,9 @@ function priorStats(exId) {
 
 // PR según tipo: peso máx / lastre máx (o reps máx si nunca hubo lastre) / tiempo máx.
 // En bodyweight sin lastre, unilateral compara con el lado más débil.
+// Calentamiento/drop set/fallida no cuentan para PR (mismo criterio para los 3).
 function isPR(type, st, prior, unilateral) {
-  if (!st.done || st.warmup) return false;
+  if (!st.done || getSetType(st)) return false;
   if (type === "time") return num(st.seconds) > 0 && num(st.seconds) > prior.maxS;
   if (type === "bodyweight") {
     if (num(st.weight) > 0) return num(st.weight) > prior.maxW;
@@ -253,6 +270,66 @@ function computeSupersetLabels(items) {
   return labels;
 }
 
+// Color de acento del bloque de un ejercicio: morado de superserie si
+// pertenece a un grupo (todo el bloque, no solo la etiqueta A1/A2), si no
+// el color de su grupo muscular — igual dentro y fuera del modo Organizar.
+const blockAccentColor = (ex, lbl) => lbl ? "var(--superset)" : (groupColor(ex?.group) || "var(--line)");
+
+/* ------------------------- Modo "Organizar ejercicios" --------------------------- */
+// Compartido entre editorHTML (rutina) y trainActiveHTML (sesión activa): es
+// la ÚNICA forma de reordenar (junto al drag-handle ya existente), eliminar,
+// agrupar en superserie o reemplazar un ejercicio.
+
+function organizeToggleHTML() {
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="vt-btn-icon" data-a="exercise-editmode-toggle">${ui.exerciseEditMode ? "Listo" : "Organizar"}</button>
+  </div>`;
+}
+
+// Fila compacta que reemplaza el bloque completo mientras se organiza:
+// manija + acento + nombre + círculo de selección.
+function exerciseOrganizeRowHTML(idx, ex, lbl) {
+  const selected = ui.selectedExercises.has(idx);
+  return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
+    <div class="vt-block-row">
+      <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
+      <span class="vt-organize-name" style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
+      <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ejercicio"></button>
+    </div>
+  </div>`;
+}
+
+// Barra sticky con las acciones sobre lo seleccionado — vacía si no hay nada elegido.
+function organizeActionBarHTML() {
+  const n = ui.selectedExercises.size;
+  if (n === 0) return "";
+  return `<div class="vt-organize-bar">
+    <span class="vt-organize-count">${n} seleccionado${n !== 1 ? "s" : ""}</span>
+    <div class="vt-organize-actions">
+      <button class="vt-btn-ghost vt-danger" data-a="organize-delete">${icon("trash", 16)} Eliminar</button>
+      ${n >= 2 ? `<button class="vt-btn-ghost" data-a="organize-group">${icon("link", 16)} Agrupar</button>` : ""}
+      ${n === 1 ? `<button class="vt-btn-ghost" data-a="organize-replace">${icon("repeat", 16)} Reemplazar</button>` : ""}
+    </div>
+  </div>`;
+}
+
+// Agrupa los índices seleccionados en una superserie consecutiva a partir de
+// la posición del primero. Si alguno venía de otro grupo, el que quedaba
+// justo después de él (si no está también seleccionado) pierde su linkPrev
+// — su "anterior" se está por ir, así que empieza un grupo propio nuevo.
+function groupAsSuperset(list, indices) {
+  const sel = new Set(indices);
+  for (let i = 1; i < list.length; i++) {
+    if (!sel.has(i) && list[i].linkPrev && sel.has(i - 1)) list[i].linkPrev = false;
+  }
+  const sortedSel = [...indices].sort((a, b) => a - b);
+  const insertAt = sortedSel[0];
+  const items = sortedSel.map((i) => list[i]);
+  for (let k = sortedSel.length - 1; k >= 0; k--) list.splice(sortedSel[k], 1);
+  list.splice(insertAt, 0, ...items);
+  items.forEach((it, k) => { it.linkPrev = k > 0; });
+}
+
 function lastSetsFor(exId) {
   for (const s of sessions) {
     const found = s.exercises.find((e) => e.exerciseId === exId && e.sets.length > 0);
@@ -262,7 +339,7 @@ function lastSetsFor(exId) {
 }
 
 function fmtSet(type, s, unilateral) {
-  const w = s.warmup ? "c" : "";
+  const w = typePrefix(getSetType(s));
   const rpe = s.rpe ? ` @${s.rpe}` : "";
   if (type === "time") return `${w}${fmtClock(num(s.seconds))}${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
   if (unilateral) {
@@ -324,6 +401,28 @@ function updateRestBar() {
     <button class="vt-rest-cancel" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 20)}</button>`;
 }
 
+// Barra flotante de sesión minimizada — mismo nivel visual que #restbar
+// (ambas viven en #floating-stack, ver render()). Reloj propio (id
+// distinto de #live-clock) para que el tick de 1s lo actualice sin
+// depender de render(); el volumen no necesita tick porque no cambia
+// mientras la sesión está minimizada (sus inputs no están en el DOM).
+function updateMinimizedBar() {
+  const el = document.getElementById("minimized-bar");
+  if (!el) return;
+  if (!ui.activeSession || !ui.sessionMinimized) { el.className = "is-hidden"; el.innerHTML = ""; return; }
+  const s = ui.activeSession;
+  const vol = sessionVolume(s, true);
+  el.className = "";
+  el.innerHTML = `
+    <button type="button" class="vt-minibar-btn" data-a="session-restore">
+      <span class="vt-minibar-name">${esc(s.routineName)}</span>
+      <span class="vt-minibar-stats">
+        <span id="live-clock-mini">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span>
+        <span>${Math.round(vol).toLocaleString("es-CL")} kg</span>
+      </span>
+    </button>`;
+}
+
 function beep() {
   if (!settings.sound) return;
   try {
@@ -348,9 +447,12 @@ function beep() {
 const $app = document.getElementById("app");
 let chart = null;
 
+// "rutinas" fusiona lo que antes eran dos pestañas separadas (Rutinas +
+// Entrenar): muestra la sesión activa cuando hay una y no está minimizada,
+// si no la lista de rutinas (que a su vez incluye iniciar rutina y sesión
+// libre — ver routinesHTML). El punto verde de sesión activa vive acá.
 const NAV_ITEMS = [
-  { id: "rutinas", label: "Rutinas", ic: "barbell" },
-  { id: "entrenar", label: "Entrenar", ic: "play" },
+  { id: "rutinas", label: "Entrenar", ic: "play" },
   { id: "historial", label: "Historial", ic: "history" },
   { id: "progreso", label: "Progreso", ic: "trend" },
   { id: "ajustes", label: "Ajustes", ic: "sliders" },
@@ -358,8 +460,11 @@ const NAV_ITEMS = [
 
 function render() {
   let view = "";
-  if (ui.tab === "rutinas") view = ui.editingRoutine ? editorHTML() : routinesHTML();
-  else if (ui.tab === "entrenar") view = ui.activeSession ? trainActiveHTML() : trainIdleHTML();
+  if (ui.tab === "rutinas") {
+    if (ui.editingRoutine) view = editorHTML();
+    else if (ui.activeSession && !ui.sessionMinimized) view = trainActiveHTML();
+    else view = routinesHTML();
+  }
   else if (ui.tab === "historial") view = historyHTML();
   else if (ui.tab === "progreso") view = progressHTML();
   else if (ui.tab === "ajustes") view = ui.manageGroups ? groupsManagerHTML() : (ui.manageExercises ? exercisesManagerHTML() : settingsHTML());
@@ -367,12 +472,15 @@ function render() {
   $app.innerHTML = `
     <div class="vt-frame">
       <div class="vt-content">${view}</div>
-      <div id="restbar" class="is-hidden"></div>
+      <div id="floating-stack">
+        <div id="minimized-bar" class="is-hidden"></div>
+        <div id="restbar" class="is-hidden"></div>
+      </div>
       <nav class="vt-nav">
         ${NAV_ITEMS.map((n) => `
           <button class="vt-nav-item ${ui.tab === n.id ? "is-active" : ""}" data-a="tab" data-tab="${n.id}">
             ${icon(n.ic, 20)}<span>${n.label}</span>
-            ${n.id === "entrenar" && ui.activeSession ? '<span class="vt-dot"></span>' : ""}
+            ${n.id === "rutinas" && ui.activeSession ? '<span class="vt-dot"></span>' : ""}
           </button>`).join("")}
       </nav>
     </div>
@@ -382,9 +490,11 @@ function render() {
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
     ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}
-    ${ui.groupModal ? groupModalHTML() : ""}`;
+    ${ui.groupModal ? groupModalHTML() : ""}
+    ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}`;
 
   updateRestBar();
+  updateMinimizedBar();
   if (ui.tab === "progreso") mountChart();
   mountSortables();
 }
@@ -496,7 +606,8 @@ function routinesHTML() {
 
   const foldersHTML = routineFolders.map((f) => {
     const inFolder = routines.filter((r) => r.folderId === f.id);
-    const collapsed = ui.collapsedFolders.has(f.id);
+    // openFolders persiste en settings — por defecto (array vacío) todas colapsadas.
+    const collapsed = !(settings.openFolders || []).includes(f.id);
     return `<div class="vt-folder">
       <div class="vt-folder-head-row">
         <button class="vt-folder-toggle" data-a="folder-toggle" data-id="${f.id}">
@@ -526,7 +637,8 @@ function routinesHTML() {
         <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 20)}</button>
         <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
       </div>
-    </header>${body}`;
+    </header>${body}
+    <button class="vt-btn-outline vt-flex-center" data-a="train-free">${icon("plus", 18)} Sesión libre</button>`;
 }
 
 function folderModalHTML() {
@@ -545,6 +657,25 @@ function folderModalHTML() {
         </div>
         <div class="vt-modal-actions">
           <button class="vt-btn-primary" data-a="folder-modal-save">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function pasteJsonModalHTML() {
+  return `
+    <div class="vt-modal-backdrop" data-a="paste-json-cancel">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">Pegar JSON</h2>
+          <button class="vt-btn-ghost" data-a="paste-json-cancel">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-form">
+          <textarea class="vt-input vt-textarea" id="paste-json-text" rows="8"
+            placeholder="Pega acá el JSON de un respaldo completo o de rutinas/ejercicios" autocomplete="off"></textarea>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-primary" data-a="paste-json-import">Importar</button>
         </div>
       </div>
     </div>`;
@@ -573,6 +704,7 @@ function editorHTML() {
   const r = ui.editingRoutine;
   const map = exMap();
   const ssLabels = computeSupersetLabels(r.exercises);
+  const editMode = ui.exerciseEditMode;
   return `
     <header class="vt-header">
       <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 20)}</button>
@@ -581,9 +713,12 @@ function editorHTML() {
     </header>
     <input class="vt-input vt-input-title" placeholder="Nombre de la rutina (ej: Fuerza semana 1)"
       value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
+    ${organizeToggleHTML()}
     <div class="vt-list" id="editor-exercise-list">
       ${r.exercises.map((it, idx) => {
         const ex = map[it.exerciseId];
+        const lbl = ssLabels[idx];
+        if (editMode) return exerciseOrganizeRowHTML(idx, ex, lbl);
         const t = ex?.type || "weight";
         const isPct = it.loadMode === "percent";
         const oneRM = num(map[it.exerciseId]?.oneRM);
@@ -612,29 +747,26 @@ function editorHTML() {
             <span class="vt-muted-sm" id="pct-calc-${idx}" style="${oneRM > 0 ? "" : "color:var(--red)"}">${calc}</span>
           </div>`;
         }
-        const lbl = ssLabels[idx];
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${groupColor(ex?.group) || "var(--line)"}">
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
           <div class="vt-block-row">
             <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
             <div class="vt-block-body">
               <div class="vt-card-top">
                 <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
-                <button class="vt-btn-ghost vt-danger" data-a="editor-remove" data-idx="${idx}" aria-label="Quitar">${icon("trash", 16)}</button>
               </div>
               <div class="vt-target-row">${fields}</div>
               ${loadmode}
               <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
                 value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
-              ${idx > 0 ? `<button class="vt-link-toggle ${it.linkPrev ? "is-on" : ""}" data-a="editor-link-toggle" data-idx="${idx}">🔗 Superserie con anterior</button>` : ""}
             </div>
           </div>
         </div>`;
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
-    <div class="vt-sticky-footer">
+    ${editMode ? organizeActionBarHTML() : `<div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full" data-a="editor-save">Guardar rutina</button>
-    </div>`;
+    </div>`}`;
 }
 
 function numFieldHTML(label, field, idx, value, step, isClock = false) {
@@ -649,19 +781,12 @@ function numFieldHTML(label, field, idx, value, step, isClock = false) {
 
 /* --------------------------------- Vista Entrenar -------------------------------- */
 
-function trainIdleHTML() {
-  const list = routines.length === 0
-    ? emptyHTML("No tienes rutinas todavía", "Puedes partir con una sesión libre o crear una rutina primero.", "")
-    : `<div class="vt-list">${routines.map((r) => `
-        <button class="vt-block vt-card-button" data-a="train-start" data-id="${r.id}">
-          <h3>${esc(r.name)}</h3>
-          <p class="vt-muted">${r.exercises.length} ejercicios</p>
-        </button>`).join("")}</div>`;
-  return `
-    <header class="vt-header">
-      ${tabHeaderHTML("Set 02 · Ejecución", "Entrenar")}
-    </header>${list}
-    <button class="vt-btn-outline vt-flex-center" data-a="train-free">${icon("plus", 18)} Sesión libre</button>`;
+// Un ejercicio está "completo" cuando todas sus series NO calentamiento
+// tienen done=true y hay al menos una (drop set/fallida sí cuentan acá,
+// solo calentamiento queda afuera).
+function isExerciseComplete(e) {
+  const effective = e.sets.filter((st) => getSetType(st) !== "warmup");
+  return effective.length > 0 && effective.every((st) => st.done);
 }
 
 function trainActiveHTML() {
@@ -669,6 +794,7 @@ function trainActiveHTML() {
   const map = exMap();
   const vol = sessionVolume(s, true);
   const ssLabels = computeSupersetLabels(s.exercises);
+  const editMode = ui.exerciseEditMode;
 
   return `
     <header class="vt-header vt-header-sticky">
@@ -678,20 +804,41 @@ function trainActiveHTML() {
           ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div></div>
-      <div style="display:flex;gap:22px">
-        <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
-        <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="display:flex;gap:22px">
+          <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
+          <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+        </div>
+        <button class="vt-btn-ghost" data-a="session-minimize" aria-label="Minimizar sesión">${icon("chevDown", 20)}</button>
       </div>
     </header>
+    ${organizeToggleHTML()}
     <div class="vt-list" id="session-exercise-list">
       ${s.exercises.map((e, exIdx) => {
         const ex = map[e.exerciseId];
+        const lbl = ssLabels[exIdx];
+        if (editMode) return exerciseOrganizeRowHTML(exIdx, ex, lbl);
+
         const t = ex?.type || "weight";
         const uni = !!ex?.unilateral;
-        const last = lastSetsFor(e.exerciseId);
         const prior = priorStats(e.exerciseId);
-        const lbl = ssLabels[exIdx];
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${groupColor(ex?.group) || "var(--line)"}">
+        const complete = isExerciseComplete(e);
+        const anyPR = e.sets.some((st) => isPR(t, st, prior, uni));
+        const accent = blockAccentColor(ex, lbl);
+
+        if (ui.collapsedExercises.has(exIdx)) {
+          return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}">
+            <button type="button" class="vt-collapsed-row" data-a="ex-toggle-collapse" data-ex="${exIdx}">
+              <span class="vt-collapsed-name" style="color:${groupColor(ex?.group) || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</span>
+              ${complete ? `<span class="vt-collapsed-check">${icon("check", 12)}</span>` : ""}
+              ${anyPR ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 14)}</span>` : ""}
+              ${icon("chevDown", 16)}
+            </button>
+          </div>`;
+        }
+
+        const last = lastSetsFor(e.exerciseId);
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}">
           <div class="vt-block-row">
             <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
             <div class="vt-block-body">
@@ -705,7 +852,7 @@ function trainActiveHTML() {
                       autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                   </span>
                   <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
-                  <button class="vt-btn-ghost vt-danger" data-a="session-ex-remove" data-ex="${exIdx}" aria-label="Quitar ejercicio de la sesión">${icon("trash", 15)}</button>
+                  <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar">${icon("chevUp", 16)}</button>
                 </div>
               </div>
               ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
@@ -714,9 +861,12 @@ function trainActiveHTML() {
               <div class="vt-sets">
                 ${e.sets.length ? setCapsHTML(t, uni) : ""}
                 ${(() => {
-                  let n = 0; // las efectivas se numeran 1..n; las de calentamiento muestran "C"
-                  return e.sets.map((st, setIdx) =>
-                    setRowHTML(t, st, exIdx, setIdx, prior, st.warmup ? "C" : String(++n), uni)).join("");
+                  let n = 0; // las efectivas se numeran 1..n; C/D/F muestran su letra
+                  return e.sets.map((st, setIdx) => {
+                    const stype = getSetType(st);
+                    const label = stype === "warmup" ? "C" : stype === "dropset" ? "D" : stype === "failed" ? "F" : String(++n);
+                    return setRowHTML(t, st, exIdx, setIdx, prior, label, uni);
+                  }).join("");
                 })()}
               </div>
               <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
@@ -726,10 +876,10 @@ function trainActiveHTML() {
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
-    <div class="vt-sticky-footer vt-footer-split">
+    ${editMode ? organizeActionBarHTML() : `<div class="vt-sticky-footer vt-footer-split">
       <button class="vt-btn-ghost vt-danger" data-a="session-discard">Descartar</button>
       <button class="vt-btn-primary vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
-    </div>`;
+    </div>`}`;
 }
 
 // Encabezados de columnas sobre la primera serie, alineados con los inputs.
@@ -755,7 +905,9 @@ function setCapsHTML(type, unilateral) {
   } else {
     inner = cap("kg", 52) + gap("×") + cap("reps", 52);
   }
-  return `<div class="vt-set-caps ${rowClass}" aria-hidden="true"><span class="vt-cap-check"></span><span class="vt-cap-warm"></span><span class="vt-set-num"></span>${inner}</div>`;
+  // settype (30px, botón único) + check (30px) — reemplaza los viejos
+  // spacers de warmup(28)+num(16) de cuando eran elementos separados.
+  return `<div class="vt-set-caps ${rowClass}" aria-hidden="true"><span class="vt-cap-settype"></span><span class="vt-cap-check"></span>${inner}</div>`;
 }
 
 // "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
@@ -804,6 +956,9 @@ setInterval(() => {
   const clock = document.getElementById("live-clock");
   if (clock && ui.activeSession)
     clock.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
+  const miniClock = document.getElementById("live-clock-mini");
+  if (miniClock && ui.activeSession)
+    miniClock.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
 
   if (!runningTimer) return;
   const st = ui.activeSession?.exercises[runningTimer.exIdx]?.sets[runningTimer.setIdx];
@@ -815,9 +970,27 @@ setInterval(() => {
   if (input && document.activeElement !== input) input.value = fmtClock(st.seconds);
 }, 1000);
 
+// Selector chico de tipo de serie: se expande bajo la fila (mismo patrón que
+// la línea de RPE), un tap elige y cierra.
+function typeSelectorHTML(exIdx, setIdx) {
+  const opts = [
+    { type: "", label: "1", cls: "", aria: "Normal" },
+    { type: "warmup", label: "C", cls: "is-warmup", aria: "Calentamiento" },
+    { type: "dropset", label: "D", cls: "is-dropset", aria: "Drop set" },
+    { type: "failed", label: "F", cls: "is-failed", aria: "Fallida" },
+  ];
+  return `<div class="vt-type-picker">
+    ${opts.map((o) => `<button type="button" class="vt-type-picker-opt ${o.cls}" data-a="settype-pick" data-ex="${exIdx}" data-set="${setIdx}" data-type="${o.type}" aria-label="${o.aria}">${o.label}</button>`).join("")}
+  </div>`;
+}
+
 function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
+  const stype = getSetType(st);
   const pr = isPR(type, st, prior, unilateral);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
+  const typeKey = `${exIdx}:${setIdx}`;
+  const openType = ui.openTypeSelector === typeKey;
+  const typeBtnClass = stype === "warmup" ? "is-warmup" : stype === "dropset" ? "is-dropset" : stype === "failed" ? "is-failed" : "";
   const attrs = (f) =>
     `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
 
@@ -849,15 +1022,15 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
   return `
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${unilateral ? "vt-set-row-uni" : ""} ${st.warmup ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${unilateral ? "vt-set-row-uni" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+        <button class="vt-settype-btn ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Tipo de serie">${label}</button>
         <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
-        <button class="vt-warmup ${st.warmup ? "is-on" : ""}" data-a="set-warmup" data-ex="${exIdx}" data-set="${setIdx}" title="Calentamiento" aria-label="Alternar calentamiento">C</button>
-        <span class="vt-set-num">${label}</span>
         ${fields}
         ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
-        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE" style="${st.rpe || st.note ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
+        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE" style="${st.rpe ? "color:var(--amber)" : ""}">${icon("gauge", 15)}</button>
       </div>
     </div>
+    ${openType ? typeSelectorHTML(exIdx, setIdx) : ""}
     ${open ? `<div class="vt-setline2">
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
         value="${st.rpe ?? ""}" ${attrs("rpe")}>
@@ -903,7 +1076,7 @@ function historyHTML() {
 
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 03 · Registro", "Historial")}
+      ${tabHeaderHTML("Set 02 · Registro", "Historial")}
     </header>${list}`;
 }
 
@@ -937,8 +1110,9 @@ function progressData(exId, metric) {
     let v;
     if (metric === "volume") v = Math.round(e.sets.reduce((a, st) => a + setVol(t, st, uni), 0));
     else {
-      // Los máximos se calculan solo con series efectivas; el volumen incluye todo.
-      const eff = e.sets.filter((st) => !st.warmup);
+      // Los máximos se calculan solo con series efectivas (sin C/D/F, mismo
+      // criterio que priorStats); el volumen incluye todo.
+      const eff = e.sets.filter((st) => !getSetType(st));
       if (!eff.length) return;
       // "reps" en unilateral usa el lado más débil, mismo criterio que el PR.
       v = Math.max(...eff.map((st) => metric === "reps" && uni ? Math.min(repsL(st), repsR(st)) : num(st[metric])));
@@ -974,7 +1148,7 @@ function featuredHTML() {
 function progressHTML() {
   const ids = exercisesWithHistory();
   const head = `<header class="vt-header">
-    ${tabHeaderHTML("Set 04 · Análisis", "Progreso")}
+    ${tabHeaderHTML("Set 03 · Análisis", "Progreso")}
   </header>` + featuredHTML();
 
   if (ids.length === 0)
@@ -1044,7 +1218,7 @@ function mountChart() {
 function settingsHTML() {
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 05 · Configuración", "Ajustes")}
+      ${tabHeaderHTML("Set 04 · Configuración", "Ajustes")}
     </header>
     <div class="vt-card">
       <div class="vt-settings-row">
@@ -1072,9 +1246,12 @@ function settingsHTML() {
       </div>
       <div class="vt-settings-row">
         <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
-        <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
-          <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
-        </label>
+        <div style="display:flex;gap:8px">
+          <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
+            <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
+          </label>
+          <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
+        </div>
       </div>
     </div>
     <p class="vt-muted" style="text-align:center;margin-top:16px">GOAT · datos guardados en este dispositivo</p>`;
@@ -1270,25 +1447,26 @@ function tabHeaderHTML(eyebrow, title) {
 /* -------------------------------- Lógica de sesión -------------------------------- */
 
 function defaultSet(type, target, prevSet, unilateral) {
-  // Si la serie anterior es calentamiento, la nueva nace calentamiento (otro aproche).
-  const warmup = !!(prevSet && prevSet.warmup);
+  // Si la serie anterior es calentamiento, la nueva nace calentamiento (otro
+  // aproche) — drop set/fallida no se heredan, son del intento puntual.
+  const setType = prevSet && getSetType(prevSet) === "warmup" ? "warmup" : null;
   if (type === "time")
     return {
-      done: false, warmup,
+      done: false, setType,
       seconds: num(prevSet?.seconds) || num(target?.seconds) || 30,
       weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
       rpe: null,
     };
   if (unilateral)
     return {
-      done: false, warmup,
+      done: false, setType,
       repsL: (prevSet ? repsL(prevSet) : 0) || num(target?.reps) || 8,
       repsR: (prevSet ? repsR(prevSet) : 0) || num(target?.reps) || 8,
       weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
       rpe: null,
     };
   return {
-    done: false, warmup,
+    done: false, setType,
     reps: num(prevSet?.reps) || num(target?.reps) || 8,
     weight: prevSet ? num(prevSet.weight) : num(target?.weight) || 0,
     rpe: null,
@@ -1352,14 +1530,14 @@ function buildSessionFromPastSession(pastSession) {
     exercises: pastSession.exercises.map((e) => {
       const sets = e.sets.map((st) => ({
         done: false,
-        warmup: st.warmup,
+        // Mismo criterio que defaultSet: solo calentamiento se hereda.
+        setType: getSetType(st) === "warmup" ? "warmup" : null,
         weight: st.weight,
         reps: st.reps,
         repsL: st.repsL,
         repsR: st.repsR,
         seconds: st.seconds,
         rpe: null,
-        note: "",
       }));
       const lastSet = sets[sets.length - 1];
       const target = { sets: sets.length, reps: lastSet?.reps, weight: lastSet?.weight, seconds: lastSet?.seconds };
@@ -1384,7 +1562,9 @@ function finishSession() {
 
   if (done === 0) {
     askConfirm("No marcaste ninguna serie. ¿Descartar la sesión completa?", () => {
-      ui.activeSession = null; stopRest(); render();
+      ui.activeSession = null;
+      ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
+      stopRest(); render();
     }, true);
     return;
   }
@@ -1402,7 +1582,7 @@ function finishSession() {
       const uni = exUnilateral(e.exerciseId);
       const prior = priorStats(e.exerciseId);
       for (const st of e.sets) {
-        if (!st.done || st.warmup || !isPR(type, st, prior, uni)) continue;
+        if (!st.done || getSetType(st) || !isPR(type, st, prior, uni)) continue;
         // Unilateral: reps del hit usa el lado más débil (mismo criterio que
         // el PR); repsL/repsR se guardan aparte para el formato compacto de fmtSet.
         const hit = {
@@ -1477,6 +1657,9 @@ function finishSession() {
     ui.activeSession = null;
     ui.openNotes.clear();
     ui.openExNotes.clear();
+    ui.exerciseEditMode = false;
+    ui.selectedExercises.clear();
+    ui.collapsedExercises.clear();
     stopRest();
     render();
   };
@@ -1576,13 +1759,9 @@ function exportJSON() {
   URL.revokeObjectURL(a.href);
 }
 
-function importJSON(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    let data;
-    try { data = JSON.parse(reader.result); }
-    catch { alert("El archivo no es un JSON válido."); return; }
-
+// Separado de importJSON(file) para poder reutilizarlo desde "Pegar JSON"
+// (que ya tiene el objeto parseado, sin pasar por FileReader).
+function processImportedData(data) {
     const inExercises = data["custom-exercises"] || data.exercises || null;
     const inFolders = data["routine-folders"] || data.routineFolders || null;
 
@@ -1631,6 +1810,15 @@ function importJSON(file) {
       alert("El archivo no tiene rutinas, ejercicios ni un respaldo reconocible.");
     }
     render();
+}
+
+function importJSON(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch { alert("El archivo no es un JSON válido."); return; }
+    processImportedData(data);
   };
   reader.readAsText(file);
 }
@@ -1719,6 +1907,8 @@ document.addEventListener("click", (e) => {
       ui.editingRoutine = null;
       ui.manageExercises = false;
       ui.manageGroups = false;
+      ui.exerciseEditMode = false;
+      ui.selectedExercises.clear();
       render();
       break;
 
@@ -1761,14 +1951,17 @@ document.addEventListener("click", (e) => {
         persistRoutines(); render();
       }, true);
       break;
-    case "routine-start": case "train-start": {
+    case "routine-start": {
       const r = routines.find((x) => x.id === id);
       if (r) {
         const start = () => {
           ui.activeSession = buildSessionFromRoutine(r);
+          ui.sessionMinimized = false;
           ui.openNotes.clear();
           ui.openExNotes.clear();
-          ui.tab = "entrenar";
+          ui.openTypeSelector = null;
+          ui.collapsedExercises.clear();
+          ui.tab = "rutinas";
           render();
         };
         if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
@@ -1792,15 +1985,20 @@ document.addEventListener("click", (e) => {
         persistFolders();
         routines = routines.map((r) => r.folderId === id ? { ...r, folderId: null } : r);
         persistRoutines();
-        ui.collapsedFolders.delete(id);
+        settings.openFolders = (settings.openFolders || []).filter((x) => x !== id);
+        persistSettings();
         render();
       }, true);
       break;
     }
-    case "folder-toggle":
-      if (ui.collapsedFolders.has(id)) ui.collapsedFolders.delete(id); else ui.collapsedFolders.add(id);
+    case "folder-toggle": {
+      const open = new Set(settings.openFolders || []);
+      open.has(id) ? open.delete(id) : open.add(id);
+      settings.openFolders = [...open];
+      persistSettings();
       render();
       break;
+    }
     case "folder-modal-cancel": ui.folderModal = null; render(); break;
     case "folder-modal-save": {
       const name = document.getElementById("fold-name").value.trim();
@@ -1843,7 +2041,11 @@ document.addEventListener("click", (e) => {
     }
 
     /* Editor de rutina */
-    case "editor-cancel": ui.editingRoutine = null; render(); break;
+    case "editor-cancel":
+      ui.editingRoutine = null;
+      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      render();
+      break;
     case "editor-loadmode": {
       const it = ui.editingRoutine.exercises[+el.dataset.idx];
       it.loadMode = el.dataset.mode;
@@ -1851,16 +2053,6 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "editor-link-toggle": {
-      const it = ui.editingRoutine.exercises[+el.dataset.idx];
-      it.linkPrev = !it.linkPrev;
-      render();
-      break;
-    }
-    case "editor-remove":
-      ui.editingRoutine.exercises.splice(+el.dataset.idx, 1);
-      render();
-      break;
     case "editor-save": {
       const r = ui.editingRoutine;
       if (!r.name.trim()) { alert("Ponle un nombre a la rutina."); break; }
@@ -1878,6 +2070,59 @@ document.addEventListener("click", (e) => {
       if (i >= 0) routines[i] = stamped; else routines = [stamped, ...routines];
       persistRoutines();
       ui.editingRoutine = null;
+      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      render();
+      break;
+    }
+
+    /* Modo "Organizar ejercicios" (compartido: editor de rutina y sesión activa) */
+    case "exercise-editmode-toggle":
+      ui.exerciseEditMode = !ui.exerciseEditMode;
+      ui.selectedExercises.clear();
+      render();
+      break;
+    case "exercise-select-toggle": {
+      const idx = +el.dataset.idx;
+      ui.selectedExercises.has(idx) ? ui.selectedExercises.delete(idx) : ui.selectedExercises.add(idx);
+      render();
+      break;
+    }
+    case "organize-delete": {
+      const inSession = !ui.editingRoutine && !!ui.activeSession;
+      const list = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
+      const indices = [...ui.selectedExercises];
+      const doDelete = () => {
+        indices.slice().sort((a, b) => b - a).forEach((i) => {
+          if (inSession) {
+            const ex = list[i];
+            (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
+            if (runningTimer) {
+              if (runningTimer.exIdx === i) runningTimer = null;
+              else if (runningTimer.exIdx > i) runningTimer.exIdx--;
+            }
+          }
+          list.splice(i, 1);
+        });
+        ui.selectedExercises.clear();
+        render();
+      };
+      const hasDone = inSession && indices.some((i) => list[i].sets.some((st) => st.done));
+      if (hasDone) askConfirm("Algunos de estos ejercicios tienen series marcadas como hechas. ¿Eliminarlos de todas formas?", doDelete, true);
+      else doDelete();
+      break;
+    }
+    case "organize-group": {
+      const list = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
+      groupAsSuperset(list, [...ui.selectedExercises]);
+      ui.selectedExercises.clear();
+      render();
+      break;
+    }
+    case "organize-replace": {
+      ui.replaceExerciseIdx = [...ui.selectedExercises][0];
+      ui.selectedExercises.clear();
+      ui.picker = "replace";
+      ui.pickerQuery = "";
       render();
       break;
     }
@@ -1889,9 +2134,13 @@ document.addEventListener("click", (e) => {
     case "picker-create": {
       const name = ui.pickerQuery.trim();
       if (!name) break;
-      const ex = { id: uid("cex"), name, group: "Custom", type: "weight" };
-      exercises.push(ex); persistExercises();
-      pickExercise(ex.id);
+      // Personalización completa: abre el modal de ejercicio precargado en vez
+      // de crearlo directo. pickerCtx recuerda desde qué picker se abrió, para
+      // que ex-modal-save lo agregue automáticamente ahí al guardar.
+      ui.exerciseModal = { id: null, name, group: "Custom", type: "weight", pickerCtx: ui.picker };
+      ui.picker = null;
+      ui.pickerQuery = "";
+      render();
       break;
     }
 
@@ -1899,8 +2148,11 @@ document.addEventListener("click", (e) => {
     case "train-free": {
       const start = () => {
         ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), explicitlyRemoved: [], exercises: [] };
+        ui.sessionMinimized = false;
         ui.openNotes.clear();
         ui.openExNotes.clear();
+        ui.openTypeSelector = null;
+        ui.collapsedExercises.clear();
         render();
       };
       if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
@@ -1913,22 +2165,10 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "session-ex-remove": {
+    case "ex-toggle-collapse": {
       const exI = +el.dataset.ex;
-      const ex = ui.activeSession.exercises[exI];
-      const hasDone = ex.sets.some((st) => st.done);
-      const removeEx = () => {
-        // Mismo cuidado que deleteSet: el cronómetro debe seguir apuntando al índice correcto.
-        if (runningTimer) {
-          if (runningTimer.exIdx === exI) runningTimer = null;
-          else if (runningTimer.exIdx > exI) runningTimer.exIdx--;
-        }
-        (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
-        ui.activeSession.exercises.splice(exI, 1);
-        render();
-      };
-      if (hasDone) askConfirm("Este ejercicio tiene series marcadas como hechas. ¿Quitarlo de la sesión de todas formas?", removeEx, true);
-      else removeEx();
+      ui.collapsedExercises.has(exI) ? ui.collapsedExercises.delete(exI) : ui.collapsedExercises.add(exI);
+      render();
       break;
     }
     case "set-add": {
@@ -1942,6 +2182,7 @@ document.addEventListener("click", (e) => {
       const exI = +el.dataset.ex, setI = +el.dataset.set;
       const ex = ui.activeSession.exercises[exI];
       const st = ex.sets[setI];
+      const wasComplete = isExerciseComplete(ex);
       st.done = !st.done;
       if (st.done) {
         // Si esta misma serie estaba cronometrándose, se detiene y queda su valor.
@@ -1950,6 +2191,9 @@ document.addEventListener("click", (e) => {
         const lbl = computeSupersetLabels(ui.activeSession.exercises)[exI];
         if (!lbl || lbl.isLast) startRest(ex.restSeconds);
       }
+      // Colapso automático solo cuando este click deja el ejercicio recién
+      // completo — si lo rompe, no se fuerza a expandir de vuelta.
+      if (!wasComplete && isExerciseComplete(ex)) ui.collapsedExercises.add(exI);
       render();
       break;
     }
@@ -1966,9 +2210,17 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "set-warmup": {
+    case "settype-toggle": {
+      const key = `${el.dataset.ex}:${el.dataset.set}`;
+      ui.openTypeSelector = ui.openTypeSelector === key ? null : key;
+      render();
+      break;
+    }
+    case "settype-pick": {
       const st = ui.activeSession.exercises[+el.dataset.ex].sets[+el.dataset.set];
-      st.warmup = !st.warmup;
+      st.setType = el.dataset.type || null;
+      st.warmup = false; // limpia el campo viejo: el fallback de compatibilidad ya no debe mirarlo
+      ui.openTypeSelector = null;
       render();
       break;
     }
@@ -1981,10 +2233,18 @@ document.addEventListener("click", (e) => {
     case "session-discard":
       askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;
-        ui.activeSession = null; ui.openNotes.clear(); ui.openExNotes.clear(); stopRest(); render();
+        ui.activeSession = null; ui.openNotes.clear(); ui.openExNotes.clear();
+        ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
+        stopRest(); render();
       }, true);
       break;
     case "session-finish": finishSession(); break;
+    case "session-minimize":
+      ui.sessionMinimized = true;
+      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      render();
+      break;
+    case "session-restore": ui.sessionMinimized = false; render(); break;
     case "rest-cancel": stopRest(); break;
 
     /* Resumen de sesión */
@@ -2067,9 +2327,12 @@ document.addEventListener("click", (e) => {
       if (past) {
         const start = () => {
           ui.activeSession = buildSessionFromPastSession(past);
+          ui.sessionMinimized = false;
           ui.openNotes.clear();
           ui.openExNotes.clear();
-          ui.tab = "entrenar";
+          ui.openTypeSelector = null;
+          ui.collapsedExercises.clear();
+          ui.tab = "rutinas";
           render();
         };
         if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
@@ -2123,15 +2386,25 @@ document.addEventListener("click", (e) => {
       const uniVal = document.getElementById("exm-unilateral")?.checked;
       const unilateral = type !== "time" && uniVal ? true : undefined;
       const m = ui.exerciseModal;
+      let exId = m.id;
       if (m.id) {
         const i = exercises.findIndex((x) => x.id === m.id);
         if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral };
       } else {
-        exercises.push({ id: uid("cex"), name, group, type, oneRM, unilateral });
+        exId = uid("cex");
+        exercises.push({ id: exId, name, group, type, oneRM, unilateral });
       }
       persistExercises();
       ui.exerciseModal = null;
-      render();
+      // Si se abrió desde un picker (crear con personalización completa), lo
+      // agrega automáticamente a esa rutina/sesión — aplica a cualquier
+      // contexto: editor, sesión, destacados o "reemplazar".
+      if (m.pickerCtx) {
+        ui.picker = m.pickerCtx;
+        pickExercise(exId);
+      } else {
+        render();
+      }
       break;
     }
 
@@ -2188,6 +2461,17 @@ document.addEventListener("click", (e) => {
     }
 
     case "export": exportJSON(); break;
+    case "paste-json-open": ui.pasteJsonModal = true; render(); break;
+    case "paste-json-cancel": ui.pasteJsonModal = false; render(); break;
+    case "paste-json-import": {
+      const text = document.getElementById("paste-json-text").value;
+      let data;
+      try { data = JSON.parse(text); }
+      catch { alert("El texto pegado no es un JSON válido."); break; }
+      ui.pasteJsonModal = false;
+      processImportedData(data);
+      break;
+    }
   }
 });
 
@@ -2207,6 +2491,34 @@ function pickExercise(id) {
   } else if (ui.picker === "session" && ui.activeSession) {
     const t = exType(id);
     ui.activeSession.exercises.push({ exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] });
+  } else if (ui.picker === "replace") {
+    const idx = ui.replaceExerciseIdx;
+    const newType = exType(id);
+    if (ui.editingRoutine) {
+      const it = ui.editingRoutine.exercises[idx];
+      const shapeChanged = exType(it.exerciseId) !== newType;
+      it.exerciseId = id;
+      if (shapeChanged) {
+        // Reconstruye los targets para el tipo nuevo, sin dejar campos rotos
+        // (ej. segundos en un ejercicio que ahora es de peso).
+        delete it.targetReps; delete it.targetWeight; delete it.targetSeconds;
+        delete it.targetPercent; delete it.loadMode;
+        it.targetSets = it.targetSets || 3;
+        if (newType === "time") it.targetSeconds = 30;
+        else { it.targetReps = 8; it.targetWeight = 0; }
+      }
+    } else if (ui.activeSession) {
+      const e = ui.activeSession.exercises[idx];
+      // El type solo no basta: unilateral cambia la forma del set (reps vs
+      // repsL/repsR) aunque el type sea el mismo (ej. Sentadilla → Zancada búlgara).
+      const shapeChanged = exType(e.exerciseId) !== newType || exUnilateral(e.exerciseId) !== exUnilateral(id);
+      e.exerciseId = id;
+      if (shapeChanged) {
+        e.target = null;
+        e.sets = e.sets.map(() => defaultSet(newType, null, null, exUnilateral(id)));
+      }
+    }
+    ui.replaceExerciseIdx = null;
   }
   ui.picker = null;
   ui.pickerQuery = "";
@@ -2248,8 +2560,7 @@ document.addEventListener("input", (e) => {
       const st = ui.activeSession?.exercises[+el.dataset.ex]?.sets[+el.dataset.set];
       if (!st) break;
       const f = el.dataset.f;
-      if (f === "note") st.note = el.value;
-      else if (f === "rpe") st.rpe = el.value === "" ? null : num(el.value);
+      if (f === "rpe") st.rpe = el.value === "" ? null : num(el.value);
       else if (f === "seconds") st.seconds = parseClock(el.value);
       else st[f] = num(el.value);
       // Actualiza el contador de volumen en vivo sin re-dibujar (para no perder el foco).
