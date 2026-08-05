@@ -385,3 +385,65 @@ Entradas nuevas al final. No reescribir lo anterior.
   abierta persiste tras recargar la página de verdad. Sin errores de
   consola en las 4 pestañas resultantes. Falta probar en el teléfono
   real.
+
+## 2026-08-04 cont.
+- Bloque 1: Ajustes sin cajas (.vt-card fuera, secciones General/Datos
+  con eyebrow + .vt-settings-row con su propio padding lateral). El
+  catálogo de ejercicios se sacó de Ajustes.
+- A pedido de Martín (antes del push): se eliminó por completo el
+  ajuste general "Descanso entre series" (no solo se bajó su default a
+  0 como se había hecho primero) — settings.restSeconds ya no existe
+  en el modelo. startRest() ya no tiene fallback a un valor global: si
+  el ejercicio/rutina/sesión no define su propio descanso (>0), no
+  arranca descanso automático. El placeholder del campo de descanso
+  por ejercicio en sesión activa pasa de mostrar el default global a
+  "0". El descanso por ejercicio/rutina (editor, sesión) sigue igual
+  que antes, sin cambios.
+- Bloque 2: nueva pestaña "Ejercicios" (5 pestañas en el nav, ícono
+  barbell). exercisesManagerHTML dejó de depender de
+  ui.manageExercises (eliminado junto con manage-open/manage-close).
+  Buscador (.vt-search, mismo componente que el picker) con
+  ui.exercisesQuery: mientras hay texto los grupos sin match se
+  ocultan y los que matchean se auto-expanden ignorando el estado
+  guardado; al vaciar vuelve a regir settings.openExerciseGroups
+  (nuevo, persistido, default [] = todo colapsado). "+" y "Gestionar
+  grupos" viven en el header de la pestaña.
+- Bloque 3+4: rediseño completo de Progreso. Resumen (sesiones/
+  volumen/racha de la semana en curso, sin caja — .vt-stat-row-flat),
+  racha cuenta semanas consecutivas hacia atrás sin romperse si la
+  semana en curso todavía no tiene sesión. "PRs recientes"
+  (computeAllPRs: recorre sesiones cronológicamente con un tracker
+  incremental por ejercicio, devuelve más reciente primero, se
+  muestran los primeros 5). Selector Total/Grupo muscular/Ejercicio
+  (ui.progressView) + chips de rango 1SEM..1A (ui.progressRange,
+  default 2m, rangeToDays) con scroll horizontal
+  (.vt-metric-toggle-scroll) arriba de las 3 vistas. Granularidad
+  adaptativa: buckets semanales con rango ≤2m, mensuales con ≥4m
+  (bucketGranularity). Total = barra con volumen por bucket; Grupo
+  muscular = barra apilada (stacked:true) por grupo muscular con
+  leyenda; Ejercicio = el comportamiento previo, con soporte
+  unilateral (dos datasets Izquierda/Derecha en la métrica reps,
+  stats por lado) — se amplió metricOptions para ofrecer "reps" en
+  ejercicios de peso unilaterales (antes solo existía para bodyweight
+  sin lastre, con lo que la vista de dos lados era inalcanzable para
+  la mayoría de los ejercicios unilaterales reales, ej. zancada
+  búlgara). "Tus máximos" se mantuvo igual, reubicado bajo el gráfico.
+- Fix encontrado en verificación: los colores de grupo semilla usan
+  var(--amber) etc., que un <canvas> de Chart.js NO resuelve (a
+  diferencia del DOM normal) — un fillStyle inválido se ignora en
+  silencio y queda negro. Se agregó resolveCssColor() para resolver
+  la variable a su valor real antes de pasarla a un dataset (afecta
+  la vista Grupo muscular).
+- Verificado en el navegador (viewport 360px, con datos de sesiones
+  inyectados para probar resumen/racha/PRs/buckets/vista unilateral):
+  las 5 pestañas, buscador con auto-expand, grupos persistiendo across
+  reload, descanso default 0 en instalación limpia, resumen semanal y
+  racha correctos con hueco de semana intermedio, PRs recientes en
+  orden y recortados a 5, cambio de bucket semanal→mensual al pasar de
+  2m a 4m, vista Grupo muscular apilada con color correcto tras el
+  fix, vista Ejercicio con dos datasets Izq/Der para unilateral. Sin
+  errores de consola en las 5 pestañas. Además, tras quitar el ajuste
+  global de descanso: verificado que marcar una serie sin descanso
+  propio en el ejercicio NO arranca descanso automático, y que
+  definiéndole 20s a un ejercicio sí lo arranca con ese valor. Falta
+  probar en el teléfono real.

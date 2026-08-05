@@ -631,14 +631,30 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer;
 }
 .vt-metric-toggle button.is-active { border-color: var(--blue); color: var(--blue); }
+/* Chips de rango temporal: no entran los 8 a lo ancho de 360px, scroll
+   horizontal en vez de encogerlos hasta ilegibles. */
+.vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
+.vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: 7px 10px; }
 
 .vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.vt-stat-label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+.vt-stat-label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
 .vt-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; }
 .vt-stat-delta { color: var(--green); }
 
-.vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 10px 8px; }
+/* Resumen semanal / stats de ejercicio en Progreso: sin caja, mismo
+   lenguaje que .vt-settings-row (divisores finos en vez de bordes). */
+.vt-stat-row-flat { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.vt-stat-flat { flex: 1; padding: 12px 6px; text-align: center; }
+.vt-stat-flat + .vt-stat-flat { border-left: 1px solid var(--line); }
+
+/* Lista de PRs recientes: fila plana con divisor, mismo patrón que vt-detail-row. */
+.vt-pr-recent-row { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.vt-pr-recent-row:last-child { border-bottom: none; }
+.vt-pr-recent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-pr-recent-value { color: var(--text-dim); flex-shrink: 0; }
+
+.vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 10px 8px; margin-bottom: 18px; }
 
 /* -------------------- Aviso de actualización disponible ------------------ */
 /* Barra delgada de ancho completo, pegada arriba de todo (por sobre el
@@ -730,10 +746,20 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--blue); font-weight: 600;
 }
 
+/* Encabezado de sección genérico (Ajustes, PRs recientes, etc.): mayúscula
+   con tracking, sin caja — reemplaza los .vt-card que agrupaban secciones. */
+.vt-section-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
 /* ------------------------------ Ajustes -------------------------------- */
 .vt-settings-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 13px 2px; border-bottom: 1px solid var(--line);
+  padding: 14px 4px; border-bottom: 1px solid var(--line);
 }
 .vt-settings-row:last-child { border-bottom: none; }
 .vt-settings-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -757,7 +783,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    caja, acento vertical de 2-3px en el color del grupo para TODO el bloque
    (no por fila), encabezado de grupo en mayúscula con tracking. Las filas
    .vt-ex-row de adentro ya traen su propio divisor fino (border-bottom). */
-.vt-group-block { border-left: 3px solid var(--line); padding: 2px 4px 4px 14px; margin-bottom: 26px; }
+/* Wrapper de la pestaña Ejercicios: sin gap propio, la separación la da el
+   margin-bottom de cada .vt-group-block (20-24px, ver abajo) — evita sumar
+   el gap:12px de .vt-list encima y dejar demasiado aire. */
+.vt-ex-groups { display: flex; flex-direction: column; }
+.vt-group-block { border-left: 3px solid var(--line); padding: 2px 4px 4px 14px; margin-bottom: 22px; }
 .vt-group-block:last-child { margin-bottom: 0; }
 .vt-group-title {
   font-family: 'JetBrains Mono', monospace;

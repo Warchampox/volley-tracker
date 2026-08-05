@@ -84,7 +84,7 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   exercises = DEFAULT_EXERCISES.map((e) => ({ ...e }));
   save("custom-exercises", exercises);
 }
-let settings = Object.assign({ restSeconds: 90, sound: true, vibrate: true, featuredExercises: [], openFolders: [] }, load("settings", {}));
+let settings = Object.assign({ sound: true, vibrate: true, featuredExercises: [], openFolders: [], openExerciseGroups: [] }, load("settings", {}));
 let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
 let exerciseGroups = load("exercise-groups", null); // [{name, color}]
 if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
@@ -117,7 +117,9 @@ const ui = {
   openHistory: null,
   progressEx: null,
   progressMetric: null,
-  manageExercises: false,
+  progressView: "ejercicio", // "total" | "grupo" | "ejercicio"
+  progressRange: "2m",       // "1sem"|"2sem"|"1m"|"2m"|"4m"|"6m"|"8m"|"1a"
+  exercisesQuery: "",        // buscador de la pestaña Ejercicios
   manageGroups: false,
   exerciseModal: null,    // null | {id|null, name, group, type, pickerCtx?}
   groupModal: null,       // null | {originalName|null, name, color}
@@ -358,9 +360,9 @@ let audioCtx = null;
 
 function startRest(seconds) {
   stopRest();
-  // Prioridad: descanso del ejercicio (si es > 0), si no el global de Ajustes.
-  const own = Math.round(num(seconds));
-  const secs = own > 0 ? own : Math.round(num(settings.restSeconds));
+  // Sin fallback global: si el ejercicio/rutina/sesión no define descanso
+  // propio (>0), simplemente no arranca descanso automático.
+  const secs = Math.round(num(seconds));
   if (secs <= 0) return;
   rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250) };
   updateRestBar();
@@ -453,6 +455,7 @@ let chart = null;
 // libre — ver routinesHTML). El punto verde de sesión activa vive acá.
 const NAV_ITEMS = [
   { id: "rutinas", label: "Entrenar", ic: "play" },
+  { id: "ejercicios", label: "Ejercicios", ic: "barbell" },
   { id: "historial", label: "Historial", ic: "history" },
   { id: "progreso", label: "Progreso", ic: "trend" },
   { id: "ajustes", label: "Ajustes", ic: "sliders" },
@@ -465,9 +468,10 @@ function render() {
     else if (ui.activeSession && !ui.sessionMinimized) view = trainActiveHTML();
     else view = routinesHTML();
   }
+  else if (ui.tab === "ejercicios") view = ui.manageGroups ? groupsManagerHTML() : exercisesManagerHTML();
   else if (ui.tab === "historial") view = historyHTML();
   else if (ui.tab === "progreso") view = progressHTML();
-  else if (ui.tab === "ajustes") view = ui.manageGroups ? groupsManagerHTML() : (ui.manageExercises ? exercisesManagerHTML() : settingsHTML());
+  else if (ui.tab === "ajustes") view = settingsHTML();
 
   $app.innerHTML = `
     <div class="vt-frame">
@@ -847,7 +851,7 @@ function trainActiveHTML() {
                 <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
                   <span class="vt-rest-mini vt-muted-sm">Descanso
                     <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
-                      value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="${num(settings.restSeconds)}"
+                      value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
                       data-i="ex-rest" data-ex="${exIdx}"
                       autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                   </span>
@@ -1076,7 +1080,7 @@ function historyHTML() {
 
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 02 · Registro", "Historial")}
+      ${tabHeaderHTML("Set 03 · Registro", "Historial")}
     </header>${list}`;
 }
 
@@ -1090,21 +1094,192 @@ function exercisesWithHistory() {
 
 function metricOptions(exId) {
   const t = exType(exId);
+  const uni = exUnilateral(exId);
   const prior = priorStats(exId);
   if (t === "time") return [{ id: "seconds", label: "Tiempo máx." }];
-  if (t === "bodyweight")
-    return [
+  if (t === "bodyweight") {
+    const opts = [
       prior.anyLastre ? { id: "weight", label: "Lastre máx." } : { id: "reps", label: "Reps máx." },
       { id: "volume", label: "Volumen" },
     ];
-  return [{ id: "weight", label: "Peso máx." }, { id: "volume", label: "Volumen" }];
+    // Con lastre, "reps" no aparece por defecto — pero en unilateral sigue
+    // siendo el dato que interesa graficar por lado (peso es compartido).
+    if (uni && prior.anyLastre) opts.splice(1, 0, { id: "reps", label: "Reps máx." });
+    return opts;
+  }
+  const opts = [{ id: "weight", label: "Peso máx." }, { id: "volume", label: "Volumen" }];
+  // Ejercicios de peso unilaterales (ej. zancada búlgara): el peso es
+  // compartido, lo que realmente varía por lado son las reps — sin esto la
+  // vista de dos lados (Izq/Der) nunca sería alcanzable para este tipo.
+  if (uni) opts.splice(1, 0, { id: "reps", label: "Reps máx." });
+  return opts;
 }
+
+// Volumen total de un ejercicio dentro de una sesión (sets ya guardados = todos done).
+function exerciseVolume(e) {
+  const t = exType(e.exerciseId);
+  const uni = exUnilateral(e.exerciseId);
+  return e.sets.reduce((a, st) => a + setVol(t, st, uni), 0);
+}
+
+/* ------------------------- Rango temporal (Bloque 4) ------------------------- */
+
+const RANGE_CHIPS = [
+  { id: "1sem", label: "1SEM" }, { id: "2sem", label: "2SEM" },
+  { id: "1m", label: "1M" }, { id: "2m", label: "2M" },
+  { id: "4m", label: "4M" }, { id: "6m", label: "6M" },
+  { id: "8m", label: "8M" }, { id: "1a", label: "1A" },
+];
+const RANGE_DAYS = { "1sem": 7, "2sem": 14, "1m": 30, "2m": 60, "4m": 120, "6m": 180, "8m": 240, "1a": 365 };
+const rangeToDays = (range) => RANGE_DAYS[range] || 60;
+
+// Granularidad adaptativa: rangos cortos agrupan por semana, los largos por
+// mes calendario (si no, con "1a" terminarían 52 barras chicas).
+const bucketGranularity = (range) => (range === "4m" || range === "6m" || range === "8m" || range === "1a") ? "month" : "week";
+
+function sessionsInRange(range) {
+  const cutoff = Date.now() - rangeToDays(range) * 86400000;
+  return sessions.filter((s) => new Date(s.date).getTime() >= cutoff);
+}
+
+// Lunes de la semana de `d` (semana ISO, lunes a domingo), a medianoche local.
+function mondayOf(d) {
+  const dt = new Date(d);
+  dt.setHours(0, 0, 0, 0);
+  const day = dt.getDay(); // 0=domingo
+  dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day));
+  return dt;
+}
+const weekKey = (d) => mondayOf(d).toISOString().slice(0, 10);
+const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+function bucketLabel(key, granularity) {
+  if (granularity === "month") {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("es-CL", { month: "short", year: "2-digit" });
+  }
+  return fmtDateShort(key);
+}
+
+// Agrupa las sesiones del rango en buckets (semanales o mensuales según el
+// rango, ver bucketGranularity), ordenados cronológicamente ascendente.
+function computeBuckets(range) {
+  const granularity = bucketGranularity(range);
+  const map = new Map();
+  sessionsInRange(range).forEach((s) => {
+    const d = new Date(s.date);
+    const key = granularity === "month" ? monthKey(d) : weekKey(d);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(s);
+  });
+  return [...map.keys()].sort().map((key) => ({ key, label: bucketLabel(key, granularity), sessions: map.get(key) }));
+}
+
+function rangeChipsHTML() {
+  return `<div class="vt-metric-toggle vt-metric-toggle-scroll">
+    ${RANGE_CHIPS.map((c) => `<button class="${ui.progressRange === c.id ? "is-active" : ""}" data-a="prog-range" data-range="${c.id}">${c.label}</button>`).join("")}
+  </div>`;
+}
+
+/* ---------------------------- Resumen semanal (Bloque 3.2) ---------------------------- */
+
+// Semanas consecutivas (hacia atrás desde hoy) con al menos 1 sesión. Si la
+// semana en curso todavía no tiene sesión, no rompe la racha por eso solo —
+// se sigue contando desde la semana anterior.
+function currentStreakWeeks() {
+  const weeksWithSessions = new Set(sessions.map((s) => weekKey(new Date(s.date))));
+  let cursor = mondayOf(new Date());
+  if (!weeksWithSessions.has(weekKey(cursor))) cursor.setDate(cursor.getDate() - 7);
+  let streak = 0;
+  while (weeksWithSessions.has(weekKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 7);
+  }
+  return streak;
+}
+
+function weeklyStats() {
+  const thisWeek = weekKey(new Date());
+  const thisWeekSessions = sessions.filter((s) => weekKey(new Date(s.date)) === thisWeek);
+  const volume = thisWeekSessions.reduce((a, s) => a + sessionVolume(s, false), 0);
+  return { count: thisWeekSessions.length, volume, streak: currentStreakWeeks() };
+}
+
+// Fila de stats plana (sin caja), mismo lenguaje visual que .vt-settings-row.
+function statRowFlatHTML(items) {
+  return `<div class="vt-stat-row-flat">${items.map((it) => `
+    <div class="vt-stat-flat"><span class="vt-stat-label">${it.label}</span><span class="vt-stat-value ${it.deltaClass || ""}">${it.value}</span></div>`).join("")}</div>`;
+}
+
+/* ------------------------------ PRs recientes (Bloque 3.3) ----------------------------- */
+
+// Recorre las sesiones de la más vieja a la más nueva llevando un máximo
+// incremental por ejercicio (mismo criterio que priorStats/isPR: C/D/F no
+// cuentan, unilateral usa el lado más débil) y registra cada vez que una
+// serie supera el máximo que había hasta ESE momento. Devuelve más reciente primero.
+function computeAllPRs() {
+  const map = exMap();
+  const trackers = {};
+  const hits = [];
+  [...sessions].reverse().forEach((s) => {
+    s.exercises.forEach((e) => {
+      const exId = e.exerciseId;
+      const type = exType(exId);
+      const uni = exUnilateral(exId);
+      if (!trackers[exId]) trackers[exId] = { maxW: 0, maxR: 0, maxS: 0, anyLastre: false };
+      const prior = trackers[exId];
+      e.sets.forEach((st) => {
+        if (getSetType(st)) return;
+        if (type === "time") {
+          const v = num(st.seconds);
+          if (v > 0 && v > prior.maxS) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "seconds", value: v });
+        } else if (type === "bodyweight") {
+          if (num(st.weight) > 0) {
+            if (num(st.weight) > prior.maxW) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
+          } else {
+            const r = uni ? Math.min(repsL(st), repsR(st)) : num(st.reps);
+            if (!prior.anyLastre && r > 0 && r > prior.maxR) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "reps", value: r });
+          }
+        } else {
+          if (num(st.weight) > 0 && num(st.weight) > prior.maxW) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
+        }
+        prior.maxW = Math.max(prior.maxW, num(st.weight));
+        prior.maxR = Math.max(prior.maxR, uni ? Math.min(repsL(st), repsR(st)) : num(st.reps));
+        prior.maxS = Math.max(prior.maxS, num(st.seconds));
+        if (num(st.weight) > 0) prior.anyLastre = true;
+      });
+    });
+  });
+  return hits.reverse();
+}
+
+const fmtPRValue = (hit) =>
+  hit.metric === "seconds" ? fmtClock(hit.value) : hit.metric === "reps" ? `${hit.value} reps` : `${hit.value}kg`;
+
+function prsRecentHTML() {
+  const prs = computeAllPRs().slice(0, 5);
+  return `<div style="margin:22px 0">
+    <p class="vt-section-eyebrow">PRs recientes</p>
+    ${prs.length === 0
+      ? `<p class="vt-muted" style="padding:4px 0">Todavía no hay PRs registrados.</p>`
+      : prs.map((p) => `
+        <div class="vt-pr-recent-row">
+          <span class="vt-pr">${icon("trophy", 15)}</span>
+          <span class="vt-pr-recent-name">${esc(p.exerciseName)}</span>
+          <span class="vt-mono vt-pr-recent-value">${fmtPRValue(p)}</span>
+          <span class="vt-muted-sm">${fmtDateShort(p.date)}</span>
+        </div>`).join("")}
+  </div>`;
+}
+
+/* --------------------------- Vista Ejercicio (comportamiento previo) -------------------------- */
 
 function progressData(exId, metric) {
   const t = exType(exId);
   const uni = exUnilateral(exId);
+  const cutoff = Date.now() - rangeToDays(ui.progressRange || "2m") * 86400000;
   const pts = [];
-  [...sessions].reverse().forEach((s) => {
+  [...sessions].filter((s) => new Date(s.date).getTime() >= cutoff).reverse().forEach((s) => {
     const e = s.exercises.find((x) => x.exerciseId === exId);
     if (!e || e.sets.length === 0) return;
     let v;
@@ -1122,10 +1297,71 @@ function progressData(exId, metric) {
   return pts;
 }
 
+// Variante por lado (izq/der) para ejercicios unilaterales con métrica "reps"
+// — el rango solo filtra qué sesiones entran, cada una es su propio punto.
+function progressDataSide(exId, field) {
+  const cutoff = Date.now() - rangeToDays(ui.progressRange || "2m") * 86400000;
+  const pts = [];
+  [...sessions].filter((s) => new Date(s.date).getTime() >= cutoff).reverse().forEach((s) => {
+    const e = s.exercises.find((x) => x.exerciseId === exId);
+    if (!e || e.sets.length === 0) return;
+    const eff = e.sets.filter((st) => !getSetType(st));
+    if (!eff.length) return;
+    const v = Math.max(...eff.map((st) => (field === "repsL" ? repsL(st) : repsR(st))));
+    pts.push({ date: fmtDateShort(s.date), v });
+  });
+  return pts;
+}
+
 const metricUnit = (m) => (m === "seconds" ? "s" : m === "reps" ? "reps" : "kg");
 
-// Panel "Tus máximos": hasta 5 ejercicios destacados con su 1RM editable inline.
-// El 1RM es el mismo dato del catálogo (exercises[i].oneRM), no una copia.
+function exerciseViewHTML() {
+  const ids = exercisesWithHistory();
+  if (!ui.progressEx || !ids.includes(ui.progressEx)) ui.progressEx = ids[0];
+  const options = metricOptions(ui.progressEx);
+  if (!ui.progressMetric || !options.some((o) => o.id === ui.progressMetric)) ui.progressMetric = options[0].id;
+  const unit = metricUnit(ui.progressMetric);
+  // Unilateral: solo la métrica "reps" se desglosa por lado — peso es
+  // compartido y volumen ya suma ambos lados, ahí un único dataset alcanza.
+  const splitBySide = exUnilateral(ui.progressEx) && ui.progressMetric === "reps";
+
+  let stats = "";
+  if (splitBySide) {
+    const dataL = progressDataSide(ui.progressEx, "repsL");
+    const dataR = progressDataSide(ui.progressEx, "repsR");
+    const curL = dataL[dataL.length - 1], curR = dataR[dataR.length - 1];
+    if (curL || curR) {
+      stats = statRowFlatHTML([
+        curL ? { label: "Izquierda", value: `${curL.v} ${unit}` } : null,
+        curR ? { label: "Derecha", value: `${curR.v} ${unit}` } : null,
+      ].filter(Boolean));
+    }
+  } else {
+    const data = progressData(ui.progressEx, ui.progressMetric);
+    const current = data[data.length - 1];
+    const first = data[0];
+    if (current) {
+      const delta = data.length > 1 ? current.v - first.v : null;
+      stats = statRowFlatHTML([
+        { label: "Actual", value: `${current.v} ${unit}` },
+        delta !== null ? { label: "Desde el inicio", value: `${delta >= 0 ? "+" : ""}${Math.round(delta * 10) / 10} ${unit}`, deltaClass: "vt-stat-delta" } : null,
+      ].filter(Boolean));
+    }
+  }
+
+  return `
+    <select class="vt-input vt-select" data-c="prog-ex">
+      ${ids.map((id) => `<option value="${id}" ${id === ui.progressEx ? "selected" : ""}>${esc(exName(id))}</option>`).join("")}
+    </select>
+    <div class="vt-metric-toggle">
+      ${options.map((o) => `<button class="${ui.progressMetric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}">${o.label}</button>`).join("")}
+    </div>
+    ${stats}
+    <div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
+}
+
+/* -------------------------- Panel "Tus máximos" (sin cambios, reubicado) ------------------------- */
+
 function featuredHTML() {
   const map = exMap();
   const ids = (settings.featuredExercises || []).filter((id) => map[id]); // ids huérfanos se ignoran
@@ -1138,57 +1374,142 @@ function featuredHTML() {
       <span class="vt-muted-sm">kg</span>
       <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 14)}</button>
     </div>`).join("");
-  return `<div class="vt-card" style="margin-bottom:14px">
+  return `<div class="vt-card" style="margin-top:18px">
     <h3>Tus máximos</h3>
     ${slots || `<p class="vt-muted">Destaca hasta 5 ejercicios y edita su 1RM aquí mismo.</p>`}
     ${ids.length < 5 ? `<button class="vt-btn-outline vt-flex-center vt-small" style="width:100%" data-a="picker-open" data-ctx="featured">${icon("plus", 14)} Agregar</button>` : ""}
   </div>`;
 }
 
-function progressHTML() {
-  const ids = exercisesWithHistory();
-  const head = `<header class="vt-header">
-    ${tabHeaderHTML("Set 03 · Análisis", "Progreso")}
-  </header>` + featuredHTML();
+/* --------------------------------- Vista principal de Progreso -------------------------------- */
 
-  if (ids.length === 0)
+const PROGRESS_VIEWS = [{ id: "total", label: "Total" }, { id: "grupo", label: "Grupo muscular" }, { id: "ejercicio", label: "Ejercicio" }];
+
+function progressHTML() {
+  const head = `<header class="vt-header">${tabHeaderHTML("Set 04 · Análisis", "Progreso")}</header>`;
+
+  if (sessions.length === 0)
     return head + emptyHTML("Todavía no hay datos", "Registra al menos una sesión para ver tu progreso acá.", "");
 
-  if (!ui.progressEx || !ids.includes(ui.progressEx)) ui.progressEx = ids[0];
-  const options = metricOptions(ui.progressEx);
-  if (!ui.progressMetric || !options.some((o) => o.id === ui.progressMetric)) ui.progressMetric = options[0].id;
+  const ws = weeklyStats();
+  const summary = statRowFlatHTML([
+    { label: "Sesiones esta semana", value: ws.count },
+    { label: "Volumen esta semana", value: `${Math.round(ws.volume).toLocaleString("es-CL")} kg` },
+    { label: "Racha", value: `${ws.streak} sem${ws.streak !== 1 ? "s" : ""}` },
+  ]);
 
-  const data = progressData(ui.progressEx, ui.progressMetric);
-  const current = data[data.length - 1];
-  const first = data[0];
-  const unit = metricUnit(ui.progressMetric);
+  let body = "";
+  if (ui.progressView === "total" || ui.progressView === "grupo") body = `<div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
+  else body = exerciseViewHTML();
 
-  let stats = "";
-  if (current) {
-    const delta = data.length > 1 ? current.v - first.v : null;
-    stats = `<div class="vt-stat-row">
-      <div class="vt-stat"><span class="vt-stat-label">Actual</span>
-        <span class="vt-stat-value">${current.v} ${unit}</span></div>
-      ${delta !== null ? `<div class="vt-stat"><span class="vt-stat-label">Desde el inicio</span>
-        <span class="vt-stat-value vt-stat-delta">${delta >= 0 ? "+" : ""}${Math.round(delta * 10) / 10} ${unit}</span></div>` : ""}
-    </div>`;
-  }
-
-  return `${head}
-    <select class="vt-input vt-select" data-c="prog-ex">
-      ${ids.map((id) => `<option value="${id}" ${id === ui.progressEx ? "selected" : ""}>${esc(exName(id))}</option>`).join("")}
-    </select>
-    <div class="vt-metric-toggle">
-      ${options.map((o) => `<button class="${ui.progressMetric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}">${o.label}</button>`).join("")}
+  return `${head}${summary}${prsRecentHTML()}
+    <p class="vt-section-eyebrow">Rango</p>
+    ${rangeChipsHTML()}
+    <div class="vt-metric-toggle" style="margin-top:14px">
+      ${PROGRESS_VIEWS.map((v) => `<button class="${ui.progressView === v.id ? "is-active" : ""}" data-a="prog-view" data-view="${v.id}">${v.label}</button>`).join("")}
     </div>
-    ${stats}
-    <div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
+    ${body}
+    ${featuredHTML()}`;
+}
+
+// El <canvas> de Chart.js no resuelve var(--nombre) como color (a diferencia
+// del DOM normal): un fillStyle inválido se ignora en silencio y queda
+// negro. groupColor() devuelve var(--amber) etc. para los grupos semilla —
+// hay que resolverlo a su valor real antes de pasarlo a un dataset.
+function resolveCssColor(c) {
+  if (typeof c === "string" && c.startsWith("var(")) {
+    const name = c.slice(4, -1).trim();
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || c;
+  }
+  return c;
 }
 
 function mountChart() {
   const canvas = document.getElementById("prog-canvas");
   if (!canvas || typeof Chart === "undefined") return;
   if (chart) { chart.destroy(); chart = null; }
+
+  const gridColor = "rgba(44,55,66,0.6)";
+  const tickColor = "#8FA0AC";
+  const legendOpts = { display: true, labels: { color: tickColor, font: { size: 11 } } };
+
+  if (ui.progressView === "total") {
+    const buckets = computeBuckets(ui.progressRange);
+    chart = new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: buckets.map((b) => b.label),
+        datasets: [{
+          data: buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + sessionVolume(s, false), 0))),
+          backgroundColor: "#3B6FE0",
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        },
+      },
+    });
+    return;
+  }
+
+  if (ui.progressView === "grupo") {
+    const buckets = computeBuckets(ui.progressRange);
+    const groupsPresent = [];
+    buckets.forEach((b) => b.sessions.forEach((s) => s.exercises.forEach((e) => {
+      const g = exGroup(e.exerciseId);
+      if (!groupsPresent.includes(g)) groupsPresent.push(g);
+    })));
+    const datasets = groupsPresent.map((g) => ({
+      label: g,
+      data: buckets.map((b) => Math.round(b.sessions.reduce((a, s) =>
+        a + s.exercises.filter((e) => exGroup(e.exerciseId) === g).reduce((aa, e) => aa + exerciseVolume(e), 0), 0))),
+      backgroundColor: resolveCssColor(groupColor(g)) || "#8FA0AC",
+    }));
+    chart = new Chart(canvas, {
+      type: "bar",
+      data: { labels: buckets.map((b) => b.label), datasets },
+      options: {
+        plugins: { legend: legendOpts },
+        scales: {
+          x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+          y: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        },
+      },
+    });
+    return;
+  }
+
+  // Vista Ejercicio
+  const splitBySide = exUnilateral(ui.progressEx) && ui.progressMetric === "reps";
+  if (splitBySide) {
+    const dataL = progressDataSide(ui.progressEx, "repsL");
+    const dataR = progressDataSide(ui.progressEx, "repsR");
+    const labels = (dataL.length >= dataR.length ? dataL : dataR).map((p) => p.date);
+    chart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Izquierda", data: dataL.map((p) => p.v), borderColor: "#3B6FE0", backgroundColor: "#3B6FE0", borderWidth: 2.5, pointRadius: 3.5, tension: 0.3 },
+          { label: "Derecha", data: dataR.map((p) => p.v), borderColor: "#E8A33D", backgroundColor: "#E8A33D", borderWidth: 2.5, pointRadius: 3.5, tension: 0.3 },
+        ],
+      },
+      options: {
+        plugins: { legend: legendOpts },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        },
+      },
+    });
+    return;
+  }
+
   const data = progressData(ui.progressEx, ui.progressMetric);
   chart = new Chart(canvas, {
     type: "line",
@@ -1206,8 +1527,8 @@ function mountChart() {
     options: {
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: "rgba(44,55,66,0.6)" }, ticks: { color: "#8FA0AC", font: { size: 11 } } },
-        y: { grid: { color: "rgba(44,55,66,0.6)" }, ticks: { color: "#8FA0AC", font: { size: 11 } } },
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
       },
     },
   });
@@ -1218,40 +1539,29 @@ function mountChart() {
 function settingsHTML() {
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 04 · Configuración", "Ajustes")}
+      ${tabHeaderHTML("Set 05 · Configuración", "Ajustes")}
     </header>
-    <div class="vt-card">
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Descanso entre series<small>Se usa cuando el ejercicio no define el suyo</small></div>
-        <input type="number" inputmode="numeric" class="vt-input vt-mono" value="${num(settings.restSeconds)}" min="0" step="15" data-i="set-rest"
-          autocomplete="off" autocorrect="off" spellcheck="false" name="f_restseconds">
-      </div>
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Sonido<small>Pitido al terminar el descanso</small></div>
-        <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound" autocomplete="off">
-      </div>
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
-        <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
-      </div>
+    <p class="vt-section-eyebrow">General</p>
+    <div class="vt-settings-row">
+      <div class="vt-settings-label">Sonido<small>Pitido al terminar el descanso</small></div>
+      <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound" autocomplete="off">
     </div>
-    <div class="vt-card" style="margin-top:12px">
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Ejercicios<small>Crear, editar tipo y grupo, eliminar</small></div>
-        <button class="vt-btn-icon" data-a="manage-open">${icon("pencil", 16)} Gestionar</button>
-      </div>
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Exportar datos<small>Descarga un respaldo JSON de todo</small></div>
-        <button class="vt-btn-icon" data-a="export">${icon("download", 16)}</button>
-      </div>
-      <div class="vt-settings-row">
-        <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
-        <div style="display:flex;gap:8px">
-          <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
-            <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
-          </label>
-          <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
-        </div>
+    <div class="vt-settings-row">
+      <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
+      <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
+    </div>
+    <p class="vt-section-eyebrow" style="margin-top:26px">Datos</p>
+    <div class="vt-settings-row">
+      <div class="vt-settings-label">Exportar datos<small>Descarga un respaldo JSON de todo</small></div>
+      <button class="vt-btn-icon" data-a="export">${icon("download", 16)}</button>
+    </div>
+    <div class="vt-settings-row">
+      <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
+      <div style="display:flex;gap:8px">
+        <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
+          <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
+        </label>
+        <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
       </div>
     </div>
     <p class="vt-muted" style="text-align:center;margin-top:16px">GOAT · datos guardados en este dispositivo</p>`;
@@ -1259,37 +1569,64 @@ function settingsHTML() {
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
 
-function exercisesManagerHTML() {
+// Lista de grupos + ejercicios, separada de exercisesManagerHTML para poder
+// reconstruirla sola al tipear en el buscador (patrón de picker-q), sin
+// perder el foco del input de búsqueda.
+function exercisesListHTML() {
   const byGroup = {};
   exercises.forEach((e) => { (byGroup[e.group] = byGroup[e.group] || []).push(e); });
   const groups = Object.keys(byGroup);
+  if (groups.length === 0) return emptyHTML("Sin ejercicios todavía", "Crea el primero con el botón +.", "");
 
+  const q = ui.exercisesQuery.trim().toLowerCase();
+  const searching = q.length > 0;
+  const openSaved = new Set(settings.openExerciseGroups || []);
+
+  const groupsHTML = groups.map((g) => {
+    const list = byGroup[g];
+    const matches = searching ? list.filter((e) => e.name.toLowerCase().includes(q)) : list;
+    if (searching && matches.length === 0) return ""; // grupo sin coincidencias: se oculta mientras se busca
+    // Mientras se busca, los grupos con coincidencias se auto-expanden
+    // (ignorando el estado guardado); al vaciar el buscador vuelve a regir
+    // settings.openExerciseGroups.
+    const open = searching ? true : openSaved.has(g);
+    return `<div class="vt-group-block" style="border-left-color:${groupColor(g) || "var(--line)"}">
+      <button type="button" class="vt-folder-toggle" data-a="exgroup-toggle" data-name="${esc(g)}" style="width:100%">
+        ${icon(open ? "chevUp" : "chevDown", 16)}
+        <span class="vt-group-title" style="margin:0">${esc(g)}</span>
+        <span class="vt-muted-sm" style="margin-left:auto">${list.length} ejercicio${list.length !== 1 ? "s" : ""}</span>
+      </button>
+      ${open ? matches.map((e) => `
+        <div class="vt-ex-row">
+          <div class="vt-ex-row-top">
+            <span class="vt-ex-name">${esc(e.name)}</span>
+            <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
+            <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
+          </div>
+          <div class="vt-ex-badges">
+            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
+            <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
+          </div>
+        </div>`).join("") : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="vt-ex-groups">${groupsHTML}</div>`;
+}
+
+function exercisesManagerHTML() {
   return `
     <header class="vt-header">
-      <button class="vt-btn-icon" data-a="manage-close" aria-label="Volver">${icon("back", 20)}</button>
-      <h1 class="vt-header-title">Ejercicios</h1>
+      ${tabHeaderHTML("Set 02 · Catálogo", "Ejercicios")}
       <div style="display:flex;gap:8px">
         <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 18)}</button>
         <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 20)}</button>
       </div>
     </header>
-    <div class="vt-list">
-      ${groups.map((g) => `<div class="vt-group-block" style="border-left-color:${groupColor(g) || "var(--line)"}">
-        <h3 class="vt-group-title">${esc(g)}</h3>
-        ${byGroup[g].map((e) => `
-          <div class="vt-ex-row">
-            <div class="vt-ex-row-top">
-              <span class="vt-ex-name">${esc(e.name)}</span>
-              <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
-              <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
-            </div>
-            <div class="vt-ex-badges">
-              ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
-              <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
-            </div>
-          </div>`).join("")}
-      </div>`).join("")}
-    </div>`;
+    <div class="vt-search" style="margin-bottom:18px">${icon("search", 16)}
+      <input placeholder="Buscar ejercicio…" value="${esc(ui.exercisesQuery)}" data-i="exercises-q" autocomplete="off">
+    </div>
+    <div id="exercises-list">${exercisesListHTML()}</div>`;
 }
 
 function groupsManagerHTML() {
@@ -1905,7 +2242,6 @@ document.addEventListener("click", (e) => {
       stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
       ui.tab = el.dataset.tab;
       ui.editingRoutine = null;
-      ui.manageExercises = false;
       ui.manageGroups = false;
       ui.exerciseEditMode = false;
       ui.selectedExercises.clear();
@@ -2343,15 +2679,24 @@ document.addEventListener("click", (e) => {
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
+    case "prog-view": ui.progressView = el.dataset.view; render(); break;
+    case "prog-range": ui.progressRange = el.dataset.range; render(); break;
     case "featured-remove":
       settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
       persistSettings();
       render();
       break;
 
-    /* Ajustes / ejercicios */
-    case "manage-open": ui.manageExercises = true; render(); break;
-    case "manage-close": ui.manageExercises = false; render(); break;
+    /* Pestaña Ejercicios */
+    case "exgroup-toggle": {
+      const name = el.dataset.name;
+      const open = new Set(settings.openExerciseGroups || []);
+      open.has(name) ? open.delete(name) : open.add(name);
+      settings.openExerciseGroups = [...open];
+      persistSettings();
+      render();
+      break;
+    }
     case "ex-new": ui.exerciseModal = { id: null, name: "", group: "Custom", type: "weight" }; render(); break;
     case "ex-edit": {
       const ex = exercises.find((x) => x.id === id);
@@ -2574,10 +2919,12 @@ document.addEventListener("input", (e) => {
       if (list) list.innerHTML = pickerListHTML();
       break;
     }
-    case "set-rest":
-      settings.restSeconds = Math.max(0, Math.round(num(el.value)));
-      persistSettings();
+    case "exercises-q": {
+      ui.exercisesQuery = el.value;
+      const list = document.getElementById("exercises-list");
+      if (list) list.innerHTML = exercisesListHTML();
       break;
+    }
     case "featured-rm": {
       // Escribe directo en el catálogo, sin render para no perder el foco.
       const ex = exercises.find((x) => x.id === el.dataset.id);
