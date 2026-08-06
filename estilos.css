@@ -682,6 +682,27 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 #update-toast button:active { filter: brightness(0.85); }
 
+/* Aviso discreto de que se recuperó una sesión autoguardada al abrir la app
+   (showRecoveredToast) — pill chico, no bloqueante, se autodestruye solo. */
+#recovered-toast {
+  position: fixed;
+  top: 12px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  padding: 9px 16px;
+  border-radius: 20px;
+  z-index: 100;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  animation: vt-toast-fade 3.5s ease forwards;
+}
+@keyframes vt-toast-fade {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ------------ Barras flotantes: descanso + sesión minimizada ------------ */
 /* Wrapper fijo compartido: cada barra vive dentro como bloque normal (no
    position:fixed cada una), así se apilan solas sin coordinar posiciones —

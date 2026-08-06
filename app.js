@@ -99,6 +99,22 @@ const persistSettings = () => save("settings", settings);
 const persistFolders = () => save("routine-folders", routineFolders);
 const persistGroups = () => save("exercise-groups", exerciseGroups);
 
+// Autoguardado de la sesión EN CURSO (distinto de persistSessions, que solo
+// guarda sesiones ya finalizadas) — para sobrevivir a cerrar la pestaña sin
+// terminar/descartar. También sincroniza acá el cronómetro inline en curso
+// (runningTimer, variable de módulo fuera de `ui`) dentro de
+// ui.activeSession.runningTimerInfo, para poder reconstruirlo al recargar.
+function persistActiveSession() {
+  if (ui.activeSession) {
+    ui.activeSession.runningTimerInfo = runningTimer
+      ? { exIdx: runningTimer.exIdx, setIdx: runningTimer.setIdx, startedAt: runningTimer.startedAt }
+      : null;
+    save("active-session", ui.activeSession);
+  } else {
+    localStorage.removeItem("active-session");
+  }
+}
+
 // El grupo se identifica por nombre (no hay id) — mismo modelo que ya usaban
 // GROUPS/GROUP_COLORS antes de persistirse. Sin fallback baked-in: cada
 // call site decide su propio valor por defecto, igual que antes.
@@ -501,6 +517,7 @@ function render() {
   updateMinimizedBar();
   if (ui.tab === "progreso") mountChart();
   mountSortables();
+  if (ui.activeSession) persistActiveSession();
 }
 
 // Reordenar ejercicios por arrastre (manija .vt-drag-handle), en el editor de rutina
@@ -953,10 +970,13 @@ function stopSetTimer() {
   const st = ui.activeSession?.exercises[runningTimer.exIdx]?.sets[runningTimer.setIdx];
   if (st) st.seconds = runningValue();
   runningTimer = null;
+  persistActiveSession(); // limpia runningTimerInfo (se recalcula desde runningTimer, ver arriba)
 }
 
 // Tick único y global: escribe directo en el DOM por id/selector, nunca render() (patrón #live-vol).
+let tickCount = 0;
 setInterval(() => {
+  tickCount++;
   const clock = document.getElementById("live-clock");
   if (clock && ui.activeSession)
     clock.textContent = fmtClock((Date.now() - new Date(ui.activeSession.date).getTime()) / 1000);
@@ -972,6 +992,9 @@ setInterval(() => {
     `input[data-i="set"][data-f="seconds"][data-ex="${runningTimer.exIdx}"][data-set="${runningTimer.setIdx}"]`);
   // Si el input no está en el DOM (otra pestaña) no pasa nada; el valor sigue acumulando en el estado.
   if (input && document.activeElement !== input) input.value = fmtClock(st.seconds);
+  // No hace falta autoguardar con precisión de 1s — cada 5 alcanza para que
+  // quede al día sin escribir en localStorage cada tick.
+  if (tickCount % 5 === 0) persistActiveSession();
 }, 1000);
 
 // Selector chico de tipo de serie: se expande bajo la fila (mismo patrón que
@@ -1900,6 +1923,7 @@ function finishSession() {
   if (done === 0) {
     askConfirm("No marcaste ninguna serie. ¿Descartar la sesión completa?", () => {
       ui.activeSession = null;
+      persistActiveSession(); // limpia el autoguardado, ya no hay sesión que recuperar
       ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
       stopRest(); render();
     }, true);
@@ -1992,6 +2016,7 @@ function finishSession() {
       savedAsRoutine: false,
     };
     ui.activeSession = null;
+    persistActiveSession(); // sesión ya finalizada y guardada en `sessions` — limpia el autoguardado
     ui.openNotes.clear();
     ui.openExNotes.clear();
     ui.exerciseEditMode = false;
@@ -2291,6 +2316,7 @@ document.addEventListener("click", (e) => {
       const r = routines.find((x) => x.id === id);
       if (r) {
         const start = () => {
+          runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
           ui.activeSession = buildSessionFromRoutine(r);
           ui.sessionMinimized = false;
           ui.openNotes.clear();
@@ -2483,6 +2509,7 @@ document.addEventListener("click", (e) => {
     /* Sesión activa */
     case "train-free": {
       const start = () => {
+        runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
         ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), explicitlyRemoved: [], exercises: [] };
         ui.sessionMinimized = false;
         ui.openNotes.clear();
@@ -2569,7 +2596,9 @@ document.addEventListener("click", (e) => {
     case "session-discard":
       askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;
-        ui.activeSession = null; ui.openNotes.clear(); ui.openExNotes.clear();
+        ui.activeSession = null;
+        persistActiveSession(); // limpia el autoguardado, se descartó a propósito
+        ui.openNotes.clear(); ui.openExNotes.clear();
         ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
         stopRest(); render();
       }, true);
@@ -2662,6 +2691,7 @@ document.addEventListener("click", (e) => {
       const past = sessions.find((s) => s.id === id);
       if (past) {
         const start = () => {
+          runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
           ui.activeSession = buildSessionFromPastSession(past);
           ui.sessionMinimized = false;
           ui.openNotes.clear();
@@ -2911,6 +2941,7 @@ document.addEventListener("input", (e) => {
       // Actualiza el contador de volumen en vivo sin re-dibujar (para no perder el foco).
       const live = document.getElementById("live-vol");
       if (live && ui.activeSession) live.textContent = Math.round(sessionVolume(ui.activeSession, true)).toLocaleString("es-CL");
+      persistActiveSession(); // este caso no pasa por render() (no perder el foco), autoguardar aparte
       break;
     }
     case "picker-q": {
@@ -2939,11 +2970,13 @@ document.addEventListener("input", (e) => {
       // Solo afecta la sesión en curso, no la rutina guardada.
       const ex = ui.activeSession?.exercises[+el.dataset.ex];
       if (ex) ex.restSeconds = Math.max(0, Math.round(num(el.value)));
+      persistActiveSession(); // no pasa por render() (no perder el foco), autoguardar aparte
       break;
     }
     case "session-note": {
       const ex = ui.activeSession?.exercises[+el.dataset.ex];
       if (ex) ex.sessionNote = el.value;
+      persistActiveSession(); // no pasa por render() (no perder el foco), autoguardar aparte
       break;
     }
   }
@@ -2990,6 +3023,38 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "";
   }
 });
+
+/* ------------------------ Restaurar sesión activa autoguardada ------------------------ */
+// Aviso chico y discreto (no bloqueante) de que se recuperó una sesión sola —
+// mismo patrón de elemento de DOM aparte que showUpdateToast, se autodestruye solo.
+function showRecoveredToast() {
+  const bar = document.createElement("div");
+  bar.id = "recovered-toast";
+  bar.textContent = "Recuperamos tu sesión en curso";
+  document.body.appendChild(bar);
+  setTimeout(() => bar.remove(), 3500);
+}
+
+// Antes del primer render(): si había una sesión autoguardada (persistActiveSession,
+// ver Storage), se restaura tal cual quedó — series marcadas, valores editados,
+// ejercicios agregados, todo. Cubre el caso de cerrar la pestaña sin terminar
+// ni descartar la sesión.
+{
+  const savedActiveSession = load("active-session", null);
+  if (savedActiveSession && savedActiveSession.id && Array.isArray(savedActiveSession.exercises)) {
+    ui.activeSession = savedActiveSession;
+    ui.sessionMinimized = false;
+    ui.tab = "rutinas"; // la lleva directo a la sesión en curso, no a donde estuviera antes
+    if (savedActiveSession.runningTimerInfo) {
+      const info = savedActiveSession.runningTimerInfo;
+      const st = savedActiveSession.exercises[info.exIdx]?.sets?.[info.setIdx];
+      // baseValue = el "seconds" que ese set ya tenía guardado (mismo criterio
+      // que set-timer al arrancar): sigue contando desde ahí, no desde cero.
+      if (st) runningTimer = { exIdx: info.exIdx, setIdx: info.setIdx, startedAt: Date.now(), baseValue: num(st.seconds) };
+    }
+    showRecoveredToast();
+  }
+}
 
 render();
 

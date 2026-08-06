@@ -470,3 +470,54 @@ Entradas nuevas al final. No reescribir lo anterior.
   tiene que borrar el acceso directo instalado y agregarlo de nuevo en
   su teléfono para confirmar visualmente que la pantalla de carga
   queda sin el rectángulo — eso no se puede probar desde acá.
+
+## 2026-08-06
+- Autoguardado de la sesión en curso (sobrevive a cerrar la pestaña sin
+  terminar/descartar): nueva `persistActiveSession()` — guarda
+  ui.activeSession completo en localStorage bajo "active-session", o
+  borra la llave si es null. Se llama al final de render() (si hay
+  sesión activa) y explícitamente en los 3 caminos que escriben directo
+  al DOM sin pasar por render() (para no perder foco): input "set"
+  (valores de serie), "ex-rest" (descanso por ejercicio en caliente) y
+  "session-note" (nota de ejercicio) — este último no estaba en la
+  lista explícita del pedido pero es exactamente el mismo patrón de
+  bypass de render(), y "notas de ejercicio" sí estaba en el alcance
+  pedido, así que se cubrió igual.
+- Cronómetro inline (runningTimer, variable de módulo) ahora se
+  refleja en ui.activeSession.runningTimerInfo ({exIdx, setIdx,
+  startedAt} o null) — se sincroniza solo dentro de
+  persistActiveSession() a partir del runningTimer vivo en ese
+  momento, así que cualquier lugar que ya llamaba render() después de
+  tocar runningTimer quedó cubierto sin tocarlo aparte. stopSetTimer()
+  y el tick de 1s (cada 5 ticks, no con lujo de detalle) llaman
+  persistActiveSession() explícito porque no pasan por render().
+- Restauración al abrir la app: antes del primer render(), si hay
+  "active-session" guardado con id+exercises válidos, se restaura tal
+  cual (incluye reconstruir runningTimer si había uno corriendo,
+  baseValue = el `seconds` que ese set ya tenía guardado y startedAt =
+  ahora — sigue contando desde el último valor conocido, no desde
+  cero, pero tampoco cuenta como tiempo activo el rato que la pestaña
+  estuvo cerrada). Deja ui.tab="rutinas" y sessionMinimized=false para
+  caer directo en la sesión, y muestra un toast chico que se
+  autodestruye solo ("Recuperamos tu sesión en curso",
+  #recovered-toast, mismo patrón de DOM aparte que el aviso de
+  actualización).
+- Fix encontrado en el camino (no pedido explícito, pero necesario
+  para que esto funcione bien): routine-start/train-free/
+  session-repeat reemplazan ui.activeSession por una sesión nueva sin
+  limpiar el runningTimer de la sesión vieja que se descarta — eso
+  dejaba un cronómetro colgado apuntando a índices de la sesión nueva
+  (y se autoguardaría mal). Se agregó `runningTimer = null` en los 3
+  puntos de arranque.
+- finishSession() y session-discard limpian "active-session" al
+  terminar (vía persistActiveSession() con ui.activeSession ya null).
+- Verificado en el navegador: autoguardado con valores editados a mano
+  y set marcado, cronómetro inline arrancado y confirmado en
+  localStorage; recarga completa de la página (simula cerrar/reabrir
+  pestaña) restaura series/valores/ejercicios exactos, el cronómetro
+  sigue corriendo desde el tiempo acumulado (no en 0) y aparece el
+  toast; descartar y finalizar sesión dejan "active-session" en null,
+  y abrir la app después arranca normal sin nada que restaurar. Sin
+  errores de consola en las 5 pestañas. sw.js goat-v13 → v14. Falta
+  probar en el teléfono real (cerrar la app de verdad, no solo
+  recargar).
