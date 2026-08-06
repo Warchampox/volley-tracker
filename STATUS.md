@@ -521,3 +521,78 @@ Entradas nuevas al final. No reescribir lo anterior.
   errores de consola en las 5 pestañas. sw.js goat-v13 → v14. Falta
   probar en el teléfono real (cerrar la app de verdad, no solo
   recargar).
+
+## 2026-08-06 cont.
+- Fix: la manija de arrastre (⋮⋮) ya NO existe en el DOM fuera del modo
+  Organizar (antes se renderizaba igual, solo visualmente redundante) —
+  se sacó del bloque normal en editorHTML y trainActiveHTML, el bloque
+  recupera el ancho completo (ya no queda el wrapper .vt-block-row con
+  el hueco de la manija).
+- Modo Organizar reescrito sobre un BORRADOR: nuevo ui.exerciseEditDraft
+  (copia profunda de los ejercicios, cada item marcado con su índice
+  ORIGINAL en __ord). Mientras dura el modo, editorHTML/trainActiveHTML,
+  el drag de Sortable y las acciones (Eliminar/Agrupar/Reemplazar) leen
+  y escriben sobre el borrador — el array real no se toca. Nueva barra
+  inferior fija (Cancelar / Guardar cambios, mismo look que el footer
+  de "Finalizar sesión") reemplaza el botón suelto "Listo" de arriba;
+  es la ÚNICA forma de salir del modo. "Cancelar" descarta el borrador
+  sin tocar nada; "Guardar cambios" lo escribe de vuelta — en sesión
+  activa, si algún ejercicio ELIMINADO en el borrador tenía series
+  done=true, un solo askConfirm resume cuántas se perderían antes de
+  aplicar (organize-delete en sí mismo ya no confirma nada, eso quedó
+  diferido acá). __ord también se usa para recolocar (o detener, si ya
+  no existe) el cronómetro corriendo, y para remapear
+  ui.collapsedExercises/openNotes/openExNotes a sus nuevos índices —
+  sin esto, tras eliminar/reordenar quedaban aplicados al ejercicio
+  equivocado (bug real que apareció al probar: un ejercicio colapsado
+  terminaba con el estado colapsado de OTRO tras guardar).
+- Nuevo gesto: mantener presionado ~500ms el NOMBRE de un ejercicio
+  (fuera del modo Organizar) entra al modo con ese ejercicio ya
+  preseleccionado (Eliminar+Reemplazar de inmediato en la barra).
+  Fuera del sistema de delegación de "click" — pointerdown/move/up con
+  temporizador, se cancela con movimiento > 10px. Atado solo al <h3>
+  del bloque (nunca a sus controles); la fila colapsada de sesión no
+  tiene long-press (es enteramente un botón de toggle, se decidió no
+  competir con eso — para organizarla hay que expandirla primero).
+  suppressClickUntil evita que el tap que dispara el long-press
+  también gatille un click normal.
+- Reemplazar ahora SIEMPRE reconstruye desde el historial real del
+  ejercicio NUEVO (lastSetsFor), nunca hereda valores del que se está
+  sacando: en el editor, targetSets/Reps/Weight/Seconds del último set
+  histórico (cantidad de series = cantidad de sets históricos, mismo
+  patrón que "Guardar como rutina"); en sesión, un set nuevo por cada
+  set histórico vía defaultSet(type, null, histSet, uni) (mismo patrón
+  que agregar una serie basada en la anterior). Sin historial, cae a
+  los defaults de siempre (3 series/8 reps/0kg o 30s). Ya no depende
+  de si cambió el "shape" — siempre reconstruye con la forma del
+  ejercicio nuevo.
+- Verificado en el navegador: cero manijas en vista normal; organizar,
+  reordenar y eliminar varios + Cancelar deja el array real intacto;
+  lo mismo + Guardar cambios lo aplica; eliminar con series hechas no
+  confirma hasta Guardar cambios, y ahí el mensaje resume la cantidad
+  correcta; long-press preselecciona y muestra Eliminar+Reemplazar de
+  inmediato; reemplazar con historial trae cantidad de series y
+  valores reales (verificado con series de distinto peso/reps cada
+  una, no solo repetido); reemplazar sin historial cae a los defaults;
+  agrupar en superserie dentro del borrador aplica bien las etiquetas
+  A1/A2 al guardar; colapsados/notas abiertas sobreviven correctamente
+  reindexados tras eliminar. Sin errores de consola en las 5 pestañas.
+  sw.js goat-v14 → v15.
+
+## 2026-08-06 cont.2
+- Bug reportado por Martín probando en vivo: "Agregar ejercicio" sigue
+  visible/funcional durante el modo Organizar, pero pickExercise()
+  empujaba directo al array REAL (ui.editingRoutine.exercises /
+  ui.activeSession.exercises), no al borrador — el ejercicio agregado
+  no se veía en la lista de Organizar, y encima quedaba con el
+  comportamiento invertido: "Guardar cambios" lo perdía (pisaba el
+  array real, que ya lo tenía, con el borrador viejo que no), mientras
+  que "Cancelar" lo dejaba puesto (nunca tocó ese array real). Fix:
+  pickExercise() ahora empuja al borrador (ui.exerciseEditDraft) si
+  ui.exerciseEditMode está activo, marcado con un __ord negativo
+  decreciente (nextDraftOrd) para que nunca colisione con los índices
+  reales que usa el remapeo de colapsados/notas/cronómetro al guardar.
+  Verificado en editor y sesión: agregar durante Organizar se ve al
+  toque en el borrador, Guardar cambios lo conserva, Cancelar lo
+  descarta — en ambos sentidos, ya no invertido. Sin errores de
+  consola. sw.js goat-v15 → v16.

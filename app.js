@@ -66,6 +66,11 @@ const fmtDateShort = (iso) =>
 
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 
+// Clonado profundo para el borrador del modo Organizar (los datos son planos,
+// JSON-serializables, sin fechas ni funciones) — nunca comparte referencias
+// con el array real mientras se está organizando.
+const deepClone = (v) => JSON.parse(JSON.stringify(v));
+
 // Kg objetivo a partir de %1RM, redondeado al disco de 2.5 kg más cercano.
 const pctKg = (oneRM, pct) => Math.round(num(oneRM) * num(pct) / 100 / 2.5) * 2.5;
 
@@ -148,8 +153,9 @@ const ui = {
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
-  selectedExercises: new Set(), // índices seleccionados en modo Organizar
-  replaceExerciseIdx: null,     // índice del ejercicio a reemplazar (picker en contexto "replace")
+  exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
+  selectedExercises: new Set(), // índices (dentro del draft) seleccionados en modo Organizar
+  replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
 };
 
@@ -296,11 +302,43 @@ const blockAccentColor = (ex, lbl) => lbl ? "var(--superset)" : (groupColor(ex?.
 /* ------------------------- Modo "Organizar ejercicios" --------------------------- */
 // Compartido entre editorHTML (rutina) y trainActiveHTML (sesión activa): es
 // la ÚNICA forma de reordenar (junto al drag-handle ya existente), eliminar,
-// agrupar en superserie o reemplazar un ejercicio.
+// agrupar en superserie o reemplazar un ejercicio. Todo el modo trabaja sobre
+// un BORRADOR (ui.exerciseEditDraft, copia profunda) — el array real
+// (ui.editingRoutine.exercises o ui.activeSession.exercises) no se toca hasta
+// "Guardar cambios"; "Cancelar" simplemente descarta el borrador.
 
+// Índice (dentro del draft) que acaba de entrar al modo por mantener presionado
+// — dispara el pulso visual una sola vez, ver exerciseOrganizeRowHTML.
+let justEnteredOrganizeIdx = null;
+
+// Contador para el __ord de ejercicios agregados DURANTE el modo Organizar
+// (vía "Agregar ejercicio" con el picker abierto mientras se organiza): no
+// existían en el array original, así que nunca deben colisionar con un
+// índice real (siempre >= 0) — negativo y decreciente alcanza.
+let nextDraftOrd = -1;
+
+// Entra al modo: clona el array correspondiente hacia el borrador, marcando
+// cada item con su posición ORIGINAL (__ord) — así "Guardar cambios" puede
+// saber más tarde qué se eliminó de verdad, sin importar cuánto se reordenó/
+// agrupó/reemplazó mientras tanto (ver exercise-editmode-save).
+function enterOrganizeMode(preselectIdx) {
+  const source = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
+  ui.exerciseEditDraft = source.map((it, i) => ({ ...deepClone(it), __ord: i }));
+  ui.exerciseEditMode = true;
+  ui.selectedExercises = preselectIdx != null ? new Set([preselectIdx]) : new Set();
+  if (preselectIdx != null) {
+    justEnteredOrganizeIdx = preselectIdx;
+    setTimeout(() => { justEnteredOrganizeIdx = null; }, 300);
+  }
+  render();
+}
+
+// Botón de entrada — solo existe fuera del modo; adentro se sale por la barra
+// inferior (Cancelar / Guardar cambios), nunca por un botón suelto arriba.
 function organizeToggleHTML() {
+  if (ui.exerciseEditMode) return "";
   return `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-    <button class="vt-btn-icon" data-a="exercise-editmode-toggle">${ui.exerciseEditMode ? "Listo" : "Organizar"}</button>
+    <button class="vt-btn-icon" data-a="exercise-editmode-toggle">Organizar</button>
   </div>`;
 }
 
@@ -308,7 +346,8 @@ function organizeToggleHTML() {
 // manija + acento + nombre + círculo de selección.
 function exerciseOrganizeRowHTML(idx, ex, lbl) {
   const selected = ui.selectedExercises.has(idx);
-  return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
+  const pulse = idx === justEnteredOrganizeIdx;
+  return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""} ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
     <div class="vt-block-row">
       <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
       <span class="vt-organize-name" style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
@@ -317,7 +356,7 @@ function exerciseOrganizeRowHTML(idx, ex, lbl) {
   </div>`;
 }
 
-// Barra sticky con las acciones sobre lo seleccionado — vacía si no hay nada elegido.
+// Barra de acciones sobre lo seleccionado — vacía si no hay nada elegido.
 function organizeActionBarHTML() {
   const n = ui.selectedExercises.size;
   if (n === 0) return "";
@@ -327,6 +366,20 @@ function organizeActionBarHTML() {
       <button class="vt-btn-ghost vt-danger" data-a="organize-delete">${icon("trash", 16)} Eliminar</button>
       ${n >= 2 ? `<button class="vt-btn-ghost" data-a="organize-group">${icon("link", 16)} Agrupar</button>` : ""}
       ${n === 1 ? `<button class="vt-btn-ghost" data-a="organize-replace">${icon("repeat", 16)} Reemplazar</button>` : ""}
+    </div>
+  </div>`;
+}
+
+// Barra inferior fija del modo Organizar: apila la barra de selección (si hay
+// algo elegido) sobre la de Cancelar/Guardar cambios — mismo patrón de
+// wrapper fijo compartido que #floating-stack (restbar + minimized-bar), así
+// se apilan solas sin coordinar posiciones a mano.
+function organizeFooterHTML() {
+  return `<div class="vt-organize-footer-wrap">
+    ${organizeActionBarHTML()}
+    <div class="vt-organize-savebar">
+      <button class="vt-btn-ghost vt-danger" data-a="exercise-editmode-cancel">Cancelar</button>
+      <button class="vt-btn-primary vt-flex" data-a="exercise-editmode-save">${icon("check", 18)} Guardar cambios</button>
     </div>
   </div>`;
 }
@@ -354,6 +407,34 @@ function lastSetsFor(exId) {
     if (found) return found.sets;
   }
   return null;
+}
+
+// Reconstruye el target de un ítem de RUTINA (editorHTML) a partir del
+// historial real del ejercicio (mismo patrón que "Guardar como rutina" usa
+// con el último set de cada ejercicio) — cantidad de series y valores reales,
+// no los del ejercicio que se está reemplazando. Sin historial, cae a los
+// defaults de siempre (3 series, 8 reps, 0 kg / 30s si es tipo tiempo).
+function editorTargetFromHistory(exId, type) {
+  const hist = lastSetsFor(exId);
+  if (!hist || !hist.length)
+    return type === "time"
+      ? { targetSets: 3, targetSeconds: 30, targetWeight: 0 }
+      : { targetSets: 3, targetReps: 8, targetWeight: 0 };
+  const lastSet = hist[hist.length - 1];
+  if (type === "time") return { targetSets: hist.length, targetSeconds: num(lastSet.seconds) || 30, targetWeight: num(lastSet.weight) };
+  const uni = exUnilateral(exId);
+  const reps = uni ? Math.round((repsL(lastSet) + repsR(lastSet)) / 2) : num(lastSet.reps);
+  return { targetSets: hist.length, targetReps: reps || 8, targetWeight: num(lastSet.weight) };
+}
+
+// Reconstruye los sets reales de un ítem de SESIÓN (trainActiveHTML) a partir
+// del historial — un set nuevo por cada set histórico, mismo patrón que
+// defaultSet() usa con prevSet (hereda valores, done:false, rpe:null). Sin
+// historial, un único set con los defaults de siempre.
+function sessionSetsFromHistory(exId, type, unilateral) {
+  const hist = lastSetsFor(exId);
+  if (!hist || !hist.length) return [defaultSet(type, null, null, unilateral)];
+  return hist.map((histSet) => defaultSet(type, null, histSet, unilateral));
 }
 
 function fmtSet(type, s, unilateral) {
@@ -569,8 +650,10 @@ function mountSortables() {
       onEnd: (evt) => {
         stopGhostLock();
         if (evt.oldIndex === evt.newIndex) return;
-        const [moved] = ui.editingRoutine.exercises.splice(evt.oldIndex, 1);
-        ui.editingRoutine.exercises.splice(evt.newIndex, 0, moved);
+        // La manija (y por lo tanto el drag) solo existe en modo Organizar —
+        // reordena el borrador, nunca el array real directamente.
+        const [moved] = ui.exerciseEditDraft.splice(evt.oldIndex, 1);
+        ui.exerciseEditDraft.splice(evt.newIndex, 0, moved);
         render();
       },
     });
@@ -586,8 +669,8 @@ function mountSortables() {
       onEnd: (evt) => {
         stopGhostLock();
         if (evt.oldIndex === evt.newIndex) return;
-        const [moved] = ui.activeSession.exercises.splice(evt.oldIndex, 1);
-        ui.activeSession.exercises.splice(evt.newIndex, 0, moved);
+        const [moved] = ui.exerciseEditDraft.splice(evt.oldIndex, 1);
+        ui.exerciseEditDraft.splice(evt.newIndex, 0, moved);
         render();
       },
     });
@@ -724,8 +807,11 @@ function moveRoutineHTML() {
 function editorHTML() {
   const r = ui.editingRoutine;
   const map = exMap();
-  const ssLabels = computeSupersetLabels(r.exercises);
   const editMode = ui.exerciseEditMode;
+  // En modo Organizar, TODO lee/escribe sobre el borrador — el array real no
+  // se toca hasta "Guardar cambios" (o queda intacto si se Cancela).
+  const list = editMode ? ui.exerciseEditDraft : r.exercises;
+  const ssLabels = computeSupersetLabels(list);
   return `
     <header class="vt-header">
       <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 20)}</button>
@@ -736,7 +822,7 @@ function editorHTML() {
       value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
     ${organizeToggleHTML()}
     <div class="vt-list" id="editor-exercise-list">
-      ${r.exercises.map((it, idx) => {
+      ${list.map((it, idx) => {
         const ex = map[it.exerciseId];
         const lbl = ssLabels[idx];
         if (editMode) return exerciseOrganizeRowHTML(idx, ex, lbl);
@@ -768,24 +854,21 @@ function editorHTML() {
             <span class="vt-muted-sm" id="pct-calc-${idx}" style="${oneRM > 0 ? "" : "color:var(--red)"}">${calc}</span>
           </div>`;
         }
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
-          <div class="vt-block-row">
-            <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
-            <div class="vt-block-body">
-              <div class="vt-card-top">
-                <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
-              </div>
-              <div class="vt-target-row">${fields}</div>
-              ${loadmode}
-              <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
-                value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
+          <div class="vt-block-body">
+            <div class="vt-card-top">
+              <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
             </div>
+            <div class="vt-target-row">${fields}</div>
+            ${loadmode}
+            <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
+              value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
           </div>
         </div>`;
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
-    ${editMode ? organizeActionBarHTML() : `<div class="vt-sticky-footer">
+    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full" data-a="editor-save">Guardar rutina</button>
     </div>`}`;
 }
@@ -814,8 +897,11 @@ function trainActiveHTML() {
   const s = ui.activeSession;
   const map = exMap();
   const vol = sessionVolume(s, true);
-  const ssLabels = computeSupersetLabels(s.exercises);
   const editMode = ui.exerciseEditMode;
+  // En modo Organizar, TODO lee/escribe sobre el borrador — el array real no
+  // se toca hasta "Guardar cambios" (o queda intacto si se Cancela).
+  const list = editMode ? ui.exerciseEditDraft : s.exercises;
+  const ssLabels = computeSupersetLabels(list);
 
   return `
     <header class="vt-header vt-header-sticky">
@@ -835,7 +921,7 @@ function trainActiveHTML() {
     </header>
     ${organizeToggleHTML()}
     <div class="vt-list" id="session-exercise-list">
-      ${s.exercises.map((e, exIdx) => {
+      ${list.map((e, exIdx) => {
         const ex = map[e.exerciseId];
         const lbl = ssLabels[exIdx];
         if (editMode) return exerciseOrganizeRowHTML(exIdx, ex, lbl);
@@ -859,45 +945,42 @@ function trainActiveHTML() {
         }
 
         const last = lastSetsFor(e.exerciseId);
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}">
-          <div class="vt-block-row">
-            <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
-            <div class="vt-block-body">
-              <div class="vt-card-top">
-                <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
-                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                  <span class="vt-rest-mini vt-muted-sm">Descanso
-                    <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
-                      value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
-                      data-i="ex-rest" data-ex="${exIdx}"
-                      autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
-                  </span>
-                  <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
-                  <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar">${icon("chevUp", 16)}</button>
-                </div>
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}">
+          <div class="vt-block-body">
+            <div class="vt-card-top">
+              <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                <span class="vt-rest-mini vt-muted-sm">Descanso
+                  <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                    value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
+                    data-i="ex-rest" data-ex="${exIdx}"
+                    autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
+                </span>
+                <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
+                <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar">${icon("chevUp", 16)}</button>
               </div>
-              ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
-              ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:6px 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
-              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
-              <div class="vt-sets">
-                ${e.sets.length ? setCapsHTML(t, uni) : ""}
-                ${(() => {
-                  let n = 0; // las efectivas se numeran 1..n; C/D/F muestran su letra
-                  return e.sets.map((st, setIdx) => {
-                    const stype = getSetType(st);
-                    const label = stype === "warmup" ? "C" : stype === "dropset" ? "D" : stype === "failed" ? "F" : String(++n);
-                    return setRowHTML(t, st, exIdx, setIdx, prior, label, uni);
-                  }).join("");
-                })()}
-              </div>
-              <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
             </div>
+            ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
+            ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:6px 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
+            ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
+            <div class="vt-sets">
+              ${e.sets.length ? setCapsHTML(t, uni) : ""}
+              ${(() => {
+                let n = 0; // las efectivas se numeran 1..n; C/D/F muestran su letra
+                return e.sets.map((st, setIdx) => {
+                  const stype = getSetType(st);
+                  const label = stype === "warmup" ? "C" : stype === "dropset" ? "D" : stype === "failed" ? "F" : String(++n);
+                  return setRowHTML(t, st, exIdx, setIdx, prior, label, uni);
+                }).join("");
+              })()}
+            </div>
+            <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
           </div>
         </div>`;
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
-    ${editMode ? organizeActionBarHTML() : `<div class="vt-sticky-footer vt-footer-split">
+    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer vt-footer-split">
       <button class="vt-btn-ghost vt-danger" data-a="session-discard">Descartar</button>
       <button class="vt-btn-primary vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
     </div>`}`;
@@ -1924,7 +2007,7 @@ function finishSession() {
     askConfirm("No marcaste ninguna serie. ¿Descartar la sesión completa?", () => {
       ui.activeSession = null;
       persistActiveSession(); // limpia el autoguardado, ya no hay sesión que recuperar
-      ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
+      ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
       stopRest(); render();
     }, true);
     return;
@@ -2020,6 +2103,7 @@ function finishSession() {
     ui.openNotes.clear();
     ui.openExNotes.clear();
     ui.exerciseEditMode = false;
+    ui.exerciseEditDraft = null;
     ui.selectedExercises.clear();
     ui.collapsedExercises.clear();
     stopRest();
@@ -2252,9 +2336,58 @@ function endSwipe() {
 document.addEventListener("touchend", endSwipe);
 document.addEventListener("touchcancel", endSwipe);
 
+/* ------------------- Mantener presionado: entra a Organizar ------------------- */
+// Mantener el dedo ~500ms sobre el NOMBRE de un ejercicio (fuera del modo
+// Organizar) entra al modo con ese ejercicio ya preseleccionado. Gesto de
+// temporizador, fuera del sistema de delegación de "click" — se cancela si
+// hay movimiento significativo antes de cumplirse (no compite con el scroll).
+// Se ata solo al <h3> del bloque (nombre/cabecera), nunca a sus controles:
+// en la sesión activa el <h3> convive con descanso/nota/colapsar pero es un
+// elemento propio sin acción de click encima, así que no hace falta excluir
+// nada explícitamente — inputs y botones quedan afuera del selector solo.
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_TOLERANCE = 10; // px
+let longPressTimer = null;
+let longPressStart = null; // {x, y}
+let suppressClickUntil = 0; // evita que el tap que dispara el long-press también gatille su click normal
+
+function cancelLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  longPressStart = null;
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if (ui.exerciseEditMode) return; // el long-press solo sirve para ENTRAR, no hace nada ya adentro
+  if (!ui.editingRoutine && !ui.activeSession) return;
+  const h3 = e.target.closest(".vt-block h3");
+  if (!h3) return;
+  const blockEl = h3.closest("[data-block-idx]");
+  if (!blockEl) return;
+  const idx = +blockEl.dataset.blockIdx;
+  longPressStart = { x: e.clientX, y: e.clientY };
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    if (!longPressStart) return;
+    longPressStart = null;
+    enterOrganizeMode(idx);
+    suppressClickUntil = Date.now() + 400;
+  }, LONG_PRESS_MS);
+});
+document.addEventListener("pointermove", (e) => {
+  if (!longPressStart) return;
+  const dx = e.clientX - longPressStart.x, dy = e.clientY - longPressStart.y;
+  if (Math.hypot(dx, dy) > LONG_PRESS_TOLERANCE) cancelLongPress();
+});
+document.addEventListener("pointerup", cancelLongPress);
+document.addEventListener("pointercancel", cancelLongPress);
+
 /* ------------------------------------ Eventos ------------------------------------ */
 
 document.addEventListener("click", (e) => {
+  // Si un mantener-presionado acaba de disparar (entrar a Organizar), el tap
+  // que lo soltó no debe además ejecutar la acción normal del elemento
+  // (ej. el toggle de colapsar de una fila colapsada) — ver long-press más abajo.
+  if (Date.now() < suppressClickUntil) return;
   const el = e.target.closest("[data-a]");
   if (!el) return;
   // El fondo oscuro cierra el modal, pero un clic dentro del panel no debe cerrarlo.
@@ -2269,6 +2402,7 @@ document.addEventListener("click", (e) => {
       ui.editingRoutine = null;
       ui.manageGroups = false;
       ui.exerciseEditMode = false;
+      ui.exerciseEditDraft = null;
       ui.selectedExercises.clear();
       render();
       break;
@@ -2405,7 +2539,7 @@ document.addEventListener("click", (e) => {
     /* Editor de rutina */
     case "editor-cancel":
       ui.editingRoutine = null;
-      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
       render();
       break;
     case "editor-loadmode": {
@@ -2432,16 +2566,14 @@ document.addEventListener("click", (e) => {
       if (i >= 0) routines[i] = stamped; else routines = [stamped, ...routines];
       persistRoutines();
       ui.editingRoutine = null;
-      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
       render();
       break;
     }
 
     /* Modo "Organizar ejercicios" (compartido: editor de rutina y sesión activa) */
     case "exercise-editmode-toggle":
-      ui.exerciseEditMode = !ui.exerciseEditMode;
-      ui.selectedExercises.clear();
-      render();
+      enterOrganizeMode(null);
       break;
     case "exercise-select-toggle": {
       const idx = +el.dataset.idx;
@@ -2450,32 +2582,19 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "organize-delete": {
-      const inSession = !ui.editingRoutine && !!ui.activeSession;
-      const list = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
+      // Elimina del BORRADOR nomás — nada se pierde de verdad todavía (se
+      // puede seguir "Cancelar"), así que acá no hay confirmación ni se toca
+      // explicitlyRemoved/runningTimer: eso se resuelve una sola vez en
+      // "Guardar cambios" (exercise-editmode-save), comparando contra el
+      // array real que sigue intacto.
       const indices = [...ui.selectedExercises];
-      const doDelete = () => {
-        indices.slice().sort((a, b) => b - a).forEach((i) => {
-          if (inSession) {
-            const ex = list[i];
-            (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
-            if (runningTimer) {
-              if (runningTimer.exIdx === i) runningTimer = null;
-              else if (runningTimer.exIdx > i) runningTimer.exIdx--;
-            }
-          }
-          list.splice(i, 1);
-        });
-        ui.selectedExercises.clear();
-        render();
-      };
-      const hasDone = inSession && indices.some((i) => list[i].sets.some((st) => st.done));
-      if (hasDone) askConfirm("Algunos de estos ejercicios tienen series marcadas como hechas. ¿Eliminarlos de todas formas?", doDelete, true);
-      else doDelete();
+      indices.slice().sort((a, b) => b - a).forEach((i) => ui.exerciseEditDraft.splice(i, 1));
+      ui.selectedExercises.clear();
+      render();
       break;
     }
     case "organize-group": {
-      const list = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
-      groupAsSuperset(list, [...ui.selectedExercises]);
+      groupAsSuperset(ui.exerciseEditDraft, [...ui.selectedExercises]);
       ui.selectedExercises.clear();
       render();
       break;
@@ -2486,6 +2605,83 @@ document.addEventListener("click", (e) => {
       ui.picker = "replace";
       ui.pickerQuery = "";
       render();
+      break;
+    }
+    case "exercise-editmode-cancel":
+      // El array real nunca se tocó — el borrador simplemente se descarta.
+      ui.exerciseEditMode = false;
+      ui.exerciseEditDraft = null;
+      ui.selectedExercises.clear();
+      render();
+      break;
+    case "exercise-editmode-save": {
+      const draft = ui.exerciseEditDraft;
+      const stripOrd = (list) => list.map(({ __ord, ...rest }) => rest);
+
+      if (ui.editingRoutine) {
+        ui.editingRoutine.exercises = stripOrd(draft);
+        ui.exerciseEditMode = false;
+        ui.exerciseEditDraft = null;
+        ui.selectedExercises.clear();
+        render();
+        break;
+      }
+
+      if (ui.activeSession) {
+        const original = ui.activeSession.exercises;
+        // __ord viaja con cada item del borrador pase lo que pase (reordenar/
+        // agrupar/reemplazar no lo tocan) — lo que falta acá es justo lo que
+        // se eliminó de verdad, comparado contra el array real (intacto).
+        const survivingOrds = new Set(draft.map((it) => it.__ord));
+        const removed = original.filter((it, i) => !survivingOrds.has(i));
+        const doneLost = removed.reduce((a, ex) => a + ex.sets.filter((st) => st.done).length, 0);
+
+        // Mapa índice-original (__ord) → índice-nuevo, para recolocar TODO lo
+        // que en `ui` está indexado por exIdx de la sesión (colapsados, notas
+        // abiertas, el cronómetro corriendo) — sin esto quedan apuntando a la
+        // posición vieja y terminan aplicados al ejercicio equivocado tras
+        // eliminar/reordenar/agrupar. Los que ya no sobreviven simplemente se pierden.
+        const ordToNewIdx = new Map(draft.map((it, newIdx) => [it.__ord, newIdx]));
+        const remapIdxSet = (set) => {
+          const out = new Set();
+          set.forEach((idx) => { const n = ordToNewIdx.get(idx); if (n !== undefined) out.add(n); });
+          return out;
+        };
+
+        const commit = () => {
+          // Recoloca (o detiene, si su ejercicio ya no está) el cronómetro
+          // corriendo — recién ahora, porque hasta este momento el array real
+          // no se había tocado todavía (el borrador era descartable).
+          if (runningTimer) {
+            const newIdx = ordToNewIdx.get(runningTimer.exIdx);
+            if (newIdx === undefined) runningTimer = null;
+            else runningTimer.exIdx = newIdx;
+          }
+          ui.collapsedExercises = remapIdxSet(ui.collapsedExercises);
+          ui.openExNotes = remapIdxSet(ui.openExNotes);
+          const remappedOpenNotes = new Set();
+          ui.openNotes.forEach((key) => {
+            const [exIdxStr, setIdxStr] = key.split(":");
+            const n = ordToNewIdx.get(+exIdxStr);
+            if (n !== undefined) remappedOpenNotes.add(`${n}:${setIdxStr}`);
+          });
+          ui.openNotes = remappedOpenNotes;
+          removed.forEach((ex) => {
+            (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
+          });
+          ui.activeSession.exercises = stripOrd(draft);
+          ui.exerciseEditMode = false;
+          ui.exerciseEditDraft = null;
+          ui.selectedExercises.clear();
+          render();
+        };
+
+        if (doneLost > 0) {
+          askConfirm(`Vas a perder ${doneLost} serie${doneLost !== 1 ? "s" : ""} marcada${doneLost !== 1 ? "s" : ""} de los ejercicios eliminados. ¿Guardar los cambios de todas formas?`, commit, true);
+        } else {
+          commit();
+        }
+      }
       break;
     }
 
@@ -2599,14 +2795,14 @@ document.addEventListener("click", (e) => {
         ui.activeSession = null;
         persistActiveSession(); // limpia el autoguardado, se descartó a propósito
         ui.openNotes.clear(); ui.openExNotes.clear();
-        ui.exerciseEditMode = false; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
+        ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
         stopRest(); render();
       }, true);
       break;
     case "session-finish": finishSession(); break;
     case "session-minimize":
       ui.sessionMinimized = true;
-      ui.exerciseEditMode = false; ui.selectedExercises.clear();
+      ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
       render();
       break;
     case "session-restore": ui.sessionMinimized = false; render(); break;
@@ -2859,39 +3055,40 @@ function pickExercise(id) {
     }
   } else if (ui.picker === "editor" && ui.editingRoutine) {
     const t = exType(id);
-    ui.editingRoutine.exercises.push({
+    const newItem = {
       exerciseId: id, targetSets: 3, targetReps: 8, targetWeight: 0,
       targetSeconds: t === "time" ? 30 : undefined,
-    });
+    };
+    // Si el picker se abrió estando en modo Organizar, agrega al BORRADOR
+    // (no al array real) — si no, quedaba fuera de lo que se ve/guarda ahí.
+    if (ui.exerciseEditMode && ui.exerciseEditDraft) ui.exerciseEditDraft.push({ ...newItem, __ord: nextDraftOrd-- });
+    else ui.editingRoutine.exercises.push(newItem);
   } else if (ui.picker === "session" && ui.activeSession) {
     const t = exType(id);
-    ui.activeSession.exercises.push({ exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] });
+    const newItem = { exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] };
+    if (ui.exerciseEditMode && ui.exerciseEditDraft) ui.exerciseEditDraft.push({ ...newItem, __ord: nextDraftOrd-- });
+    else ui.activeSession.exercises.push(newItem);
   } else if (ui.picker === "replace") {
     const idx = ui.replaceExerciseIdx;
     const newType = exType(id);
-    if (ui.editingRoutine) {
-      const it = ui.editingRoutine.exercises[idx];
-      const shapeChanged = exType(it.exerciseId) !== newType;
+    const draft = ui.exerciseEditDraft;
+    // Reemplazar SIEMPRE trae los valores del ejercicio NUEVO (su propio
+    // historial real, o los defaults de siempre si nunca se hizo) — nunca los
+    // del ejercicio que se está sacando. Opera sobre el borrador del modo
+    // Organizar, igual que reordenar/eliminar/agrupar.
+    if (draft && ui.editingRoutine) {
+      const it = draft[idx];
       it.exerciseId = id;
-      if (shapeChanged) {
-        // Reconstruye los targets para el tipo nuevo, sin dejar campos rotos
-        // (ej. segundos en un ejercicio que ahora es de peso).
-        delete it.targetReps; delete it.targetWeight; delete it.targetSeconds;
-        delete it.targetPercent; delete it.loadMode;
-        it.targetSets = it.targetSets || 3;
-        if (newType === "time") it.targetSeconds = 30;
-        else { it.targetReps = 8; it.targetWeight = 0; }
-      }
-    } else if (ui.activeSession) {
-      const e = ui.activeSession.exercises[idx];
-      // El type solo no basta: unilateral cambia la forma del set (reps vs
-      // repsL/repsR) aunque el type sea el mismo (ej. Sentadilla → Zancada búlgara).
-      const shapeChanged = exType(e.exerciseId) !== newType || exUnilateral(e.exerciseId) !== exUnilateral(id);
+      // Limpia todo lo del ejercicio anterior antes de reconstruir, para no
+      // dejar campos rotos (ej. segundos en un ejercicio que ahora es de peso).
+      delete it.targetReps; delete it.targetWeight; delete it.targetSeconds;
+      delete it.targetPercent; delete it.loadMode;
+      Object.assign(it, editorTargetFromHistory(id, newType));
+    } else if (draft && ui.activeSession) {
+      const e = draft[idx];
       e.exerciseId = id;
-      if (shapeChanged) {
-        e.target = null;
-        e.sets = e.sets.map(() => defaultSet(newType, null, null, exUnilateral(id)));
-      }
+      e.target = null;
+      e.sets = sessionSetsFromHistory(id, newType, exUnilateral(id));
     }
     ui.replaceExerciseIdx = null;
   }

@@ -212,7 +212,9 @@ button, svg {
   margin: 0; letter-spacing: 0.01em;
   text-transform: none;
 }
-/* Manija de arrastre para reordenar ejercicios (editor de rutina y sesión activa). */
+/* Manija de arrastre para reordenar ejercicios — SOLO existe en modo
+   Organizar (exerciseOrganizeRowHTML); la vista normal no la renderiza en
+   absoluto, así el bloque recupera todo el ancho horizontal sin hueco fantasma. */
 .vt-block-row { display: flex; align-items: flex-start; gap: 6px; }
 .vt-block-body { flex: 1; min-width: 0; }
 .vt-drag-handle {
@@ -247,23 +249,49 @@ button, svg {
 .vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
 .vt-select-circle.is-on::after { content: "✓"; font-size: 13px; line-height: 1; }
 
-/* Barra de acciones sobre la selección — mismo nivel visual que las otras
-   barras flotantes, pero sticky/fixed independiente (z-index propio, entre
-   las barras flotantes y los modales). */
-.vt-organize-bar {
+/* Pulso breve al entrar a Organizar por mantener presionado (~180ms, sobre la
+   fila compacta ya en modo Organizar) — feedback de que el gesto se registró. */
+@keyframes vt-organize-pulse {
+  0% { transform: scale(0.97); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.vt-organize-pulse { animation: vt-organize-pulse 180ms ease-out; }
+
+/* Wrapper fijo compartido por las dos barras del modo Organizar (selección +
+   Cancelar/Guardar) — mismo patrón que #floating-stack (restbar +
+   minimized-bar): cada una vive adentro como bloque normal, así se apilan
+   solas sin coordinar posiciones a mano; si la de selección no está (nada
+   elegido) el wrapper igual queda bien con una sola. */
+.vt-organize-footer-wrap {
   position: fixed;
   left: 50%; transform: translateX(-50%);
   bottom: calc(64px + env(safe-area-inset-bottom));
   width: 100%; max-width: 480px;
+  z-index: 45;
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* Barra de acciones sobre la selección — pill flotante (ya no fija/sola: es
+   un hijo normal del wrapper de arriba). */
+.vt-organize-bar {
   background: var(--surface-2);
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px;
   padding: 12px 16px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  z-index: 45;
-  box-shadow: 0 -4px 18px rgba(0,0,0,0.35);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
 .vt-organize-count { font-size: 13px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
 .vt-organize-actions { display: flex; gap: 4px; }
+/* Cancelar / Guardar cambios — única forma de salir del modo Organizar,
+   mismo tratamiento visual que el footer de "Finalizar sesión". */
+.vt-organize-savebar {
+  display: flex; gap: 10px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+}
+.vt-organize-savebar .vt-btn-ghost { flex: 1; justify-content: center; }
+.vt-organize-savebar .vt-btn-primary { flex: 1; }
 
 /* ------------------- Ejercicio colapsado (sesión activa) ----------------- */
 .vt-collapsed-row {
