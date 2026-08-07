@@ -89,7 +89,11 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   exercises = DEFAULT_EXERCISES.map((e) => ({ ...e }));
   save("custom-exercises", exercises);
 }
-let settings = Object.assign({ sound: true, vibrate: true, featuredExercises: [], openFolders: [], openExerciseGroups: [] }, load("settings", {}));
+let settings = Object.assign({
+  sound: true, vibrate: true, featuredExercises: [], openFolders: [], openExerciseGroups: [],
+  apiKeys: { volleyball: "" },        // pestaña Partidos — namespaced por deporte, hoy solo vóleibol
+  favoriteLeagues: { volleyball: [] }, // ids de liga marcados con ★
+}, load("settings", {}));
 let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
 let exerciseGroups = load("exercise-groups", null); // [{name, color}]
 if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
@@ -97,12 +101,32 @@ if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
   save("exercise-groups", exerciseGroups);
 }
 
+// Pestaña Partidos (vóleibol) — namespaced por deporte (`.volleyball`) para
+// poder sumar otros deportes más adelante sin migrar estas llaves.
+let leaguesCatalog = load("leagues-catalog", null);
+if (!leaguesCatalog?.volleyball) leaguesCatalog = { volleyball: { updatedAt: null, items: [] } };
+let matchesCache = load("matches-cache", null);
+if (!matchesCache?.volleyball) matchesCache = { volleyball: {} };
+let standingsCache = load("standings-cache", null);
+if (!standingsCache?.volleyball) standingsCache = { volleyball: {} };
+let apiUsage = load("api-usage", null);
+if (!apiUsage?.volleyball) apiUsage = { volleyball: { limit: null, remaining: null, updatedAt: null } };
+// Forma reciente (/last-five-games) y head-to-head (/head-2-head) — bajo demanda
+// desde el detalle de partido (Bloque 5), TTL 24h igual que matches-cache.
+let teamStatsCache = load("team-stats-cache", null);
+if (!teamStatsCache?.volleyball) teamStatsCache = { volleyball: { lastFive: {}, h2h: {} } };
+
 const persistRoutines = () => save("routines", routines);
 const persistSessions = () => save("sessions", sessions);
 const persistExercises = () => save("custom-exercises", exercises);
 const persistSettings = () => save("settings", settings);
 const persistFolders = () => save("routine-folders", routineFolders);
 const persistGroups = () => save("exercise-groups", exerciseGroups);
+const persistLeaguesCatalog = () => save("leagues-catalog", leaguesCatalog);
+const persistMatchesCache = () => save("matches-cache", matchesCache);
+const persistStandingsCache = () => save("standings-cache", standingsCache);
+const persistApiUsage = () => save("api-usage", apiUsage);
+const persistTeamStatsCache = () => save("team-stats-cache", teamStatsCache);
 
 // Autoguardado de la sesión EN CURSO (distinto de persistSessions, que solo
 // guarda sesiones ya finalizadas) — para sobrevivir a cerrar la pestaña sin
@@ -157,13 +181,26 @@ const ui = {
   selectedExercises: new Set(), // índices (dentro del draft) seleccionados en modo Organizar
   replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
+  // Pestaña Partidos (vóleibol)
+  partidosView: null,          // null | "buscar-ligas"
+  leaguesQuery: "",            // buscador del catálogo de ligas (búsqueda local, no llama a la API)
+  partidosActiveLeagues: null, // null | Set<Number> de ligas activas en el toggle — null = "todas", se recalcula al entrar a la pestaña
+  partidosRefreshingIds: new Set(), // ids de liga con un refresco de partidos en curso ahora mismo
+  catalogRefreshing: false,
+  catalogRefreshMsg: "",
+  partidosMatchDetail: null,   // null | { matchId, leagueId } — detalle de partido abierto
+  partidosMatchExtra: null,    // null | { lfHome, lfAway, h2h } — forma reciente + head-to-head (bajo demanda)
+  partidosMatchLoading: false,
+  partidosStandingsLeague: null, // null | leagueId de la tabla de posiciones abierta
+  standingsLoading: false,
+  standingsErrorMsg: "",
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
 // el resto de la app). onYes se guarda y se ejecuta recién si el usuario
 // toca "Confirmar"/"Eliminar"; si cancela o cierra, no pasa nada.
-function askConfirm(message, onYes, danger = false) {
-  ui.confirmDialog = { message, danger, onYes };
+function askConfirm(message, onYes, danger = false, onNo = null) {
+  ui.confirmDialog = { message, danger, onYes, onNo };
   render();
 }
 
@@ -566,6 +603,7 @@ const NAV_ITEMS = [
   { id: "ejercicios", label: "Ejercicios", ic: "barbell" },
   { id: "historial", label: "Historial", ic: "history" },
   { id: "progreso", label: "Progreso", ic: "trend" },
+  { id: "partidos", label: "Partidos", ic: "calendar" },
   { id: "ajustes", label: "Ajustes", ic: "sliders" },
 ];
 
@@ -579,6 +617,7 @@ function render() {
   else if (ui.tab === "ejercicios") view = ui.manageGroups ? groupsManagerHTML() : exercisesManagerHTML();
   else if (ui.tab === "historial") view = historyHTML();
   else if (ui.tab === "progreso") view = progressHTML();
+  else if (ui.tab === "partidos") view = partidosHTML();
   else if (ui.tab === "ajustes") view = settingsHTML();
 
   $app.innerHTML = `
@@ -1682,7 +1721,579 @@ function settingsHTML() {
         <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
       </div>
     </div>
+    <p class="vt-section-eyebrow" id="ajustes-partidos-section" style="margin-top:26px">Partidos</p>
+    <div class="vt-settings-row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div class="vt-settings-label">API key de vóleibol<small>Highlightly — se usa solo en la pestaña Partidos</small></div>
+      <input type="text" class="vt-input" placeholder="Pega tu API key…" value="${esc(settings.apiKeys?.volleyball || "")}"
+        data-i="api-key-volleyball" autocomplete="off" autocorrect="off" spellcheck="false">
+      ${quotaLabelHTML()}
+    </div>
     <p class="vt-muted" style="text-align:center;margin-top:16px">GOAT · datos guardados en este dispositivo</p>`;
+}
+
+/* ------------------------------- Vista Partidos (vóleibol) ------------------------------ */
+// Pestaña independiente del resto de la app: rutinas/sesiones/ejercicios/progreso no se
+// tocan ni se leen desde acá. Todo lo que consume la Volleyball API de Highlightly vive
+// en esta sección. Namespaced por deporte (".volleyball") pensando en sumar otros más
+// adelante — hoy solo se construye vóleibol.
+
+const VOLLEYBALL_API_BASE = "https://volleyball.highlightly.net";
+const MATCH_TERMINAL_STATES = ["Finished", "Cancelled", "Awarded", "Abandoned"];
+const MATCH_LIVE_STATES = ["First set", "Second set", "Third set", "Fourth set", "Fifth set"];
+const CACHE_TTL_24H = 24 * 3600 * 1000;
+const isCacheFresh = (fetchedAt) => {
+  if (!fetchedAt) return false;
+  const age = Date.now() - new Date(fetchedAt).getTime();
+  return !isNaN(age) && age < CACHE_TTL_24H;
+};
+// Ya jugado o en curso — a diferencia de shouldRefreshLeague (que solo mira
+// los estados terminales), acá "en curso" también cuenta: el detalle de
+// partido (Bloque 5) muestra resultado/sets apenas arranca el primer set.
+const hasScoreYet = (m) => MATCH_TERMINAL_STATES.includes(m.state?.description) || MATCH_LIVE_STATES.includes(m.state?.description);
+
+// Única puerta de entrada a la Volleyball API — ninguna otra función llama fetch
+// directo contra ella. Nunca lanza: siempre resuelve { ok:true, data } o
+// { ok:false, error }. Tras CUALQUIER respuesta (éxito o error de la API) intenta
+// leer los headers de cuota y actualizar api-usage; si la respuesta no los trae,
+// deja los valores anteriores tal cual (no los pisa con null).
+async function callVolleyballApi(path, params = {}) {
+  const key = (settings.apiKeys?.volleyball || "").trim();
+  if (!key) return { ok: false, error: "Configura tu API key en Ajustes → Partidos." };
+
+  const usage = apiUsage.volleyball;
+  if (typeof usage.remaining === "number" && usage.remaining <= 5) {
+    const proceed = await new Promise((resolve) => {
+      askConfirm(
+        `Quedan ${usage.remaining} solicitudes hoy según la última respuesta conocida (puede estar desactualizado si se usó la key fuera de la app). ¿Continuar igual?`,
+        () => resolve(true), false, () => resolve(false),
+      );
+    });
+    if (!proceed) return { ok: false, error: "Cancelado (cuota baja)." };
+  }
+
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") qs.set(k, v); });
+  const url = `${VOLLEYBALL_API_BASE}${path}${qs.toString() ? "?" + qs.toString() : ""}`;
+
+  // Dominio directo de Highlightly (no el gateway de rapidapi.com) — no manda
+  // x-rapidapi-host porque ese header solo lo exige la ruta vía rapidapi.com.
+  let res;
+  try {
+    res = await fetch(url, { headers: { "x-rapidapi-key": key } });
+  } catch {
+    return { ok: false, error: "No se pudo conectar con la API (revisa tu conexión)." };
+  }
+
+  // Confirmado con key real: llamando directo a volleyball.highlightly.net
+  // desde el navegador, estos headers casi nunca llegan — el servidor no los
+  // incluye en Access-Control-Expose-Headers, así que el CORS del browser los
+  // esconde de JS aunque sí viajen en la respuesta real (fetch().headers solo
+  // expone `content-type` en la práctica). No hay arreglo posible sin un
+  // backend propio (fuera de alcance, ver CLAUDE.md). El fallback ya definido
+  // abajo (dejar los valores anteriores intactos) cubre este caso tal cual.
+  const limitHdr = res.headers.get("x-ratelimit-requests-limit");
+  const remHdr = res.headers.get("x-ratelimit-requests-remaining");
+  if (limitHdr !== null || remHdr !== null) {
+    if (limitHdr !== null) usage.limit = num(limitHdr);
+    if (remHdr !== null) usage.remaining = num(remHdr);
+    usage.updatedAt = new Date().toISOString();
+    persistApiUsage();
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return { ok: false, error: (data && (data.message || data.error)) || `Error ${res.status} al consultar la API.` };
+  return { ok: true, data };
+}
+
+// La API envuelve las listas en { data:[...], pagination:{...} } — defensivo por
+// si algún endpoint devolviera el array pelado.
+const apiListOf = (data) => Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+
+function quotaLabelHTML() {
+  const u = apiUsage.volleyball;
+  const text = (typeof u.remaining === "number" && typeof u.limit === "number")
+    ? `${u.remaining}/${u.limit} solicitudes hoy`
+    : "Sin datos de cuota todavía";
+  return `<p class="vt-muted-sm">${esc(text)}</p>`;
+}
+
+function currentSeasonFor(leagueId) {
+  const league = leaguesCatalog.volleyball.items.find((l) => String(l.id) === String(leagueId));
+  const seasons = (league?.seasons || []).map((s) => s.season).filter((n) => typeof n === "number");
+  return seasons.length ? Math.max(...seasons) : new Date().getFullYear();
+}
+
+// Bloque 8 — true si conviene refrescar el caché de partidos de esta liga.
+function shouldRefreshLeague(leagueId) {
+  const entry = matchesCache.volleyball[leagueId];
+  if (!entry) return true;
+  const ageMs = Date.now() - new Date(entry.fetchedAt).getTime();
+  if (isNaN(ageMs) || ageMs > 24 * 3600 * 1000) return true;
+  const now = Date.now();
+  return (entry.matches || []).some((m) => {
+    if (MATCH_TERMINAL_STATES.includes(m.state?.description)) return false;
+    const t = new Date(m.date).getTime() + 3 * 3600 * 1000;
+    return !isNaN(t) && t < now;
+  });
+}
+
+// Pagina /matches para una liga y reemplaza su entrada de caché completa. Si
+// alguna página falla, deja el caché anterior intacto y propaga el error.
+async function refreshLeagueMatches(leagueId) {
+  const season = currentSeasonFor(leagueId);
+  let all = [];
+  let offset = 0;
+  const limit = 100;
+  while (true) {
+    const res = await callVolleyballApi("/matches", { leagueId, season, limit, offset });
+    if (!res.ok) return res;
+    const page = apiListOf(res.data);
+    all = all.concat(page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+  matchesCache.volleyball[leagueId] = { fetchedAt: new Date().toISOString(), season, matches: all };
+  persistMatchesCache();
+  return { ok: true, data: all };
+}
+
+function findMatch(leagueId, matchId) {
+  const entry = matchesCache.volleyball[leagueId];
+  return entry?.matches?.find((m) => String(m.id) === String(matchId));
+}
+
+// Bloque 5 — forma reciente y head-to-head, bajo demanda, con TTL 24h propio
+// (mismo criterio que matches-cache pero en team-stats-cache, namespaced por
+// deporte igual que el resto).
+async function getLastFiveGames(teamId) {
+  const cache = teamStatsCache.volleyball.lastFive[teamId];
+  if (cache && isCacheFresh(cache.fetchedAt)) return { ok: true, data: cache.data };
+  const res = await callVolleyballApi("/last-five-games", { teamId });
+  if (!res.ok) return res;
+  const data = apiListOf(res.data);
+  teamStatsCache.volleyball.lastFive[teamId] = { fetchedAt: new Date().toISOString(), data };
+  persistTeamStatsCache();
+  return { ok: true, data };
+}
+
+const h2hKey = (idOne, idTwo) => `${idOne}-${idTwo}`;
+async function getHeadToHead(idOne, idTwo) {
+  const key = h2hKey(idOne, idTwo);
+  const cache = teamStatsCache.volleyball.h2h[key];
+  if (cache && isCacheFresh(cache.fetchedAt)) return { ok: true, data: cache.data };
+  const res = await callVolleyballApi("/head-2-head", { teamIdOne: idOne, teamIdTwo: idTwo });
+  if (!res.ok) return res;
+  const data = apiListOf(res.data);
+  teamStatsCache.volleyball.h2h[key] = { fetchedAt: new Date().toISOString(), data };
+  persistTeamStatsCache();
+  return { ok: true, data };
+}
+
+// Bloque 6 — tabla de posiciones, TTL 24h en standings-cache (mismo patrón).
+async function openStandings(leagueId) {
+  ui.partidosStandingsLeague = leagueId;
+  ui.standingsErrorMsg = "";
+  const season = currentSeasonFor(leagueId);
+  const key = `${leagueId}-${season}`;
+  const cached = standingsCache.volleyball[key];
+  if (cached && isCacheFresh(cached.fetchedAt)) { render(); return; }
+  ui.standingsLoading = true;
+  render();
+  const res = await callVolleyballApi("/standings", { leagueId, season });
+  ui.standingsLoading = false;
+  if (res.ok) {
+    standingsCache.volleyball[key] = { fetchedAt: new Date().toISOString(), data: res.data };
+    persistStandingsCache();
+  } else {
+    ui.standingsErrorMsg = res.error;
+  }
+  render();
+}
+
+// Bloque 3.1 — trae el catálogo completo de ligas (paginado), reemplaza
+// leagues-catalog.volleyball.items entero.
+async function refreshLeaguesCatalog() {
+  ui.catalogRefreshing = true;
+  ui.catalogRefreshMsg = "";
+  render();
+  let all = [];
+  let offset = 0;
+  const limit = 100;
+  let calls = 0;
+  let lastErr = null;
+  while (true) {
+    const res = await callVolleyballApi("/leagues", { limit, offset });
+    calls++;
+    if (!res.ok) { lastErr = res.error; break; }
+    const page = apiListOf(res.data);
+    all = all.concat(page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+  ui.catalogRefreshing = false;
+  if (lastErr) {
+    ui.catalogRefreshMsg = `Se detuvo tras ${calls} llamada${calls !== 1 ? "s" : ""}: ${lastErr}`;
+  } else {
+    leaguesCatalog.volleyball = {
+      updatedAt: new Date().toISOString(),
+      items: all.map((l) => ({ id: l.id, name: l.name, country: l.country, logo: l.logo, seasons: l.seasons || [] })),
+    };
+    persistLeaguesCatalog();
+    ui.catalogRefreshMsg = `Catálogo actualizado: ${calls} llamada${calls !== 1 ? "s" : ""} · ${all.length} liga${all.length !== 1 ? "s" : ""} guardada${all.length !== 1 ? "s" : ""}.`;
+  }
+  render();
+}
+
+// Se llama al entrar a la pestaña Partidos (ver Bloque 4.1): refresca automáticamente
+// las ligas favoritas que lo necesiten (shouldRefreshLeague), una por una, y va
+// re-renderizando a medida que cada una termina.
+async function enterPartidosTab() {
+  ui.tab = "partidos";
+  ui.partidosView = null;
+  ui.partidosActiveLeagues = null; // se resetea cada vez que se entra — recalcula a "todas activas"
+  ui.catalogRefreshMsg = "";
+  ui.partidosMatchDetail = null;
+  ui.partidosMatchExtra = null;
+  ui.partidosStandingsLeague = null;
+  const favs = settings.favoriteLeagues?.volleyball || [];
+  const hasKey = !!(settings.apiKeys?.volleyball || "").trim();
+  const toRefresh = hasKey ? favs.filter((id) => shouldRefreshLeague(id)) : [];
+  ui.partidosRefreshingIds = new Set(toRefresh);
+  render();
+  for (const id of toRefresh) {
+    await refreshLeagueMatches(id);
+    ui.partidosRefreshingIds.delete(id);
+    render();
+  }
+}
+
+function fmtMatchDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const datePart = d.toLocaleDateString("es-CL", { day: "2-digit", month: "short" });
+  const timePart = d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  return `${datePart} · ${timePart}`;
+}
+
+function teamLogoHTML(team) {
+  return team?.logo
+    ? `<img src="${esc(team.logo)}" alt="" style="width:22px;height:22px;object-fit:contain;flex-shrink:0" onerror="this.style.visibility='hidden'">`
+    : `<span style="width:22px;height:22px;flex-shrink:0"></span>`;
+}
+
+// Toca un partido para abrir su detalle (Bloque 5).
+function matchRowHTML(m, leagueId) {
+  const home = m.homeTeam || {};
+  const away = m.awayTeam || {};
+  const played = MATCH_TERMINAL_STATES.includes(m.state?.description);
+  const score = m.state?.score?.current;
+  return `<div class="vt-block" style="border-left-color:transparent;cursor:pointer" data-a="match-open" data-id="${m.id}" data-league="${leagueId}">
+    <div class="vt-block-row" style="align-items:center">
+      <div class="vt-block-body">
+        <div style="display:flex;align-items:center;gap:8px">${teamLogoHTML(home)}<span>${esc(home.name || "?")}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:5px">${teamLogoHTML(away)}<span>${esc(away.name || "?")}</span></div>
+        <p class="vt-muted" style="margin-top:6px">${icon("calendar", 12)} ${fmtMatchDateTime(m.date)}</p>
+      </div>
+      ${played && score ? `<span class="vt-mono" style="font-weight:600;flex-shrink:0">${esc(String(score))}</span>` : ""}
+    </div>
+  </div>`;
+}
+
+// Confirmado con la doc oficial (openapi.json, VolleyballMatchScoreResponseDto):
+// current/firstSet.."fifthSet" son siempre string "N - M" (con espacios).
+function fmtSetScore(v) {
+  if (v == null || v === "") return null;
+  return String(v).trim();
+}
+const SET_FIELDS = [
+  { key: "firstSet", label: "SET 1" }, { key: "secondSet", label: "SET 2" },
+  { key: "thirdSet", label: "SET 3" }, { key: "fourthSet", label: "SET 4" },
+  { key: "fifthSet", label: "SET 5" },
+];
+function setsTableHTML(m) {
+  const score = m.state?.score || {};
+  const rows = SET_FIELDS.map((s) => ({ ...s, v: fmtSetScore(score[s.key] ?? m[s.key]) })).filter((s) => s.v);
+  if (!rows.length) return "";
+  return `<div class="vt-list" style="margin-top:14px">
+    ${rows.map((s) => `<div class="vt-detail-row"><span>${s.label}</span><span class="vt-mono">${esc(s.v)}</span></div>`).join("")}
+  </div>`;
+}
+
+// VolleyballMatchResponseDto (doc oficial) no trae un campo `winner` — se
+// infiere comparando el marcador final de sets en state.score.current
+// ("3 - 1" = home-away), que es lo único que la API entrega para esto.
+function matchResultForTeam(m, teamId) {
+  const cur = m.state?.score?.current;
+  const homeId = m.homeTeam?.id, awayId = m.awayTeam?.id;
+  if (typeof cur === "string" && cur.includes("-") && homeId != null && awayId != null) {
+    const [a, b] = cur.split("-").map(Number);
+    if (!isNaN(a) && !isNaN(b) && a !== b) {
+      const homeWon = a > b;
+      if (String(homeId) === String(teamId)) return homeWon ? "W" : "L";
+      if (String(awayId) === String(teamId)) return !homeWon ? "W" : "L";
+    }
+  }
+  return null;
+}
+
+function formRowHTML(label, lfResult, teamId) {
+  if (!lfResult) return `<p class="vt-muted-sm">${esc(label)}: sin datos</p>`;
+  if (!lfResult.ok) return `<p class="vt-muted-sm">${esc(label)}: ${esc(lfResult.error || "no disponible")}</p>`;
+  const letters = (lfResult.data || []).map((g) => matchResultForTeam(g, teamId)).filter(Boolean);
+  if (!letters.length) return `<p class="vt-muted-sm">${esc(label)}: sin datos</p>`;
+  return `<div class="vt-detail-row"><span>${esc(label)}</span>
+    <span class="vt-mono">${letters.map((l) => `<span style="color:${l === "W" ? "var(--green)" : "var(--red)"};font-weight:700;margin-left:6px">${l}</span>`).join("")}</span>
+  </div>`;
+}
+
+function h2hListHTML(h2h) {
+  if (!h2h) return `<p class="vt-muted-sm">Sin datos.</p>`;
+  if (!h2h.ok) return `<p class="vt-muted-sm">${esc(h2h.error || "No se pudo cargar.")}</p>`;
+  const games = h2h.data || [];
+  if (!games.length) return `<p class="vt-muted-sm">Sin enfrentamientos previos registrados.</p>`;
+  return `<div class="vt-list">${games.map((g) => `
+    <div class="vt-detail-row">
+      <span>${esc(g.homeTeam?.name || "?")} vs ${esc(g.awayTeam?.name || "?")}</span>
+      <span class="vt-mono">${esc(g.state?.score?.current ? String(g.state.score.current) : fmtDateShort(g.date))}</span>
+    </div>`).join("")}</div>`;
+}
+
+function matchDetailHTML() {
+  const { matchId, leagueId } = ui.partidosMatchDetail;
+  const backHeader = `<header class="vt-header">
+      <button class="vt-btn-icon" data-a="match-detail-close" aria-label="Volver">${icon("back", 20)}</button>
+      <h1 class="vt-header-title">Partido</h1>
+    </header>`;
+
+  const m = findMatch(leagueId, matchId);
+  if (!m) return `${backHeader}${emptyHTML("No encontrado", "Este partido ya no está en el caché — actualiza la liga desde el calendario.", "")}`;
+
+  const home = m.homeTeam || {};
+  const away = m.awayTeam || {};
+  const withScore = hasScoreYet(m);
+  const score = m.state?.score?.current;
+  const wk = m.week ? String(m.week).toUpperCase() : null;
+  const extra = ui.partidosMatchExtra;
+  const loading = ui.partidosMatchLoading;
+
+  return `${backHeader}
+    ${wk ? `<p class="vt-section-eyebrow">${esc(wk)}</p>` : ""}
+    <div style="text-align:center;margin:10px 0 4px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">
+        ${teamLogoHTML(home)}<span style="font-weight:600">${esc(home.name || "?")}</span>
+      </div>
+      ${withScore && score ? `<div class="vt-mono" style="font-size:22px;font-weight:700;margin:6px 0">${esc(String(score))}</div>` : `<p class="vt-muted-sm" style="margin:6px 0">vs</p>`}
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:6px">
+        ${teamLogoHTML(away)}<span style="font-weight:600">${esc(away.name || "?")}</span>
+      </div>
+    </div>
+    <p class="vt-muted" style="text-align:center">${icon("calendar", 12)} ${fmtMatchDateTime(m.date)}${m.state?.description ? ` · ${esc(m.state.description)}` : ""}</p>
+    ${withScore ? setsTableHTML(m) : ""}
+    <p class="vt-section-eyebrow" style="margin-top:22px">Forma reciente</p>
+    ${loading && !extra ? `<p class="vt-muted-sm">Cargando…</p>` : `
+      ${formRowHTML(home.name || "Local", extra?.lfHome, home.id)}
+      ${formRowHTML(away.name || "Visita", extra?.lfAway, away.id)}
+    `}
+    <p class="vt-section-eyebrow" style="margin-top:22px">Head-to-head</p>
+    ${loading && !extra ? `<p class="vt-muted-sm">Cargando…</p>` : h2hListHTML(extra?.h2h)}`;
+}
+
+// Bloque 6 — nombres de campo confirmados con la doc oficial (openapi.json,
+// VolleyballStandingsDto): sin sets a favor/en contra (la API no los da),
+// en su lugar trae puntos de rally anotados/recibidos en la temporada.
+function standingRowFields(s) {
+  return {
+    position: s.position,
+    team: s.team || {},
+    played: s.gamesPlayed,
+    won: s.wins,
+    lost: s.loses,
+    points: s.points,
+    scoredPoints: s.scoredPoints,
+    receivedPoints: s.receivedPoints,
+  };
+}
+
+function standingsGroupHTML(g) {
+  const rows = (g.standings || []).map(standingRowFields);
+  return `<p class="vt-section-eyebrow" style="margin-top:18px">${esc(g.name || "Tabla")}</p>
+    <div class="vt-standings-table">
+      <div class="vt-standings-row vt-standings-head">
+        <span>#</span><span>Equipo</span><span>PJ</span><span>G</span><span>P</span><span>Pts</span><span>Puntos +/-</span>
+      </div>
+      ${rows.map((r) => `<div class="vt-standings-row">
+        <span class="vt-mono">${r.position}</span>
+        <span class="vt-standings-team">${teamLogoHTML(r.team)}<span>${esc(r.team?.name || "?")}</span></span>
+        <span class="vt-mono">${r.played}</span>
+        <span class="vt-mono">${r.won}</span>
+        <span class="vt-mono">${r.lost}</span>
+        <span class="vt-mono">${r.points}</span>
+        <span class="vt-mono">${r.scoredPoints}-${r.receivedPoints}</span>
+      </div>`).join("")}
+    </div>`;
+}
+
+// Respuesta de /standings (VolleyballStandingsResponseDto) es el objeto
+// { groups, league } directo — sin envoltorio { data, pagination, plan }
+// como /leagues o /matches (confirmado con la doc oficial).
+function standingsHTML() {
+  const leagueId = ui.partidosStandingsLeague;
+  const season = currentSeasonFor(leagueId);
+  const key = `${leagueId}-${season}`;
+  const entry = standingsCache.volleyball[key];
+  const catalogLeague = leaguesCatalog.volleyball.items.find((l) => Number(l.id) === Number(leagueId));
+  const leagueName = catalogLeague?.name || entry?.data?.league?.name || `Liga ${leagueId}`;
+  const loading = ui.standingsLoading;
+
+  const header = `<header class="vt-header">
+      <button class="vt-btn-icon" data-a="standings-close" aria-label="Volver">${icon("back", 20)}</button>
+      <h1 class="vt-header-title">${esc(leagueName)}</h1>
+    </header>
+    <p class="vt-muted-sm">Temporada ${season}</p>`;
+
+  if (loading && !entry) return `${header}<p class="vt-muted-sm" style="margin-top:14px">Cargando tabla…</p>`;
+  if (!entry) {
+    return `${header}
+      ${ui.standingsErrorMsg ? `<p class="vt-muted-sm" style="color:var(--red);margin-top:10px">${esc(ui.standingsErrorMsg)}</p>` : ""}
+      ${emptyHTML("Sin tabla cargada", "No se pudo cargar la tabla de posiciones de esta liga.", "")}`;
+  }
+
+  const groups = entry.data?.groups || [];
+  if (!groups.length) return `${header}${emptyHTML("Sin tabla", "Esta liga todavía no tiene tabla de posiciones publicada.", "")}`;
+
+  return `${header}${groups.map(standingsGroupHTML).join("")}`;
+}
+
+function leagueSectionHTML(id, info) {
+  const entry = matchesCache.volleyball[id];
+  const refreshing = ui.partidosRefreshingIds.has(id);
+  const header = `<div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px">
+      ${info.logo ? `<img src="${esc(info.logo)}" alt="" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" onerror="this.style.visibility='hidden'">` : ""}
+      <h2 class="vt-header-title-sm" style="flex:1;margin:0">${esc(info.name)}</h2>
+      <button class="vt-btn-ghost" data-a="league-standings-open" data-id="${id}" aria-label="Ver tabla de posiciones">${icon("trophy", 15)}</button>
+      <button class="vt-btn-ghost" data-a="league-refresh" data-id="${id}" aria-label="Actualizar" ${refreshing ? "disabled" : ""}>${icon("repeat", 15)}</button>
+    </div>`;
+
+  if (refreshing && !entry) return `${header}<p class="vt-muted-sm">Cargando partidos…</p>`;
+  if (!entry || !(entry.matches || []).length) return `${header}${emptyHTML("Sin partidos", "Todavía no hay partidos cargados para esta liga.", "")}`;
+
+  const matches = [...entry.matches].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const isPlayed = (m) => MATCH_TERMINAL_STATES.includes(m.state?.description);
+  const upcoming = matches.filter((m) => !isPlayed(m));
+  const played = matches.filter(isPlayed).reverse(); // más recientes primero
+
+  // Header de fase/semana (campo `week`) encima de cada tramo con contenido —
+  // sin ningún aviso si no viene, simplemente no se muestra.
+  const rowsHTML = (list) => {
+    let lastWeek;
+    return list.map((m) => {
+      const wk = m.week ? String(m.week).toUpperCase() : null;
+      const weekHeader = wk && wk !== lastWeek ? `<p class="vt-section-eyebrow" style="margin-top:14px">${esc(wk)}</p>` : "";
+      lastWeek = wk ?? lastWeek;
+      return weekHeader + matchRowHTML(m, id);
+    }).join("");
+  };
+
+  return `${header}
+    ${refreshing ? `<p class="vt-muted-sm">Actualizando…</p>` : ""}
+    ${upcoming.length ? `<p class="vt-muted-sm" style="text-transform:uppercase;letter-spacing:.06em">Próximos</p>${rowsHTML(upcoming)}` : ""}
+    ${played.length ? `<p class="vt-muted-sm" style="text-transform:uppercase;letter-spacing:.06em;margin-top:14px">Jugados</p>${rowsHTML(played)}` : ""}`;
+}
+
+function partidosHeaderHTML() {
+  return `<header class="vt-header">
+      ${tabHeaderHTML("Set 06 · Calendario", "Partidos")}
+    </header>
+    ${quotaLabelHTML()}`;
+}
+
+function partidosNoKeyHTML() {
+  return `${partidosHeaderHTML()}
+    ${emptyHTML("Configura tu API key", "Para ver partidos necesitas una API key de Highlightly (vóleibol) — se agrega en Ajustes.",
+      `<button class="vt-btn-primary" data-a="goto-ajustes-partidos">Ir a Ajustes</button>`)}`;
+}
+
+function partidosEmptyFavHTML() {
+  return `${partidosHeaderHTML()}
+    ${emptyHTML("Sin ligas favoritas", "Busca una liga y márcala con ★ para ver su calendario acá.",
+      `<button class="vt-btn-primary" data-a="partidos-buscar-open">Buscar ligas</button>`)}`;
+}
+
+function leaguesSearchListHTML() {
+  const items = leaguesCatalog.volleyball.items;
+  if (!items.length) return emptyHTML("Catálogo vacío", "Toca el botón de arriba para traer todas las ligas disponibles (esto sí usa llamadas a la API).", "");
+  const q = ui.leaguesQuery.trim().toLowerCase();
+  const filtered = q ? items.filter((l) => l.name.toLowerCase().includes(q) || (l.country?.name || "").toLowerCase().includes(q)) : items;
+  if (!filtered.length) return emptyHTML("Sin resultados", "Prueba con otro nombre o país.", "");
+  const favs = new Set((settings.favoriteLeagues.volleyball || []).map(Number));
+  return `<div class="vt-list">${filtered.map((l) => `
+    <div class="vt-block" style="border-left-color:transparent">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${l.logo ? `<img src="${esc(l.logo)}" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.visibility='hidden'">` : `<span style="width:28px;flex-shrink:0"></span>`}
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0">${esc(l.name)}</h3>
+          <p class="vt-muted" style="margin-top:2px">${esc(l.country?.name || "")}</p>
+        </div>
+        <button class="vt-btn-ghost" data-a="league-fav-toggle" data-id="${l.id}" aria-label="Favorito"
+          style="color:${favs.has(Number(l.id)) ? "var(--amber)" : "var(--text-dim)"};font-size:20px">★</button>
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function partidosBuscarLigasHTML() {
+  const catalog = leaguesCatalog.volleyball;
+  const updated = catalog.updatedAt ? `Actualizado ${fmtDate(catalog.updatedAt)}` : "Nunca actualizado";
+  return `
+    <header class="vt-header">
+      <button class="vt-btn-icon" data-a="partidos-buscar-close" aria-label="Volver">${icon("back", 20)}</button>
+      <h1 class="vt-header-title">Buscar ligas</h1>
+      <button class="vt-btn-icon" data-a="leagues-catalog-refresh" aria-label="Actualizar catálogo de ligas" ${ui.catalogRefreshing ? "disabled" : ""}>${icon("repeat", 18)}</button>
+    </header>
+    <p class="vt-muted-sm">${esc(updated)} · ${catalog.items.length} liga${catalog.items.length !== 1 ? "s" : ""} en catálogo</p>
+    ${ui.catalogRefreshing ? `<p class="vt-muted-sm" style="color:var(--blue)">Actualizando catálogo…</p>` : ""}
+    ${!ui.catalogRefreshing && ui.catalogRefreshMsg ? `<p class="vt-muted-sm" style="color:var(--blue)">${esc(ui.catalogRefreshMsg)}</p>` : ""}
+    <div class="vt-search" style="margin:14px 0">${icon("search", 16)}
+      <input placeholder="Buscar liga o país…" value="${esc(ui.leaguesQuery)}" data-i="leagues-q" autocomplete="off">
+    </div>
+    <div id="leagues-search-list">${leaguesSearchListHTML()}</div>`;
+}
+
+function partidosCalendarHTML() {
+  const favs = (settings.favoriteLeagues.volleyball || []).map(Number);
+  const catalog = leaguesCatalog.volleyball.items;
+  const leagueInfo = (id) => catalog.find((l) => Number(l.id) === Number(id)) || { id, name: `Liga ${id}`, country: {}, logo: "" };
+
+  if (ui.partidosActiveLeagues === null) ui.partidosActiveLeagues = new Set(favs);
+  const activeIds = ui.partidosActiveLeagues;
+
+  const togglesHTML = favs.map((id) => {
+    const l = leagueInfo(id);
+    const active = activeIds.has(id);
+    const refreshing = ui.partidosRefreshingIds.has(id);
+    return `<button type="button" class="${active ? "is-active" : ""}" data-a="league-toggle-filter" data-id="${id}">
+      ${l.logo ? `<img src="${esc(l.logo)}" alt="">` : ""}${esc(l.name)}${refreshing ? " …" : ""}
+    </button>`;
+  }).join("");
+
+  const sections = favs.filter((id) => activeIds.has(id)).map((id) => leagueSectionHTML(id, leagueInfo(id))).join("");
+
+  return `${partidosHeaderHTML()}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 4px">
+      <p class="vt-section-eyebrow" style="margin:0">Tus ligas</p>
+      <button class="vt-btn-icon" data-a="partidos-buscar-open" aria-label="Buscar más ligas">${icon("plus", 16)}</button>
+    </div>
+    <div class="vt-metric-toggle vt-metric-toggle-scroll">${togglesHTML}</div>
+    ${sections || emptyHTML("Sin ligas activas", "Activa al menos una liga arriba para ver su calendario.", "")}`;
+}
+
+function partidosHTML() {
+  if (!(settings.apiKeys?.volleyball || "").trim()) return partidosNoKeyHTML();
+  if (ui.partidosMatchDetail) return matchDetailHTML();
+  if (ui.partidosStandingsLeague != null) return standingsHTML();
+  if (ui.partidosView === "buscar-ligas") return partidosBuscarLigasHTML();
+  const favs = settings.favoriteLeagues?.volleyball || [];
+  if (!favs.length) return partidosEmptyFavHTML();
+  return partidosCalendarHTML();
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -2413,13 +3024,13 @@ document.addEventListener("click", (e) => {
   switch (a) {
     case "tab":
       stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
-      ui.tab = el.dataset.tab;
       ui.editingRoutine = null;
       ui.manageGroups = false;
       ui.exerciseEditMode = false;
       ui.exerciseEditDraft = null;
       ui.selectedExercises.clear();
-      render();
+      if (el.dataset.tab === "partidos") enterPartidosTab();
+      else { ui.tab = el.dataset.tab; render(); }
       break;
 
     /* Modal de confirmación propio */
@@ -2431,6 +3042,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "confirm-cancel":
+      ui.confirmDialog?.onNo?.();
       ui.confirmDialog = null;
       render();
       break;
@@ -3058,6 +3670,97 @@ document.addEventListener("click", (e) => {
       processImportedData(data);
       break;
     }
+
+    /* Partidos (vóleibol) */
+    case "goto-ajustes-partidos":
+      ui.tab = "ajustes";
+      render();
+      setTimeout(() => document.getElementById("ajustes-partidos-section")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      break;
+    case "partidos-buscar-open":
+      ui.partidosView = "buscar-ligas";
+      ui.leaguesQuery = "";
+      ui.catalogRefreshMsg = "";
+      render();
+      break;
+    case "partidos-buscar-close":
+      ui.partidosView = null;
+      render();
+      break;
+    case "leagues-catalog-refresh":
+      if (!ui.catalogRefreshing) refreshLeaguesCatalog();
+      break;
+    case "league-fav-toggle": {
+      const lid = Number(id);
+      const favs = settings.favoriteLeagues.volleyball;
+      const i = favs.indexOf(lid);
+      if (i >= 0) favs.splice(i, 1); else favs.push(lid);
+      persistSettings();
+      // Actualiza solo la lista visible — no pierde el foco/scroll del buscador.
+      const list = document.getElementById("leagues-search-list");
+      if (list) list.innerHTML = leaguesSearchListHTML();
+      break;
+    }
+    case "league-toggle-filter": {
+      const lid = Number(id);
+      if (!ui.partidosActiveLeagues) ui.partidosActiveLeagues = new Set((settings.favoriteLeagues.volleyball || []).map(Number));
+      if (ui.partidosActiveLeagues.has(lid)) ui.partidosActiveLeagues.delete(lid); else ui.partidosActiveLeagues.add(lid);
+      render(); // solo filtra sobre el caché ya cargado — no dispara ninguna llamada
+      break;
+    }
+    case "league-refresh": {
+      const lid = Number(id);
+      (async () => {
+        ui.partidosRefreshingIds.add(lid);
+        render();
+        const res = await refreshLeagueMatches(lid);
+        ui.partidosRefreshingIds.delete(lid);
+        if (!res.ok) alert(res.error || "No se pudo actualizar la liga.");
+        render();
+      })();
+      break;
+    }
+    case "match-open": {
+      const leagueId = Number(el.dataset.league);
+      const matchId = el.dataset.id;
+      ui.partidosMatchDetail = { matchId, leagueId };
+      ui.partidosMatchExtra = null;
+      ui.partidosMatchLoading = true;
+      render();
+      // Forma reciente (x2) + head-to-head: bajo demanda, solo para ESTE
+      // partido — nunca se disparan al cargar el calendario. Secuenciales
+      // (no Promise.all) para que el diálogo de cuota baja de
+      // callVolleyballApi, si aparece, no se pise entre llamadas concurrentes.
+      (async () => {
+        const m = findMatch(leagueId, matchId);
+        let lfHome = { ok: false, error: "Sin equipo" };
+        let lfAway = { ok: false, error: "Sin equipo" };
+        let h2h = { ok: false, error: "Sin equipos" };
+        if (m) {
+          const homeId = m.homeTeam?.id, awayId = m.awayTeam?.id;
+          if (homeId != null) lfHome = await getLastFiveGames(homeId);
+          if (awayId != null) lfAway = await getLastFiveGames(awayId);
+          if (homeId != null && awayId != null) h2h = await getHeadToHead(homeId, awayId);
+        }
+        ui.partidosMatchExtra = { lfHome, lfAway, h2h };
+        ui.partidosMatchLoading = false;
+        render();
+      })();
+      break;
+    }
+    case "match-detail-close":
+      ui.partidosMatchDetail = null;
+      ui.partidosMatchExtra = null;
+      render();
+      break;
+    case "league-standings-open":
+      openStandings(Number(id));
+      break;
+    case "standings-close":
+      ui.partidosStandingsLeague = null;
+      ui.standingsErrorMsg = "";
+      render();
+      break;
   }
 });
 
@@ -3191,6 +3894,16 @@ document.addEventListener("input", (e) => {
       persistActiveSession(); // no pasa por render() (no perder el foco), autoguardar aparte
       break;
     }
+    case "leagues-q": {
+      ui.leaguesQuery = el.value;
+      const list = document.getElementById("leagues-search-list");
+      if (list) list.innerHTML = leaguesSearchListHTML();
+      break;
+    }
+    case "api-key-volleyball":
+      settings.apiKeys.volleyball = el.value;
+      persistSettings(); // sin render (no perder el foco mientras se pega/escribe la key)
+      break;
   }
 });
 

@@ -666,6 +666,20 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .vt-detail-row .vt-mono { text-align: right; }
 
+/* Tabla de posiciones (pestaña Partidos, Bloque 6) — estilo tabla, sin cajas,
+   divisores finos, mayúsculas con tracking en encabezados de columna. */
+.vt-standings-table { display: flex; flex-direction: column; margin-top: 6px; }
+.vt-standings-row {
+  display: grid; grid-template-columns: 20px 1fr 24px 22px 22px 30px 64px;
+  gap: 6px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+}
+.vt-standings-row:last-child { border-bottom: none; }
+.vt-standings-head { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.vt-standings-row .vt-mono { font-size: 12px; text-align: center; }
+.vt-standings-team { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vt-standings-team img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
+.vt-standings-team span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .vt-metric-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
 .vt-metric-toggle button {
   flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text-dim); font-family: inherit;
@@ -676,6 +690,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    horizontal en vez de encogerlos hasta ilegibles. */
 .vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
 .vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: 7px 10px; }
+/* Chips de liga favorita (pestaña Partidos): mismo componente + logo chico inline. */
+.vt-metric-toggle-scroll button img { width: 15px; height: 15px; object-fit: contain; vertical-align: -3px; margin-right: 4px; }
 
 .vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }

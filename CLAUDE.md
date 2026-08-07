@@ -12,6 +12,20 @@
   (.github/workflows/pages.yml, publica el repo tal cual, sin build).
   No usa el sistema viejo "Deploy from a branch" (Jekyll) — se cambió
   el 2026-08-07 porque ese quedó colgado/fallando sin motivo claro.
+- Pestaña "Partidos" (2026-08-07): único punto de la app que llama a
+  un servicio externo — la Volleyball API de Highlightly
+  (https://volleyball.highlightly.net). Siempre a través de
+  `callVolleyballApi()`, la única función que hace fetch a esa API.
+  Caché en localStorage (leagues-catalog, matches-cache,
+  standings-cache, api-usage), TTL 24h vía `shouldRefreshLeague()`.
+  Todo namespaced bajo `.volleyball` (settings.apiKeys,
+  settings.favoriteLeagues, y las llaves de caché) pensando en sumar
+  otros deportes más adelante — hoy solo se construye vóleibol. Sin
+  key configurada, la pestaña no intenta ninguna llamada. Confirmado
+  con key real: los headers de cuota (x-ratelimit-requests-*) casi
+  nunca llegan a JS por CORS al llamar directo desde el navegador —
+  el indicador de cuota entonces se queda casi siempre en "Sin datos"
+  y no hay arreglo posible sin backend propio (fuera de alcance).
 
 ## Diseño visual (decidido, no reabrir sin pedido explícito)
 - Estilo tabla (ref. Hevy): sin tarjetas encajonadas, divisores finos,

@@ -641,3 +641,112 @@ Entradas nuevas al final. No reescribir lo anterior.
      sin superposición (confirmado con getBoundingClientRect, no solo
      a ojo). Sin errores de consola.
 - sw.js goat-v16 → v17.
+
+## 2026-08-07 cont.2
+- Nueva pestaña "Partidos" (vóleibol), 6ta del nav — completamente
+  independiente del resto (rutinas/sesiones/ejercicios/progreso no se
+  tocaron). Implementados los Bloques 1-4 del spec: modelo de datos en
+  localStorage (leagues-catalog, matches-cache, standings-cache,
+  api-usage, settings.apiKeys/favoriteLeagues), `callVolleyballApi()`
+  como única puerta de entrada a la Volleyball API de Highlightly
+  (con manejo de headers de cuota y confirm de cuota baja ≤5), catálogo
+  de ligas paginado + buscador local (cero llamadas al escribir) +
+  favoritos, y calendario con toggle de ligas + auto-refresco al
+  entrar (`shouldRefreshLeague`, TTL 24h + partido vencido sin
+  terminar) + botón "Actualizar" manual por liga. También se agregó
+  la sección "Partidos" en Ajustes (campo de API key) porque el estado
+  vacío de la pestaña depende de ella — no estaba en los primeros 4
+  bloques pero era necesaria para poder probar el resto.
+- Pendiente (Bloques 5-8 del spec, no incluidos en esta pasada):
+  detalle de partido (sets, forma reciente, head-to-head), tabla de
+  posiciones por liga. La lógica de refresco de partidos (Bloque 8) sí
+  se construyó completa porque el calendario (Bloque 4) depende de
+  ella directamente.
+- Verificado extensivamente en browser (mobile 375×812): los 3 estados
+  de la pestaña (sin key / con key sin favoritas / con favoritas),
+  búsqueda+favoritos sin generar llamadas de red (confirmado con
+  read_network_requests), los 5 casos de `shouldRefreshLeague`,
+  paginación de catálogo y de partidos (mockeando fetch), el toggle de
+  ligas sin recargar datos, el botón "Actualizar" forzando el refresco
+  aunque el caché esté fresco, el flujo de cuota baja con
+  Cancelar/Continuar (nuevo parámetro `onNo` en `askConfirm`, retro-
+  compatible), y una llamada real a la API con key inválida para
+  confirmar manejo de error end-to-end. Ícono de la pestaña reutiliza
+  el `calendar` ya existente en PATHS (no se creó uno nuevo). Sin
+  errores de consola en las 6 pestañas. `.gitignore` de la tarea
+  anterior (api-coverage-check.json) sigue pendiente de confirmar.
+- sw.js goat-v17 → v18.
+
+## 2026-08-07 cont.3
+- Bloques 5 y 6 del spec de "Partidos": detalle de partido (fase/semana,
+  equipos+logos, resultado y tabla de sets firstSet..fifthSet — los que
+  existan, incluye partidos "en curso" además de terminados) y tabla de
+  posiciones por liga (grupos, PJ/G/P/puntos/sets, mismo lenguaje visual
+  de tabla del resto de la app). Forma reciente (`/last-five-games` x2)
+  y head-to-head (`/head-2-head`) se cargan bajo demanda solo al entrar
+  al detalle de ESE partido, nunca al cargar el calendario — nuevo caché
+  `team-stats-cache` (TTL 24h, igual criterio que matches-cache).
+  Standings usa `standings-cache` (ya existía en el modelo del Bloque 1,
+  quedaba sin usar hasta ahora), llave `{leagueId}-{season}`.
+- Las 3 llamadas bajo demanda del detalle (forma x2 + H2H) se hacen
+  secuenciales, no con Promise.all — si dispararan el confirm de cuota
+  baja en paralelo se pisarían entre sí (ui.confirmDialog es un solo
+  diálogo global). Con eso alcanza para evitarlo sin lógica extra.
+- Nombres de campo de /last-five-games, /head-2-head y /standings no se
+  pudieron verificar en vivo con una key real esta sesión — se
+  construyó con parsing defensivo (variantes de nombre para posición/
+  PJ/G/P/puntos/sets, inferencia de ganado/perdido con fallback a
+  comparar el marcador). Vale la pena una pasada de verificación con
+  una key real antes de dar esto por 100% cerrado.
+- Verificado en browser: sets table con datos reales de forma (mock),
+  caché de forma/H2H confirmado sin llamadas nuevas al reabrir el mismo
+  partido, tabla de posiciones con datos mock, y una llamada real con
+  key inválida a /last-five-games y /head-2-head que confirmó manejo de
+  error end-to-end (mismo patrón que /leagues antes). Sin errores de
+  consola nuevos en las 6 pestañas (solo los 401 esperados de las
+  pruebas con key falsa).
+- Con esto quedan completos los 8 bloques del spec de "Partidos".
+- sw.js goat-v18 → v19.
+
+## 2026-08-07 cont.4
+- Corregido el parsing defensivo de los Bloques 5-6 con la doc oficial
+  (openapi.json de Highlightly, provista por Martín). Cambios reales:
+  - `/last-five-games` y `/head-2-head` devuelven un array plano de
+    VolleyballMatchResponseDto (sin envoltorio `{data:[...]}`, a
+    diferencia de `/leagues` y `/matches`) — `apiListOf()` ya lo
+    manejaba bien, sin cambios ahí.
+  - No existe campo `winner` en ningún match — se saca del bloque
+    muerto en `matchResultForTeam`, queda solo la inferencia por
+    `state.score.current` (confirmado que es siempre string "N - M",
+    formato de sets ganados, nunca objeto).
+  - `/standings` (VolleyballStandingsDto) NO tiene sets a favor/en
+    contra como pedía el spec original — tiene `scoredPoints`/
+    `receivedPoints` (puntos de rally en la temporada). Se ajustó
+    `standingRowFields`/`standingsGroupHTML` a los nombres reales
+    (`gamesPlayed`, `wins`, `loses` -sic-, `points`, `scoredPoints`,
+    `receivedPoints`) y la columna pasó de "Sets" a "Puntos +/-".
+  - La respuesta de `/standings` es el objeto `{groups, league}`
+    directo, sin envoltorio de paginación — se simplificó
+    `standingsHTML()` en base a eso.
+- **Hallazgo importante, no es un bug de código**: probado con una key
+  real (que Martín va a regenerar después de esta sesión), confirmado
+  que los headers `x-ratelimit-requests-limit/remaining` casi nunca
+  llegan a JS al llamar directo a volleyball.highlightly.net desde el
+  navegador — el servidor no los incluye en
+  `Access-Control-Expose-Headers`, así que CORS los esconde de
+  `fetch().headers` aunque sí viajen en la respuesta real (confirmado:
+  solo `content-type` es legible). El indicador de cuota queda
+  entonces casi siempre en "Sin datos de cuota todavía" — el fallback
+  que ya pedía el spec para "headers ausentes" cubre este caso tal
+  cual, pero en la práctica va a ser el estado permanente, no
+  temporal. No hay arreglo posible sin backend propio.
+- Verificado extensivamente con la key real contra el servidor en
+  vivo: catálogo (`/leagues?leagueName=Nations League`), calendario
+  completo de la liga (116 partidos reales, headers de fase/semana
+  reales: "Final", "3rd Place", "Semi-finals"...), detalle de un
+  partido real (sets, forma reciente con W/L reales, 10 enfrentamientos
+  de head-to-head reales), y tabla de posiciones completa (15 equipos,
+  datos reales). Todo renderizó correctamente, sin errores de consola.
+  Key usada solo en este entorno de prueba local — nunca se commiteó
+  ni se subió a ningún lado.
+- sw.js goat-v19 → v20.
