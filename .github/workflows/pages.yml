@@ -1,0 +1,47 @@
+name: Deploy GOAT a GitHub Pages
+
+# Publica el repo tal cual (HTML/CSS/JS plano, sin build) usando GitHub
+# Actions en vez del sistema viejo basado en Jekyll — ese quedaba
+# colgado/fallaba sin motivo claro. Sin Jekyll de por medio, este método
+# es el que GitHub recomienda hoy y da logs reales si algo sale mal.
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar sitio (sin .git/.github)
+        run: |
+          mkdir _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' ./ _site/
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
