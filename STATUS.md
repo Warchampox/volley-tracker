@@ -614,3 +614,30 @@ Entradas nuevas al final. No reescribir lo anterior.
   con el modo Organizar. Sin errores de consola cargando la URL real.
   Documentado en CLAUDE.md (sección Arquitectura) porque es un cambio
   duradero de cómo se despliega, no solo de esta sesión.
+
+## 2026-08-07 cont.
+- Dos fixes al modo Organizar (long-press y barra de acciones):
+  1. El <h3> del bloque (donde escucha el long-press) ganó
+     user-select:none/-webkit-touch-callout:none/touch-action:
+     manipulation, y el handler de pointerdown llama e.preventDefault()
+     apenas confirma que el target es ese <h3> — antes el navegador
+     ganaba la carrera con su propia selección de texto/menú
+     contextual antes de que el temporizador de 500ms llegara a
+     disparar. Los inputs de valor y el nombre editable de sesión
+     libre quedan afuera (siguen con selección normal).
+  2. Nueva updateOrganizePad(), llamada en cada render(): mide el alto
+     real de .vt-organize-footer-wrap (varía según si hay 1 o 2 barras
+     apiladas) y lo escribe en --organize-pad, que .vt-content usa
+     como padding-bottom extra (encima de los 100px de siempre) — así
+     el último ejercicio de la lista se puede subir por sobre la barra
+     con scroll en vez de quedar tapado. Vuelve a 0px solo con que
+     .vt-organize-footer-wrap ya no esté en el DOM (Cancelar/Guardar
+     cambios), sin lógica aparte. z-index de la barra (45) ya estaba
+     por sobre las tarjetas, confirmado sin cambios.
+  3. Verificado con 15 ejercicios en sesión: long-press sigue
+     preseleccionando bien, sin selección de texto de por medio;
+     con 2 seleccionados (2 barras apiladas, ~142px medidos) el
+     último ejercicio queda completamente visible al hacer scroll,
+     sin superposición (confirmado con getBoundingClientRect, no solo
+     a ojo). Sin errores de consola.
+- sw.js goat-v16 → v17.

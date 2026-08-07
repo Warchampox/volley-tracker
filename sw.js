@@ -6,7 +6,7 @@
    app shell se sirve cache-first. No hay build tools: solo edita esta constante.
 ======================================================================================= */
 
-const CACHE_NAME = "goat-v16";
+const CACHE_NAME = "goat-v17";
 
 // App shell propio (mismo origen). "./" cubre la navegación a la raíz de la app.
 const APP_SHELL = [

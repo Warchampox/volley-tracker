@@ -522,6 +522,17 @@ function updateMinimizedBar() {
     </button>`;
 }
 
+// Mide el alto real de la barra flotante del modo Organizar (varía si hay
+// selección activa — una o dos barras apiladas) y lo deja en una CSS var
+// que .vt-content usa como padding-bottom extra, para que el scroll deje
+// subir el último ejercicio de la lista por sobre la barra. 0px si no está
+// el modo activo (nada que compensar).
+function updateOrganizePad() {
+  const wrap = document.querySelector(".vt-organize-footer-wrap");
+  const h = wrap ? Math.ceil(wrap.getBoundingClientRect().height) + 16 : 0;
+  document.documentElement.style.setProperty("--organize-pad", h + "px");
+}
+
 function beep() {
   if (!settings.sound) return;
   try {
@@ -596,6 +607,7 @@ function render() {
 
   updateRestBar();
   updateMinimizedBar();
+  updateOrganizePad();
   if (ui.tab === "progreso") mountChart();
   mountSortables();
   if (ui.activeSession) persistActiveSession();
@@ -2363,6 +2375,9 @@ document.addEventListener("pointerdown", (e) => {
   if (!h3) return;
   const blockEl = h3.closest("[data-block-idx]");
   if (!blockEl) return;
+  // Bloquea selección de texto/menú contextual/zoom del navegador sobre este
+  // gesto — si no, le gana la carrera al temporizador de long-press de abajo.
+  e.preventDefault();
   const idx = +blockEl.dataset.blockIdx;
   longPressStart = { x: e.clientX, y: e.clientY };
   longPressTimer = setTimeout(() => {
