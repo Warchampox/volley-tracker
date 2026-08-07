@@ -750,3 +750,22 @@ Entradas nuevas al final. No reescribir lo anterior.
   Key usada solo en este entorno de prueba local — nunca se commiteó
   ni se subió a ningún lado.
 - sw.js goat-v19 → v20.
+
+## 2026-08-07 cont.5
+- Fusionado Historial dentro de Progreso: se quitó "historial" de
+  NAV_ITEMS (la función pasó a llamarse `historyListHTML()`, sin su
+  propio `<header>`) y Progreso ahora arranca con un segmentado
+  "Resumen"/"Historial" (`ui.progressSection`, default "resumen") que
+  decide qué cuerpo mostrar debajo del mismo header. `finishSession()`
+  → "summary-close" ahora aterriza en `ui.tab="progreso"` +
+  `ui.progressSection="historial"` en vez de la vieja pestaña.
+- Nota para Martín: el spec asumía que esto dejaba la barra en 4
+  pestañas y que Partidos se sumaría después a 5 — pero Partidos ya
+  estaba implementado de la sesión anterior, así que quedó en 5 pestañas
+  directo (Entrenar/Ejercicios/Progreso/Partidos/Ajustes), no en 4.
+- Verificado en browser: sin sesiones ambos sub-estados muestran su
+  empty state de siempre bajo el segmentado; con sesiones, Historial
+  se ve y funciona igual que antes (expandir, repetir, eliminar);
+  terminar una sesión de prueba aterriza en Progreso→Historial;
+  recorrido de las 5 pestañas sin errores de consola.
+- sw.js goat-v20 → v21.

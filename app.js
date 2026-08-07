@@ -164,6 +164,7 @@ const ui = {
   progressMetric: null,
   progressView: "ejercicio", // "total" | "grupo" | "ejercicio"
   progressRange: "2m",       // "1sem"|"2sem"|"1m"|"2m"|"4m"|"6m"|"8m"|"1a"
+  progressSection: "resumen", // "resumen" | "historial" — Historial se fusionó dentro de Progreso
   exercisesQuery: "",        // buscador de la pestaña Ejercicios
   manageGroups: false,
   exerciseModal: null,    // null | {id|null, name, group, type, pickerCtx?}
@@ -601,7 +602,6 @@ let chart = null;
 const NAV_ITEMS = [
   { id: "rutinas", label: "Entrenar", ic: "play" },
   { id: "ejercicios", label: "Ejercicios", ic: "barbell" },
-  { id: "historial", label: "Historial", ic: "history" },
   { id: "progreso", label: "Progreso", ic: "trend" },
   { id: "partidos", label: "Partidos", ic: "calendar" },
   { id: "ajustes", label: "Ajustes", ic: "sliders" },
@@ -615,7 +615,6 @@ function render() {
     else view = routinesHTML();
   }
   else if (ui.tab === "ejercicios") view = ui.manageGroups ? groupsManagerHTML() : exercisesManagerHTML();
-  else if (ui.tab === "historial") view = historyHTML();
   else if (ui.tab === "progreso") view = progressHTML();
   else if (ui.tab === "partidos") view = partidosHTML();
   else if (ui.tab === "ajustes") view = settingsHTML();
@@ -1200,7 +1199,9 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
 
 /* --------------------------------- Vista Historial ------------------------------- */
 
-function historyHTML() {
+// Fusionado dentro de Progreso (sub-vista "historial", ver progressHTML) —
+// sin su propio <header> de pestaña, ese ya lo pone Progreso arriba.
+function historyListHTML() {
   const list = sessions.length === 0
     ? emptyHTML("Sin sesiones registradas", "Cuando termines un entrenamiento, va a aparecer acá.", "")
     : `<div class="vt-list">${sessions.map((s) => {
@@ -1235,10 +1236,7 @@ function historyHTML() {
         </div>`;
       }).join("")}</div>`;
 
-  return `
-    <header class="vt-header">
-      ${tabHeaderHTML("Set 03 · Registro", "Historial")}
-    </header>${list}`;
+  return list;
 }
 
 /* --------------------------------- Vista Progreso -------------------------------- */
@@ -1541,12 +1539,24 @@ function featuredHTML() {
 /* --------------------------------- Vista principal de Progreso -------------------------------- */
 
 const PROGRESS_VIEWS = [{ id: "total", label: "Total" }, { id: "grupo", label: "Grupo muscular" }, { id: "ejercicio", label: "Ejercicio" }];
+// Segmentado superior de la pestaña Progreso — Historial se fusionó acá,
+// dejó de ser una pestaña propia (ver NAV_ITEMS).
+const PROGRESS_SECTIONS = [{ id: "resumen", label: "Resumen" }, { id: "historial", label: "Historial" }];
+
+function progressSectionToggleHTML() {
+  return `<div class="vt-metric-toggle">
+    ${PROGRESS_SECTIONS.map((s) => `<button class="${ui.progressSection === s.id ? "is-active" : ""}" data-a="progress-section" data-section="${s.id}">${s.label}</button>`).join("")}
+  </div>`;
+}
 
 function progressHTML() {
   const head = `<header class="vt-header">${tabHeaderHTML("Set 04 · Análisis", "Progreso")}</header>`;
+  const toggle = progressSectionToggleHTML();
+
+  if (ui.progressSection === "historial") return `${head}${toggle}${historyListHTML()}`;
 
   if (sessions.length === 0)
-    return head + emptyHTML("Todavía no hay datos", "Registra al menos una sesión para ver tu progreso acá.", "");
+    return `${head}${toggle}${emptyHTML("Todavía no hay datos", "Registra al menos una sesión para ver tu progreso acá.", "")}`;
 
   const ws = weeklyStats();
   const summary = statRowFlatHTML([
@@ -1559,7 +1569,7 @@ function progressHTML() {
   if (ui.progressView === "total" || ui.progressView === "grupo") body = `<div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
   else body = exerciseViewHTML();
 
-  return `${head}${summary}${prsRecentHTML()}
+  return `${head}${toggle}${summary}${prsRecentHTML()}
     <p class="vt-section-eyebrow">Rango</p>
     ${rangeChipsHTML()}
     <div class="vt-metric-toggle" style="margin-top:14px">
@@ -3498,7 +3508,8 @@ document.addEventListener("click", (e) => {
     }
     case "summary-close":
       ui.sessionSummary = null;
-      ui.tab = "historial";
+      ui.tab = "progreso";
+      ui.progressSection = "historial";
       render();
       break;
 
@@ -3534,6 +3545,7 @@ document.addEventListener("click", (e) => {
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
     case "prog-view": ui.progressView = el.dataset.view; render(); break;
     case "prog-range": ui.progressRange = el.dataset.range; render(); break;
+    case "progress-section": ui.progressSection = el.dataset.section; render(); break;
     case "featured-remove":
       settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
       persistSettings();
