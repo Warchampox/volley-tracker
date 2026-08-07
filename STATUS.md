@@ -596,3 +596,21 @@ Entradas nuevas al final. No reescribir lo anterior.
   toque en el borrador, Guardar cambios lo conserva, Cancelar lo
   descarta — en ambos sentidos, ya no invertido. Sin errores de
   consola. sw.js goat-v15 → v16.
+
+## 2026-08-07
+- Martín reportó que el aviso de "hay una versión nueva" no le llegaba
+  al celular. Investigando: GitHub Pages (el sistema viejo, "Deploy
+  from a branch", basado en Jekyll) llevaba desde el 06-ago fallando/
+  colgado — el sitio en vivo seguía sirviendo goat-v13 (de un commit
+  de dos días antes) pese a 3 pushes posteriores. Se agregó
+  .nojekyll (no alcanzó solo, el build de ese commit igual quedó
+  colgado ~7.5 horas en "building" sin resolver). Se migró el deploy
+  completo a GitHub Actions: nuevo
+  .github/workflows/pages.yml (checkout + upload-pages-artifact +
+  deploy-pages, publica el repo tal cual sin Jekyll de por medio) y
+  se cambió el ajuste del repo (build_type: workflow, vía API). Deploy
+  de prueba corrió y terminó en ~1 minuto — verificado que
+  warchampox.github.io/volley-tracker ya sirve goat-v16 y el app.js
+  con el modo Organizar. Sin errores de consola cargando la URL real.
+  Documentado en CLAUDE.md (sección Arquitectura) porque es un cambio
+  duradero de cómo se despliega, no solo de esta sesión.

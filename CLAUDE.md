@@ -8,7 +8,10 @@
   settings). Sin backend. Sync entre dispositivos es manual, vía
   exportar/importar JSON — no proponer alternativas salvo pedido
   explícito.
-- Deploy: GitHub Pages directo desde el repo.
+- Deploy: GitHub Pages vía GitHub Actions
+  (.github/workflows/pages.yml, publica el repo tal cual, sin build).
+  No usa el sistema viejo "Deploy from a branch" (Jekyll) — se cambió
+  el 2026-08-07 porque ese quedó colgado/fallando sin motivo claro.
 
 ## Diseño visual (decidido, no reabrir sin pedido explícito)
 - Estilo tabla (ref. Hevy): sin tarjetas encajonadas, divisores finos,
