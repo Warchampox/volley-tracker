@@ -1372,7 +1372,9 @@ function bucketLabel(key, granularity) {
     const [y, m] = key.split("-").map(Number);
     return new Date(y, m - 1, 1).toLocaleDateString("es-CL", { month: "short", year: "2-digit" });
   }
-  return fmtDateShort(key);
+  // OJO: key es "YYYY-MM-DD" (de weekKey) — usar localKeyToDate, no fmtDateShort(key)
+  // a secas, o en husos negativos (Chile) el eje muestra el domingo anterior.
+  return fmtDateShort(localKeyToDate(key));
 }
 
 // Agrupa las sesiones del rango en buckets (semanales o mensuales según el

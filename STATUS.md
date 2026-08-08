@@ -849,3 +849,21 @@ Entradas nuevas al final. No reescribir lo anterior.
   consola reales en las 5 pestañas (un 403 de una imagen externa de
   flagcdn con fallback ya manejado, no es un error de la app).
 - sw.js goat-v22 → v23.
+
+## 2026-08-08 cont.2
+- Se cerró la tarea pendiente anotada en la entrada anterior: el mismo
+  bug de fecha UTC vs. local existía también en `bucketLabel()` de la
+  pestaña Progreso (gráfico de vista semanal) — llamaba
+  `fmtDateShort(key)` directo sobre el "YYYY-MM-DD" de `weekKey()`, que
+  `new Date(iso)` interpreta como medianoche UTC y en Chile (UTC-4/-3)
+  podía mostrar el domingo anterior en vez del lunes real en el eje X.
+  Se reutilizó el helper `localKeyToDate()` (ya definido en la sección
+  de Partidos, mismo scope de módulo): `bucketLabel()` ahora hace
+  `fmtDateShort(localKeyToDate(key))` para la vista semanal (la vista
+  mensual ya construía su propio Date local, sin cambios ahí).
+- Verificado en el navegador (huso America/Santiago, UTC-4, mismo huso
+  del entorno de prueba): con sesiones de prueba en semanas cuyo lunes
+  es 27-jul y 10-ago, el gráfico de Progreso (`Chart.getChart().data.
+  labels`) mostraba antes "09-ago" (domingo, incorrecto) y ahora
+  "10-ago"/"27-jul" (lunes correcto) en ambos buckets.
+- sw.js goat-v23 → v24.
