@@ -769,3 +769,83 @@ Entradas nuevas al final. No reescribir lo anterior.
   terminar una sesión de prueba aterriza en Progreso→Historial;
   recorrido de las 5 pestañas sin errores de consola.
 - sw.js goat-v20 → v21.
+
+## 2026-08-08
+- Viewport bloqueado: `maximum-scale=1, user-scalable=no` en el meta
+  viewport (index.html) + `touch-action: manipulation` en `html`
+  (estilos.css) — sin zoom por pellizco ni doble-tap en iOS.
+- Inputs de tiempo (serie tipo "time" y "Segundos" del editor de
+  rutina) ahora reformatean en vivo tecla a tecla: nueva
+  `digitsToClockDisplay()` reconstruye "M:SS"/"H:MM:SS" a partir de
+  los dígitos tecleados (últimos 2 = segundos, resto = minutos, y si
+  sobran más de 2 ahí, lo que sobra al inicio son horas), sin rellenar
+  la primera unidad a 2 dígitos mientras se escribe (nueva
+  `fmtClockInput()`, distinta de `fmtClock()` que sigue igual para
+  displays de solo lectura). `reformatClockInputLive()` reescribe el
+  input en el momento (cursor al final) y devuelve los segundos ya
+  convertidos, que se guardan en el mismo evento `input` sin esperar
+  blur — `parseClock()` no cambió, solo ahora se le pasa siempre un
+  string ya bien formado.
+- Verificado en browser simulando la secuencia exacta del spec
+  ("1"→"3"→"0" da "0:01"→"0:13"→"1:30", 90s guardados en el estado en
+  cada tecla) en ambos campos, cursor confirmado al final tras cada
+  reformateo, sin errores de consola en las 5 pestañas.
+- sw.js goat-v21 → v22.
+
+## 2026-08-08 cont.
+- Reescritura completa de la pestaña "Partidos" (reemplaza toda la
+  implementación anterior, no la parchea):
+  - **Bloque 1**: `callVolleyballApi()` con contador de cuota manual
+    y preciso (`api-usage.volleyball = {date, count}`, +1 por llamada
+    real que efectivamente volvió con respuesta — no por headers).
+    Confirm si count>=95.
+  - **Bloque 2**: equipos favoritos (`settings.favoriteTeams`, objeto
+    completo {id,name,logo}) como fuente principal; ligas favoritas
+    quedan solo como acceso rápido en Explorar/Tabla. Búsqueda de
+    equipos explícita (botón/Enter, nunca al tipear), sin catálogo
+    completo, cacheada 7 días por texto exacto.
+  - **Bloque 3**: `NATIONAL_TEAM_FLAGS` + `teamFlagOrLogo()` — bandera
+    real (flagcdn.com) para selecciones, logo de la API para clubes,
+    nunca emojis. Centralizado en `teamLogoHTML()`, usado en todos
+    lados (calendario, detalle, tabla, forma, H2H).
+  - **Bloque 4**: `fetchTeamMatches()` (2 llamadas home+away, merge
+    sin duplicados) + `matches-cache.byTeam`/`byLeague` separados.
+  - **Bloque 5**: 3 sub-secciones con segmentado (Mis equipos/Explorar
+    ligas/Tabla). "Mis equipos" tiene calendario mensual armado a mano
+    (sin librería), navegable, con puntos por día y panel de partidos
+    al tocar un día, más chips Hoy/Esta semana/Próximos 7 días que
+    cambian a lista agrupada por fecha (nunca plana).
+  - **Bloque 6**: forma reciente como píldoras de color (no números
+    sueltos), head-to-head como filas con el estilo visual del resto
+    de listas de partidos (acento azul + negrita al que ganó).
+  - **Bloque 7**: indicador "{count}/100 solicitudes usadas hoy" en
+    rojo si count>=90.
+- **Bug real encontrado y corregido durante la verificación**: mostrar
+  una fecha "YYYY-MM-DD" de la grilla/listas con
+  `fmtDate(dateKey)`/`fmtDateShort(key)` directo hacía `new
+  Date("YYYY-MM-DD")`, que el motor JS interpreta como medianoche UTC
+  — en husos horarios negativos (Chile) mostraba el día ANTERIOR.
+  Nuevo helper `localKeyToDate()` reconstruye el Date a mano en huso
+  local antes de formatear. Se aplicó en el panel de día de la grilla
+  y en las listas de accesos rápidos/agrupado por semana. El mismo
+  patrón de bug existe en `bucketLabel()` de la pestaña Progreso
+  (preexistente, no tocado esta sesión — quedó como tarea aparte).
+- Nota para Martín: la regla de CLAUDE.md "no reproducir escudos/
+  logos de clubes o marcas registradas" (sección Diseño visual) choca
+  con lo que pediste explícitamente para Partidos (mostrar logos
+  reales de equipos vía la API). La traté como no aplicable a esta
+  pestaña — si quieres, ajusto la redacción de esa regla para que
+  quede explícito que es solo para el resto de la app.
+- Verificado extensivamente en browser con datos mock y con la key
+  real: calendario mensual (navegación de mes, puntos, panel de día
+  con fecha correcta), accesos rápidos agrupados, Explorar ligas
+  (favoritos, buscador, header de fase real "SEMIFINALES"), Tabla
+  (favoritas + buscador + posiciones con banderas), detalle de partido
+  con píldoras de forma real (W/L correctos) y H2H con acento de color,
+  búsqueda de equipos (cero llamadas al tipear, 1 al buscar, 0 en
+  caché repetida, favorito guarda objeto completo), contador de cuota
+  exacto (verificado llamada por llamada contra el contador), reseteo
+  diario, y el diálogo de confirmación a partir de 95. Sin errores de
+  consola reales en las 5 pestañas (un 403 de una imagen externa de
+  flagcdn con fallback ya manejado, no es un error de la app).
+- sw.js goat-v22 → v23.

@@ -20,6 +20,7 @@
 html {
   -webkit-tap-highlight-color: transparent; /* sin el flash azul de "seleccionar" al tocar */
   -webkit-touch-callout: none; /* sin menú de "guardar imagen" al mantener presionado */
+  touch-action: manipulation; /* sin zoom por doble-tap en iOS (el meta viewport ya bloquea pellizco) */
 }
 
 body {
@@ -680,6 +681,29 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-standings-team img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
 .vt-standings-team span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Calendario mensual de "Mis equipos" (pestaña Partidos, Bloque 5.1) */
+.vt-cal-header { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
+.vt-cal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin: 0; }
+.vt-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.vt-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.vt-cal-cell {
+  aspect-ratio: 1; background: transparent; border: 1px solid transparent; border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--text); font-family: inherit; cursor: pointer; padding: 2px;
+}
+.vt-cal-cell.vt-cal-empty { cursor: default; }
+.vt-cal-daynum { font-size: 13px; }
+.vt-cal-cell.is-today { border-color: var(--line); }
+.vt-cal-cell.is-today .vt-cal-daynum { color: var(--blue); font-weight: 700; }
+.vt-cal-cell.is-selected { background: var(--surface-2); border-color: var(--blue); }
+.vt-cal-dots { display: flex; gap: 2px; }
+.vt-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+
+/* Forma reciente: fila de píldoras W/L (pestaña Partidos, Bloque 6) — nunca
+   números sueltos. Verde/roja/gris según ganó, perdió o no se pudo determinar. */
+.vt-form-pills { display: flex; gap: 6px; }
+.vt-form-pill { width: 22px; height: 10px; border-radius: 5px; display: inline-block; }
+
 .vt-metric-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
 .vt-metric-toggle button {
   flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text-dim); font-family: inherit;
@@ -690,8 +714,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    horizontal en vez de encogerlos hasta ilegibles. */
 .vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
 .vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: 7px 10px; }
-/* Chips de liga favorita (pestaña Partidos): mismo componente + logo chico inline. */
-.vt-metric-toggle-scroll button img { width: 15px; height: 15px; object-fit: contain; vertical-align: -3px; margin-right: 4px; }
 
 .vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
