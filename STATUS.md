@@ -867,3 +867,24 @@ Entradas nuevas al final. No reescribir lo anterior.
   labels`) mostraba antes "09-ago" (domingo, incorrecto) y ahora
   "10-ago"/"27-jul" (lunes correcto) en ambos buckets.
 - sw.js goat-v23 → v24.
+
+## 2026-08-08 cont.2
+- Cambio de tipografía (solo fuentes, sin tocar layout/colores/lógica):
+  Inter → IBM Plex Sans, JetBrains Mono → IBM Plex Mono en todo
+  estilos.css (19 apariciones reemplazadas). Barlow Condensed intacto.
+  `<link>` de Google Fonts en index.html actualizado al mismo combo
+  (preconnect existente reutilizado, sin duplicar).
+- Revisión de pesos: IBM Plex Sans importa 400/500/600 (sin 700) e
+  IBM Plex Mono importa 500/600/700 (sin 400). Encontrados y corregidos
+  2 casos que hubieran caído a negrita sintética del navegador sin
+  avisar: `.vt-scoreboard small` (heredaba Mono con weight 400 → 500) y
+  `.vt-cal-cell.is-today .vt-cal-daynum` (heredaba Sans con weight 700
+  → 600). Revisado también app.js por font-weight inline — los que
+  tiene (600/700 sobre `.vt-mono` o el body font) ya calzaban con los
+  pesos importados, sin cambios ahí.
+- Verificado en browser: `document.fonts` confirma las 3 familias
+  cargadas con los pesos reales usados (Barlow 700/800, Plex Mono 500,
+  Plex Sans 400/600) sin pedir ningún peso no importado; recorrido de
+  las 5 pestañas sin errores de consola reales (un 401 esperado de una
+  key de prueba falsa).
+- sw.js goat-v24 → v25.

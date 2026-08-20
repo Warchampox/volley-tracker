@@ -25,7 +25,7 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'IBM Plex Sans', sans-serif;
   color: var(--text);
   background: var(--bg);
   min-height: 100vh;
@@ -66,7 +66,7 @@ button, svg {
 }
 .vt-header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .vt-eyebrow {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -110,14 +110,14 @@ button, svg {
 .vt-session-name-input:focus { outline: none; border-bottom-color: var(--blue); }
 
 .vt-scoreboard {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 18px;
   font-weight: 600;
   color: var(--blue);
   white-space: nowrap;
   text-align: right;
 }
-.vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase; }
+.vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
 
 .vt-btn-icon, .vt-btn-ghost {
   background: transparent;
@@ -205,7 +205,7 @@ button, svg {
 /* Superseries: bloques encadenados se pegan y llevan etiqueta A1/A2 en azul. */
 .vt-block.vt-linked-next { margin-bottom: 5px; }
 .vt-ss-badge {
-  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 600;
   border: 1px solid var(--superset); color: var(--superset);
   padding: 1px 7px; border-radius: 20px; margin-right: 7px;
   vertical-align: 2px; letter-spacing: 0.04em;
@@ -293,7 +293,7 @@ button, svg {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
-.vt-organize-count { font-size: 13px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+.vt-organize-count { font-size: 13px; color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
 .vt-organize-actions { display: flex; gap: 4px; }
 /* Cancelar / Guardar cambios — única forma de salir del modo Organizar,
    mismo tratamiento visual que el footer de "Finalizar sesión". */
@@ -327,8 +327,8 @@ button, svg {
 .vt-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .vt-card h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 19px; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 0.01em; }
 .vt-muted { color: var(--text-dim); font-size: 12.5px; margin: 4px 0 0; }
-.vt-muted-sm { color: var(--text-dim); font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }
-.vt-lasttime { color: var(--text-dim); font-size: 12px; font-family: 'JetBrains Mono', monospace; margin: 6px 0 10px; }
+.vt-muted-sm { color: var(--text-dim); font-size: 11.5px; font-family: 'IBM Plex Mono', monospace; }
+.vt-lasttime { color: var(--text-dim); font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin: 6px 0 10px; }
 
 .vt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .vt-tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--line); color: var(--text-dim); }
@@ -360,7 +360,7 @@ button, svg {
 }
 .vt-input:focus { outline: none; border-color: var(--blue); }
 .vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-bottom: 14px; }
-.vt-mono { font-family: 'JetBrains Mono', monospace; }
+.vt-mono { font-family: 'IBM Plex Mono', monospace; }
 .vt-select { margin-bottom: 12px; }
 select.vt-input { appearance: none; -webkit-appearance: none; }
 
@@ -380,7 +380,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 .vt-cap-check { width: 30px; flex-shrink: 0; }
 .vt-cap {
   text-align: center; white-space: nowrap; flex-shrink: 0;
-  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim);
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: 0.06em;
 }
 /* Hueco reservado para el botón de cronómetro (solo tipo "tiempo") — antes no
@@ -473,7 +473,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border: 1.5px solid var(--line);
   background: var(--surface-2);
   color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: filter 100ms ease, transform 100ms ease, color 180ms ease, border-color 180ms ease;
@@ -486,7 +486,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-type-picker { display: flex; gap: 6px; padding: 4px 6px 8px; }
 .vt-type-picker-opt {
   flex: 1; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
   padding: 8px; border-radius: 8px; cursor: pointer;
 }
 .vt-type-picker-opt.is-warmup { color: var(--blue); border-color: var(--blue); }
@@ -627,7 +627,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .vt-modal-form { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .vt-modal-form label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
-.vt-textarea { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; resize: vertical; min-height: 160px; }
+.vt-textarea { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; resize: vertical; min-height: 160px; }
 .vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-dim); }
 .vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
@@ -659,7 +659,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-pr-hit-value { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
 .vt-pr-hit-applied { color: var(--green); font-size: 12.5px; display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
 
-.vt-diff-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-family: 'JetBrains Mono', monospace; }
+.vt-diff-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-family: 'IBM Plex Mono', monospace; }
 .vt-diff-added { color: var(--blue); }
 .vt-diff-removed { color: var(--red); }
 
@@ -694,7 +694,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-cal-cell.vt-cal-empty { cursor: default; }
 .vt-cal-daynum { font-size: 13px; }
 .vt-cal-cell.is-today { border-color: var(--line); }
-.vt-cal-cell.is-today .vt-cal-daynum { color: var(--blue); font-weight: 700; }
+.vt-cal-cell.is-today .vt-cal-daynum { color: var(--blue); font-weight: 600; }
 .vt-cal-cell.is-selected { background: var(--surface-2); border-color: var(--blue); }
 .vt-cal-dots { display: flex; gap: 2px; }
 .vt-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
@@ -718,7 +718,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .vt-stat-label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
-.vt-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; }
+.vt-stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; }
 .vt-stat-delta { color: var(--green); }
 
 /* Resumen semanal / stats de ejercicio en Progreso: sin caja, mismo
@@ -818,7 +818,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 #restbar.is-hidden { display: none; }
 .vt-rest-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .vt-rest-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
-.vt-rest-time { font-family: 'JetBrains Mono', monospace; font-size: 27px; font-weight: 700; color: var(--blue); }
+.vt-rest-time { font-family: 'IBM Plex Mono', monospace; font-size: 27px; font-weight: 700; color: var(--blue); }
 .vt-rest-cancel {
   flex-shrink: 0;
   background: transparent; border: none; color: var(--text-dim); cursor: pointer;
@@ -843,13 +843,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-minibar-stats {
   flex-shrink: 0; display: flex; gap: 10px;
-  font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--blue); font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--blue); font-weight: 600;
 }
 
 /* Encabezado de sección genérico (Ajustes, PRs recientes, etc.): mayúscula
    con tracking, sin caja — reemplaza los .vt-card que agrupaban secciones. */
 .vt-section-eyebrow {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-dim);
@@ -869,7 +869,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-badge {
   font-size: 10.5px; padding: 2px 8px; border-radius: 20px;
   border: 1px solid var(--line); color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace; white-space: nowrap;
+  font-family: 'IBM Plex Mono', monospace; white-space: nowrap;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 /* Dos filas: nombre + acciones arriba, badges abajo — sin solapamientos con nombres largos. */
@@ -890,7 +890,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-group-block { border-left: 3px solid var(--line); padding: 2px 4px 4px 14px; margin-bottom: 22px; }
 .vt-group-block:last-child { margin-bottom: 0; }
 .vt-group-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11.5px; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-dim);
