@@ -888,3 +888,47 @@ Entradas nuevas al final. No reescribir lo anterior.
   las 5 pestañas sin errores de consola reales (un 401 esperado de una
   key de prueba falsa).
 - sw.js goat-v24 → v25.
+
+## 2026-08-26
+- Auditoría (app.js/estilos.css/index.html contra CLAUDE.md): sin
+  funciones/CSS realmente huérfanos salvo `.vt-card-button` (CSS
+  muerto) y el ícono `history` en PATHS (huérfano desde que Historial
+  dejó de ser pestaña propia). Inconsistencia real encontrada: el
+  manejo de error de API en Partidos no es uniforme — "buscar equipo"
+  y "actualizar liga" usan `alert()`, la tabla de posiciones muestra
+  el error inline (`ui.standingsErrorMsg`). Sigue sin resolver la
+  tensión ya marcada antes entre la regla de CLAUDE.md "no reproducir
+  logos de clubes" y lo que Partidos hace a propósito. No se arregló
+  nada de esto todavía, solo quedó documentado.
+- Buscador + filtro de rango en Historial (dentro de Progreso):
+  `ui.historyQuery`/`ui.historyRange`, AND entre ambos, estado vacío
+  propio ("Nada por acá") distinto del de historial totalmente vacío.
+- Compartir como imagen: `buildShareBlob()` dibuja una tarjeta
+  1080x1350 a mano con Canvas (fondo negro, título GOAT, y según el
+  contexto duración/volumen/series/PRs o un PR puntual grande),
+  esperando `document.fonts.ready` para usar Barlow Condensed/IBM Plex
+  Mono reales. `shareImage()` intenta `navigator.share` con el archivo
+  y cae a descarga normal si no está disponible. Botón "Compartir" en
+  el resumen de fin de sesión y por cada PR reciente en Progreso.
+- Personalidad en estados vacíos: `emptyHTML()` ahora antepone
+  `icons/goat-face.png` (72px, opacity 0.55, con `onerror` que lo
+  oculta sin romper el layout si el archivo no existe) y se ajustó el
+  tono de los estados vacíos más prominentes (Rutinas, Historial,
+  Progreso, Ejercicios, Partidos sin key/equipos/ligas) manteniendo
+  título+detalle+acción igual que antes. `icons/goat-body.png` como
+  detalle sutil (56px, opacity 0.3) en la esquina del resumen de fin
+  de sesión.
+- **Pendiente real**: `icons/goat-face.png` e `icons/goat-body.png`
+  nunca llegaron adjuntos a pesar de que el prompt decía que sí — no
+  están en ningún lado del disco (se buscó en Descargas y home). El
+  código ya está listo para ambos (con fallback que los oculta
+  gracefully mientras no existan) — falta que Martín los mande para
+  que se vean.
+- Verificado en browser: búsqueda+rango de historial con AND real
+  (confirmado con 4 sesiones de prueba), las 2 tarjetas compartibles
+  generadas con Canvas real (PNG de ~75KB, fuentes correctas
+  confirmadas visualmente, no fallback de sistema), estados vacíos con
+  fallback gracioso sin imagen rota ni layout roto, recorrido de las 5
+  pestañas sin errores de consola reales (solo los 404 esperados de
+  los 2 archivos que faltan).
+- sw.js goat-v25 → v26.

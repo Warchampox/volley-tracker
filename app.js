@@ -171,6 +171,8 @@ const ui = {
   picker: null,           // null | "editor" | "session" | "featured" | "replace"
   pickerQuery: "",
   openHistory: null,
+  historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
+  historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
   progressEx: null,
   progressMetric: null,
   progressView: "ejercicio", // "total" | "grupo" | "ejercicio"
@@ -258,6 +260,7 @@ const PATHS = {
   trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>',
   chevDown: '<polyline points="6 9 12 15 18 9"/>',
   chevUp: '<polyline points="18 15 12 9 6 15"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
@@ -800,8 +803,8 @@ function routinesHTML() {
   }).join("");
 
   const body = routines.length === 0 && routineFolders.length === 0
-    ? emptyHTML("Aún no armas ninguna rutina",
-        "Crea tu primera rutina de entrenamiento — sin límite de cuántas puedes guardar, aunque las cambies cada mes.",
+    ? emptyHTML("Todavía no hay rutinas por acá",
+        "Creemos la primera — sin límite de cuántas puedes guardar, aunque las cambies cada mes.",
         `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`)
     : looseHTML + foldersHTML;
 
@@ -1260,42 +1263,75 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
 
 // Fusionado dentro de Progreso (sub-vista "historial", ver progressHTML) —
 // sin su propio <header> de pestaña, ese ya lo pone Progreso arriba.
-function historyListHTML() {
-  const list = sessions.length === 0
-    ? emptyHTML("Sin sesiones registradas", "Cuando termines un entrenamiento, va a aparecer acá.", "")
-    : `<div class="vt-list">${sessions.map((s) => {
-        const open = ui.openHistory === s.id;
-        const volume = sessionVolume(s, false);
-        return `<div class="vt-block">
-          <div style="display:flex;align-items:center;gap:6px">
-            <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
-              <div>
-                <h3>${esc(s.routineName)}</h3>
-                <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
-              </div>
-              ${icon(open ? "chevUp" : "chevDown", 18)}
-            </button>
-            <button class="vt-btn-ghost" data-a="session-repeat" data-id="${s.id}" aria-label="Repetir esta sesión">${icon("repeat", 16)}</button>
-          </div>
-          ${open ? `<div class="vt-session-detail">
-            ${s.exercises.map((e) => {
-              const t = exType(e.exerciseId);
-              const uni = exUnilateral(e.exerciseId);
-              const notes = e.sets.filter((st) => st.note).map((st) => esc(st.note));
-              return `<div class="vt-detail-row">
-                  <span style="color:${groupColor(exGroup(e.exerciseId))}">${esc(exName(e.exerciseId))}</span>
-                  <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st, uni)).join(", ")}</span>
-                </div>
-                ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
-                ${e.sessionNote ? `<div class="vt-note-line">— ${esc(e.sessionNote)}</div>` : ""}
-                ${notes.length ? `<div class="vt-note-line">— ${notes.join(" · ")}</div>` : ""}`;
-            }).join("")}
-            <button class="vt-btn-ghost vt-danger vt-small" data-a="hist-del" data-id="${s.id}">${icon("trash", 14)} Eliminar sesión</button>
-          </div>` : ""}
-        </div>`;
-      }).join("")}</div>`;
+const HISTORY_RANGE_CHIPS = [
+  { id: "todo", label: "TODO" }, { id: "1m", label: "ÚLTIMO MES" },
+  { id: "3m", label: "ÚLTIMOS 3 MESES" }, { id: "1a", label: "ÚLTIMO AÑO" },
+];
+const HISTORY_RANGE_DAYS = { "1m": 30, "3m": 90, "1a": 365 };
 
-  return list;
+// Buscador + rango son AND, no se reemplazan entre sí.
+function filteredSessions() {
+  const q = ui.historyQuery.trim().toLowerCase();
+  const days = HISTORY_RANGE_DAYS[ui.historyRange];
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  return sessions.filter((s) => {
+    if (q && !s.routineName.toLowerCase().includes(q)) return false;
+    if (cutoff && new Date(s.date).getTime() < cutoff) return false;
+    return true;
+  });
+}
+
+function sessionRowHTML(s) {
+  const open = ui.openHistory === s.id;
+  const volume = sessionVolume(s, false);
+  return `<div class="vt-block">
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
+        <div>
+          <h3>${esc(s.routineName)}</h3>
+          <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
+        </div>
+        ${icon(open ? "chevUp" : "chevDown", 18)}
+      </button>
+      <button class="vt-btn-ghost" data-a="session-repeat" data-id="${s.id}" aria-label="Repetir esta sesión">${icon("repeat", 16)}</button>
+    </div>
+    ${open ? `<div class="vt-session-detail">
+      ${s.exercises.map((e) => {
+        const t = exType(e.exerciseId);
+        const uni = exUnilateral(e.exerciseId);
+        const notes = e.sets.filter((st) => st.note).map((st) => esc(st.note));
+        return `<div class="vt-detail-row">
+            <span style="color:${groupColor(exGroup(e.exerciseId))}">${esc(exName(e.exerciseId))}</span>
+            <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st, uni)).join(", ")}</span>
+          </div>
+          ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
+          ${e.sessionNote ? `<div class="vt-note-line">— ${esc(e.sessionNote)}</div>` : ""}
+          ${notes.length ? `<div class="vt-note-line">— ${notes.join(" · ")}</div>` : ""}`;
+      }).join("")}
+      <button class="vt-btn-ghost vt-danger vt-small" data-a="hist-del" data-id="${s.id}">${icon("trash", 14)} Eliminar sesión</button>
+    </div>` : ""}
+  </div>`;
+}
+
+// Se llama al tipear/tocar un chip — actualiza solo la lista filtrada, sin
+// perder el foco del buscador (mismo patrón que exercises-q/leagues-q).
+function historyFilteredListHTML() {
+  const filtered = filteredSessions();
+  if (!filtered.length) return emptyHTML("Nada por acá", "Prueba con otro nombre o ajusta el rango de fecha.", "");
+  return `<div class="vt-list">${filtered.map(sessionRowHTML).join("")}</div>`;
+}
+
+function historyListHTML() {
+  if (sessions.length === 0)
+    return emptyHTML("Todavía no hay historial", "Cuando termines un entrenamiento, va a aparecer acá.", "");
+  return `
+    <div class="vt-search" style="margin-bottom:14px">${icon("search", 16)}
+      <input placeholder="Buscar por nombre…" value="${esc(ui.historyQuery)}" data-i="history-q" autocomplete="off">
+    </div>
+    <div class="vt-metric-toggle vt-metric-toggle-scroll" style="margin-bottom:14px">
+      ${HISTORY_RANGE_CHIPS.map((c) => `<button class="${ui.historyRange === c.id ? "is-active" : ""}" data-a="history-range" data-range="${c.id}">${c.label}</button>`).join("")}
+    </div>
+    <div id="history-filtered-list">${historyFilteredListHTML()}</div>`;
 }
 
 /* --------------------------------- Vista Progreso -------------------------------- */
@@ -1478,12 +1514,13 @@ function prsRecentHTML() {
     <p class="vt-section-eyebrow">PRs recientes</p>
     ${prs.length === 0
       ? `<p class="vt-muted" style="padding:4px 0">Todavía no hay PRs registrados.</p>`
-      : prs.map((p) => `
+      : prs.map((p, i) => `
         <div class="vt-pr-recent-row">
           <span class="vt-pr">${icon("trophy", 15)}</span>
           <span class="vt-pr-recent-name">${esc(p.exerciseName)}</span>
           <span class="vt-mono vt-pr-recent-value">${fmtPRValue(p)}</span>
           <span class="vt-muted-sm">${fmtDateShort(p.date)}</span>
+          <button class="vt-btn-ghost" data-a="pr-share" data-idx="${i}" aria-label="Compartir">${icon("share", 14)}</button>
         </div>`).join("")}
   </div>`;
 }
@@ -1617,7 +1654,7 @@ function progressHTML() {
   if (ui.progressSection === "historial") return `${head}${toggle}${historyListHTML()}`;
 
   if (sessions.length === 0)
-    return `${head}${toggle}${emptyHTML("Todavía no hay datos", "Registra al menos una sesión para ver tu progreso acá.", "")}`;
+    return `${head}${toggle}${emptyHTML("Todavía no hay nada que mostrar", "Registra al menos una sesión y tu progreso va a empezar a aparecer acá.", "")}`;
 
   const ws = weeklyStats();
   const summary = statRowFlatHTML([
@@ -2366,7 +2403,7 @@ function partidosSectionToggleHTML() {
 
 function partidosNoKeyHTML() {
   return `${partidosHeaderHTML()}
-    ${emptyHTML("Configura tu API key", "Para ver partidos necesitas una API key de Highlightly (vóleibol) — se agrega en Ajustes.",
+    ${emptyHTML("Falta una API key", "Para ver partidos necesitas una API key de Highlightly (vóleibol) — se agrega en Ajustes.",
       `<button class="vt-btn-primary" data-a="goto-ajustes-partidos">Ir a Ajustes</button>`)}`;
 }
 
@@ -2489,7 +2526,7 @@ function quickRangeListHTML() {
 function misEquiposHTML() {
   const favs = settings.favoriteTeams?.volleyball || [];
   if (!favs.length) {
-    return emptyHTML("Sin equipos favoritos", "Busca un equipo y márcalo con ★ para ver su calendario acá.",
+    return emptyHTML("Todavía no sigues a nadie", "Busca un equipo y márcalo con ★ para ver su calendario acá.",
       `<button class="vt-btn-primary" data-a="partidos-buscar-equipos-open">Buscar equipos</button>`);
   }
   const refreshing = ui.partidosRefreshingIds.size > 0;
@@ -2596,7 +2633,7 @@ function explorarLigasListHTML() {
           ${icon("forward", 16)}
         </div>
       </div>`;
-    }).join("")}</div>` : emptyHTML("Sin ligas favoritas", "Busca una liga y márcala con ★ para acceder rápido acá.", "")}`;
+    }).join("")}</div>` : emptyHTML("Sin ligas guardadas", "Busca una liga y márcala con ★ para acceder rápido acá.", "")}`;
 }
 
 function exploreLeagueHTML(leagueId) {
@@ -2752,7 +2789,7 @@ function exercisesListHTML() {
   const byGroup = {};
   exercises.forEach((e) => { (byGroup[e.group] = byGroup[e.group] || []).push(e); });
   const groups = Object.keys(byGroup);
-  if (groups.length === 0) return emptyHTML("Sin ejercicios todavía", "Crea el primero con el botón +.", "");
+  if (groups.length === 0) return emptyHTML("Sin ejercicios todavía", "Creemos el primero con el botón +.", "");
 
   const q = ui.exercisesQuery.trim().toLowerCase();
   const searching = q.length > 0;
@@ -2947,7 +2984,13 @@ function confirmDialogHTML() {
 }
 
 function emptyHTML(title, detail, action) {
-  return `<div class="vt-empty"><h3>${title}</h3><p>${detail}</p>${action}</div>`;
+  // onerror oculta la mascota sin romper el layout si icons/goat-face.png
+  // todavía no existe en este dispositivo/deploy — el resto del estado
+  // vacío se ve igual de bien sin ella.
+  return `<div class="vt-empty">
+    <img src="icons/goat-face.png" alt="" class="vt-empty-mascot" onerror="this.style.display='none'">
+    <h3>${title}</h3><p>${detail}</p>${action}
+  </div>`;
 }
 
 // Encabezado de pestaña.
@@ -3235,6 +3278,7 @@ function sessionSummaryHTML() {
 
   return `
     <div class="vt-summary-overlay">
+      <img src="icons/goat-body.png" alt="" class="vt-summary-mascot" onerror="this.style.display='none'">
       <div class="vt-summary-inner">
         <p class="vt-eyebrow">${fmtDate(sum.date)}</p>
         <h1 class="vt-summary-title">${esc(sum.routineName)}</h1>
@@ -3249,9 +3293,162 @@ function sessionSummaryHTML() {
         ${prSection}
         ${routineSection}
         ${saveAsRoutineSection}
-        <button class="vt-btn-primary vt-full" style="margin-top:20px" data-a="summary-close">Cerrar</button>
+        <button class="vt-btn-outline vt-flex-center" style="margin-top:20px" data-a="summary-share">${icon("share", 16)} Compartir</button>
+        <button class="vt-btn-primary vt-full" style="margin-top:10px" data-a="summary-close">Cerrar</button>
       </div>
     </div>`;
+}
+
+/* ----------------------------- Compartir como imagen ------------------------------ */
+// Tarjeta vertical (1080x1350) dibujada a mano con Canvas API — sin librería
+// nueva. Dos variantes: "session" (resumen de fin de sesión) y "pr" (un PR
+// puntual desde Progreso). Usa las mismas fuentes ya cargadas por la app
+// (Barlow Condensed para títulos, IBM Plex Mono para números) — espera
+// document.fonts.ready antes de dibujar para no caer al fallback del sistema.
+
+const SHARE_W = 1080, SHARE_H = 1350;
+
+// Reutiliza el mismo path SVG que ya usa icon() en el resto de la app (el
+// trofeo), en vez de inventar un ícono nuevo o depender de un emoji.
+function svgIconImage(pathsD, color, size) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${pathsD}</svg>`;
+  const img = new Image();
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  return new Promise((resolve) => { img.onload = () => resolve(img); img.src = url; });
+}
+
+// Dibuja `text` alineado según `align`, encogiendo el tamaño de fuente hasta
+// que quepa en maxWidth (nunca corta el texto a la fuerza) — usado para
+// nombres de rutina/ejercicio que el usuario escribió y pueden ser largos.
+function fitText(ctx, text, x, y, maxWidth, maxSize, weight, family, align = "left") {
+  let size = maxSize;
+  ctx.textAlign = align;
+  ctx.font = `${weight} ${size}px ${family}`;
+  while (size > 28 && ctx.measureText(text).width > maxWidth) {
+    size -= 4;
+    ctx.font = `${weight} ${size}px ${family}`;
+  }
+  ctx.fillText(text, x, y);
+}
+
+async function drawSessionShareCard(ctx, sum) {
+  const trophyImg = sum.prHits?.length ? await svgIconImage(PATHS.trophy, "#E8A33D", 200) : null;
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#8FA0AC";
+  ctx.font = "600 30px 'IBM Plex Mono'";
+  ctx.fillText(fmtDate(sum.date).toUpperCase(), 64, 190);
+
+  ctx.fillStyle = "#FFFFFF";
+  fitText(ctx, sum.routineName, 64, 300, SHARE_W - 128, 88, 700, "'Barlow Condensed'");
+
+  const stats = [
+    { label: "DURACIÓN", value: fmtDurationMin(sum.durationSec) },
+    { label: "VOLUMEN", value: `${Math.round(sum.volume).toLocaleString("es-CL")} kg` },
+    { label: "SERIES", value: String(sum.setsCount) },
+  ];
+  const colW = (SHARE_W - 128) / 3;
+  stats.forEach((s, i) => {
+    const x = 64 + i * colW;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#8FA0AC";
+    ctx.font = "600 24px 'IBM Plex Mono'";
+    ctx.fillText(s.label, x, 430);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "600 54px 'IBM Plex Mono'";
+    ctx.fillText(s.value, x, 495);
+  });
+
+  ctx.strokeStyle = "#2A2A2F";
+  ctx.beginPath(); ctx.moveTo(64, 550); ctx.lineTo(SHARE_W - 64, 550); ctx.stroke();
+
+  const prs = (sum.prHits || []).slice(0, 3);
+  if (prs.length) {
+    ctx.fillStyle = "#8FA0AC";
+    ctx.font = "600 28px 'IBM Plex Mono'";
+    ctx.fillText("PRs DE HOY", 64, 620);
+    let y = 690;
+    prs.forEach((hit) => {
+      if (trophyImg) ctx.drawImage(trophyImg, 64, y - 34, 40, 40);
+      ctx.fillStyle = "#E8A33D";
+      fitText(ctx, hit.exerciseName, 122, y, SHARE_W - 122 - 260, 42, 700, "'Barlow Condensed'");
+      ctx.textAlign = "right";
+      ctx.font = "600 34px 'IBM Plex Mono'";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(fmtSet(hit.type, hit, exUnilateral(hit.exerciseId)), SHARE_W - 64, y);
+      y += 72;
+    });
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#8FA0AC";
+  ctx.font = "600 26px 'IBM Plex Mono'";
+  ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
+}
+
+async function drawPRShareCard(ctx, p) {
+  const trophyImg = await svgIconImage(PATHS.trophy, "#E8A33D", 400);
+  ctx.drawImage(trophyImg, SHARE_W / 2 - 80, 220, 160, 160);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#E8A33D";
+  ctx.font = "700 40px 'Barlow Condensed'";
+  ctx.fillText("NUEVO PR", SHARE_W / 2, 470);
+
+  ctx.fillStyle = "#FFFFFF";
+  fitText(ctx, p.exerciseName, SHARE_W / 2, 580, SHARE_W - 160, 72, 700, "'Barlow Condensed'", "center");
+
+  ctx.font = "700 150px 'IBM Plex Mono'";
+  ctx.fillText(fmtPRValue(p), SHARE_W / 2, 800);
+
+  ctx.fillStyle = "#8FA0AC";
+  ctx.font = "600 32px 'IBM Plex Mono'";
+  ctx.fillText(fmtDate(p.date), SHARE_W / 2, 870);
+
+  ctx.font = "600 26px 'IBM Plex Mono'";
+  ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
+}
+
+async function buildShareBlob(kind, data) {
+  await document.fonts.ready;
+  const canvas = document.createElement("canvas");
+  canvas.width = SHARE_W;
+  canvas.height = SHARE_H;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#0A0A0C";
+  ctx.fillRect(0, 0, SHARE_W, SHARE_H);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#3B6FE0";
+  ctx.font = "800 46px 'Barlow Condensed'";
+  ctx.fillText("GOAT", 64, 110);
+
+  if (kind === "session") await drawSessionShareCard(ctx, data);
+  else await drawPRShareCard(ctx, data);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+// Comparte vía el sheet nativo del sistema si está disponible; si no, cae a
+// una descarga normal (mismo patrón que exportJSON: <a download> + blob URL).
+async function shareImage(kind, data, filename, shareTitle) {
+  const blob = await buildShareBlob(kind, data);
+  if (!blob) { alert("No se pudo generar la imagen para compartir."); return; }
+  const file = new File([blob], filename, { type: "image/png" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: shareTitle });
+      return;
+    }
+  } catch (err) {
+    if (err?.name === "AbortError") return; // el usuario cerró el sheet — no es un error
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 /* --------------------------------- Export / Import -------------------------------- */
@@ -3949,6 +4146,16 @@ document.addEventListener("click", (e) => {
       ui.progressSection = "historial";
       render();
       break;
+    case "summary-share": {
+      const sum = ui.sessionSummary;
+      if (sum) shareImage("session", sum, `goat-sesion-${sum.date.slice(0, 10)}.png`, sum.routineName);
+      break;
+    }
+    case "pr-share": {
+      const p = computeAllPRs().slice(0, 5)[+el.dataset.idx];
+      if (p) shareImage("pr", p, `goat-pr-${p.exerciseName.toLowerCase().replace(/\s+/g, "-")}.png`, `PR: ${p.exerciseName}`);
+      break;
+    }
 
     /* Historial */
     case "hist-toggle": ui.openHistory = ui.openHistory === id ? null : id; render(); break;
@@ -3982,6 +4189,11 @@ document.addEventListener("click", (e) => {
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
     case "prog-view": ui.progressView = el.dataset.view; render(); break;
     case "prog-range": ui.progressRange = el.dataset.range; render(); break;
+    case "history-range": {
+      ui.historyRange = el.dataset.range;
+      render();
+      break;
+    }
     case "progress-section": ui.progressSection = el.dataset.section; render(); break;
     case "featured-remove":
       settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
@@ -4420,6 +4632,12 @@ document.addEventListener("input", (e) => {
       const ex = ui.activeSession?.exercises[+el.dataset.ex];
       if (ex) ex.sessionNote = el.value;
       persistActiveSession(); // no pasa por render() (no perder el foco), autoguardar aparte
+      break;
+    }
+    case "history-q": {
+      ui.historyQuery = el.value;
+      const list = document.getElementById("history-filtered-list");
+      if (list) list.innerHTML = historyFilteredListHTML();
       break;
     }
     case "leagues-q": {

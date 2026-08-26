@@ -600,6 +600,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-dot { position: absolute; top: 6px; right: 26%; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
 .vt-empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+.vt-empty-mascot { width: 72px; height: 72px; object-fit: contain; opacity: 0.55; margin-bottom: 14px; }
 .vt-empty h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--text); text-transform: uppercase; margin-bottom: 8px; }
 .vt-empty p { font-size: 13.5px; line-height: 1.5; margin-bottom: 18px; }
 
@@ -644,6 +645,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   overflow-y: auto;
 }
 .vt-summary-inner { width: 100%; max-width: 480px; padding: 40px 16px 32px; }
+/* Detalle sutil, no un elemento central — se oculta solo si el archivo no existe. */
+.vt-summary-mascot { position: absolute; top: 20px; right: 20px; width: 56px; height: 56px; object-fit: contain; opacity: 0.3; pointer-events: none; }
 /* El nombre de rutina es texto libre del usuario: sin mayúsculas forzadas
    (misma regla que .vt-block h3). */
 .vt-summary-title {
