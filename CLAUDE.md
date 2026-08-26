@@ -12,27 +12,15 @@
   (.github/workflows/pages.yml, publica el repo tal cual, sin build).
   No usa el sistema viejo "Deploy from a branch" (Jekyll) — se cambió
   el 2026-08-07 porque ese quedó colgado/fallando sin motivo claro.
-- Pestaña "Partidos" (2026-08-07, reescrita completa el 2026-08-08):
-  único punto de la app que llama a un servicio externo — la
-  Volleyball API de Highlightly (https://volleyball.highlightly.net).
-  Siempre a través de `callVolleyballApi()`, la única función que hace
-  fetch a esa API. 3 sub-secciones (`ui.partidosSection`): "Mis
-  equipos" (fuente principal — equipos favoritos con objeto completo
-  en settings.favoriteTeams, calendario mensual armado a mano),
-  "Explorar ligas" (catálogo cacheado + favoritos de liga, solo
-  acceso rápido) y "Tabla" (posiciones). Caché separado por equipo/
-  liga en matches-cache (`byTeam`/`byLeague`), TTL 24h vía
-  `shouldRefreshTeam()`/`shouldRefreshLeague()`. Cuota (`api-usage`)
-  es un CONTADOR MANUAL (`{date, count}`, +1 por llamada real) — no
-  lee headers de la respuesta: confirmado con key real que
-  x-ratelimit-requests-* no llega a JS por CORS al llamar directo
-  desde el navegador, no hay arreglo posible sin backend propio
-  (fuera de alcance). `teamFlagOrLogo()` centraliza selección/club:
-  bandera real (flagcdn.com) por nombre exacto vs logo de la API,
-  nunca emojis — reemplaza cualquier uso directo de `team.logo`.
-  Todo namespaced bajo `.volleyball` pensando en sumar otros deportes
-  más adelante — hoy solo se construye vóleibol. Sin key configurada,
-  la pestaña no intenta ninguna llamada.
+- Pestaña "Partidos" (vóleibol, vía la Volleyball API de Highlightly):
+  se construyó completa entre el 2026-08-07 y 2026-08-08 y se dejó de
+  lado el 2026-08-26 — código removido de app.js/estilos.css, no
+  aparece en NAV_ITEMS. No hace falta migrar ni limpiar localStorage
+  de quien la haya probado, el código ya no lee ni escribe esas
+  llaves. Si se retoma, el diseño completo (equipos favoritos,
+  calendario mensual, banderas vs logos, compartir, cuota manual,
+  etc.) ya quedó validado — ver STATUS.md de esas fechas antes de
+  repartir desde cero.
 
 ## Diseño visual (decidido, no reabrir sin pedido explícito)
 - Estilo tabla (ref. Hevy): sin tarjetas encajonadas, divisores finos,

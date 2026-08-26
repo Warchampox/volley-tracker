@@ -932,3 +932,45 @@ Entradas nuevas al final. No reescribir lo anterior.
   pestañas sin errores de consola reales (solo los 404 esperados de
   los 2 archivos que faltan).
 - sw.js goat-v25 → v26.
+
+## 2026-08-26 cont.
+- Fix real: reemplazar un ejercicio (modo Organizar) DENTRO de una
+  sesión activa con routineId ahora agrega el ejercicio viejo a
+  `session.explicitlyRemoved` (mismo array que ya usaba el botón de
+  basura) antes de sobrescribir el exerciseId — así el diff de
+  sincronización al finalizar detecta la baja Y el alta, no solo el
+  alta. El editor de rutina no se tocó (ahí reemplazar ya escribía
+  directo, sin pasar por este mecanismo). Verificado de punta a punta:
+  rutina con 2 ejercicios → sesión → reemplazo en Organizar → finalizar
+  → sincronizar → reabrir la rutina guardada y confirmar que el
+  ejercicio viejo ya no está y el nuevo sí.
+- Se quitó la pestaña "Partidos" (queda de lado por ahora, no
+  eliminada del historial de git): NAV_ITEMS, toda la sección "Vista
+  Partidos" de app.js (~940 líneas: callVolleyballApi y todos sus
+  helpers, las 3 sub-secciones, banderas, etc.), las llaves de
+  localStorage asociadas, la sección de Ajustes con la API key, y el
+  CSS específico (.vt-cal-*, .vt-standings-*, .vt-form-pill*). También
+  se limpiaron 2 huérfanos que quedaron sueltos (el ícono `forward` y
+  la llamada a `quotaLabelHTML`). No se migró ni limpió activamente
+  ningún dato ya guardado en localStorage de quien la haya probado —
+  el código ya no los lee ni escribe, como se pidió. CLAUDE.md
+  actualizado con una nota corta en vez del detalle completo de
+  arquitectura que tenía antes.
+- Se copiaron icons/goat-face.png e icons/goat-body.png (del zip
+  goat-emptystate-assets que Martín mandó en un mensaje aparte) —
+  quedan sirviendo la personalidad de los estados vacíos y el detalle
+  del resumen de sesión de la sesión anterior, agregados también al
+  APP_SHELL del service worker para que funcionen offline.
+- Verificado en browser: 0 funciones/CSS huérfanos tras la remoción de
+  Partidos (barrido automático de referencias), 4 pestañas sin errores
+  de consola, mascota GOAT confirmada visible (fetch 200 directo al
+  archivo, no solo onerror silencioso).
+- **Nota sobre el deploy**: el run de GitHub Actions de este push (y
+  uno de la sesión anterior) quedaron "queued" por más de 25 minutos
+  sin arrancar — confirmado que no es un problema del repo/workflow
+  (permisos de Actions ok, sin runs atascados en "in_progress" que
+  bloqueen la cola de concurrencia "pages"), es una demora del lado de
+  GitHub. No hay nada que hacer desde acá salvo esperar a que
+  GitHub libere runners.
+- sw.js goat-v26 → v27 (icons/goat-face.png y goat-body.png sumados
+  al APP_SHELL).

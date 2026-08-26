@@ -670,43 +670,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .vt-detail-row .vt-mono { text-align: right; }
 
-/* Tabla de posiciones (pestaña Partidos, Bloque 6) — estilo tabla, sin cajas,
-   divisores finos, mayúsculas con tracking en encabezados de columna. */
-.vt-standings-table { display: flex; flex-direction: column; margin-top: 6px; }
-.vt-standings-row {
-  display: grid; grid-template-columns: 20px 1fr 24px 22px 22px 30px 64px;
-  gap: 6px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px;
-}
-.vt-standings-row:last-child { border-bottom: none; }
-.vt-standings-head { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
-.vt-standings-row .vt-mono { font-size: 12px; text-align: center; }
-.vt-standings-team { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.vt-standings-team img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
-.vt-standings-team span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Calendario mensual de "Mis equipos" (pestaña Partidos, Bloque 5.1) */
-.vt-cal-header { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
-.vt-cal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin: 0; }
-.vt-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
-.vt-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
-.vt-cal-cell {
-  aspect-ratio: 1; background: transparent; border: 1px solid transparent; border-radius: 8px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  color: var(--text); font-family: inherit; cursor: pointer; padding: 2px;
-}
-.vt-cal-cell.vt-cal-empty { cursor: default; }
-.vt-cal-daynum { font-size: 13px; }
-.vt-cal-cell.is-today { border-color: var(--line); }
-.vt-cal-cell.is-today .vt-cal-daynum { color: var(--blue); font-weight: 600; }
-.vt-cal-cell.is-selected { background: var(--surface-2); border-color: var(--blue); }
-.vt-cal-dots { display: flex; gap: 2px; }
-.vt-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
-
-/* Forma reciente: fila de píldoras W/L (pestaña Partidos, Bloque 6) — nunca
-   números sueltos. Verde/roja/gris según ganó, perdió o no se pudo determinar. */
-.vt-form-pills { display: flex; gap: 6px; }
-.vt-form-pill { width: 22px; height: 10px; border-radius: 5px; display: inline-block; }
-
 .vt-metric-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
 .vt-metric-toggle button {
   flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text-dim); font-family: inherit;
