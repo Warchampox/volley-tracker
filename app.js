@@ -230,6 +230,7 @@ const PATHS = {
   tag: '<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/>',
   clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/>',
   gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
 };
 
@@ -350,7 +351,7 @@ function enterOrganizeMode(preselectIdx) {
 // inferior (Cancelar / Guardar cambios), nunca por un botón suelto arriba.
 function organizeToggleHTML() {
   if (ui.exerciseEditMode) return "";
-  return `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:var(--sp-3)">
     <button class="vt-btn-icon" data-a="exercise-editmode-toggle">Organizar</button>
   </div>`;
 }
@@ -363,7 +364,7 @@ function exerciseOrganizeRowHTML(idx, ex, lbl) {
   return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""} ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
     <div class="vt-block-row">
       <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
-      <span class="vt-organize-name" style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
+      <span class="vt-organize-name">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
       <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ejercicio"></button>
     </div>
   </div>`;
@@ -748,7 +749,7 @@ function routinesHTML() {
       </div>
       ${collapsed ? "" : (inFolder.length
         ? `<div class="vt-list">${inFolder.map((r) => routineCardHTML(r, map, lastUsed)).join("")}</div>`
-        : `<p class="vt-muted" style="padding:0 4px 14px">Sin rutinas todavía — usa el ícono de carpeta en una rutina para moverla acá.</p>`)}
+        : `<p class="vt-muted" style="padding:0 var(--sp-1) var(--sp-4)">Sin rutinas todavía — usa el ícono de carpeta en una rutina para moverla acá.</p>`)}
     </div>`;
   }).join("");
 
@@ -761,7 +762,7 @@ function routinesHTML() {
   return `
     <header class="vt-header">
       ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:var(--sp-2)">
         <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 20)}</button>
         <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
       </div>
@@ -881,11 +882,11 @@ function editorHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
+              <h3>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
             </div>
             <div class="vt-target-row">${fields}</div>
             ${loadmode}
-            <input type="text" class="vt-input" style="margin-top:10px" placeholder="Nota (ej: profunda, subir altura)"
+            <input type="text" class="vt-input" style="margin-top:var(--sp-3)" placeholder="Nota (ej: profunda, subir altura)"
               value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
           </div>
         </div>`;
@@ -935,8 +936,8 @@ function trainActiveHTML() {
           ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div></div>
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="display:flex;gap:22px">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <div style="display:flex;gap:var(--sp-6)">
           <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
           <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
         </div>
@@ -960,7 +961,7 @@ function trainActiveHTML() {
         if (ui.collapsedExercises.has(exIdx)) {
           return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}">
             <button type="button" class="vt-collapsed-row" data-a="ex-toggle-collapse" data-ex="${exIdx}">
-              <span class="vt-collapsed-name" style="color:${groupColor(ex?.group) || "var(--text)"}">${esc(ex?.name || "(eliminado)")}</span>
+              <span class="vt-collapsed-name">${esc(ex?.name || "(eliminado)")}</span>
               ${complete ? `<span class="vt-collapsed-check">${icon("check", 12)}</span>` : ""}
               ${anyPR ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 14)}</span>` : ""}
               ${icon("chevDown", 16)}
@@ -972,12 +973,12 @@ function trainActiveHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h3 style="color:${groupColor(ex?.group) || "var(--text)"}">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:7px">@${e.target.percent}%</span>` : ""}</h3>
-              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                <span class="vt-rest-mini vt-muted-sm">Descanso
+              <h3>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h3>
+              <div style="display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0">
+                <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
                     value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
-                    data-i="ex-rest" data-ex="${exIdx}"
+                    data-i="ex-rest" data-ex="${exIdx}" aria-label="Descanso en segundos"
                     autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                 </span>
                 <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
@@ -985,7 +986,7 @@ function trainActiveHTML() {
               </div>
             </div>
             ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
-            ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:6px 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
+            ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:var(--sp-2) 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
             ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
             <div class="vt-sets">
               ${e.sets.length ? setCapsHTML(t, uni) : ""}
@@ -1010,32 +1011,28 @@ function trainActiveHTML() {
     </div>`}`;
 }
 
-// Encabezados de columnas sobre la primera serie, alineados con los inputs.
-// Los anchos de cada columna deben ser EXACTAMENTE los del input real que
-// representan (no un ancho genérico) — ver .vt-set-input/-sm/-clock y
-// .vt-timer-btn en estilos.css. El gap/padding del contenedor también debe
-// calzar con el de .vt-set-row (o .vt-set-row-time) de ese mismo tipo.
+// Plantilla ÚNICA de columnas de valor por tipo de ejercicio. La usan el
+// encabezado (setCapsHTML) y la fila (setRowHTML), así los dos quedan
+// alineados por construcción: mismas columnas, mismas clases .vt-col-*
+// (anchos en estilos.css, ver .vt-sets). Alrededor de estas columnas van
+// siempre, fijas: [nº] a la izquierda y [RPE] [✓] a la derecha.
+//   {cap, f}   → columna de valor (flex:1), f = campo de la serie
+//   {x: true}  → el "×" entre kg y reps
+//   {timer: true} → botón de cronómetro
+function setColumns(type, unilateral) {
+  if (type === "time") return [{ cap: "tiempo", f: "seconds" }, { cap: "+kg", f: "weight" }, { timer: true }];
+  if (unilateral) return [{ cap: "kg", f: "weight" }, { cap: "izq", f: "repsL" }, { cap: "der", f: "repsR" }];
+  if (type === "bodyweight") return [{ cap: "reps", f: "reps" }, { cap: "+kg", f: "weight" }];
+  return [{ cap: "kg", f: "weight" }, { x: true }, { cap: "reps", f: "reps" }];
+}
+
+// Encabezados de columna sobre la primera serie.
 function setCapsHTML(type, unilateral) {
-  const cap = (t, w) => `<span class="vt-cap" style="width:${w}px">${t}</span>`;
-  const gap = (t) => `<span class="vt-x" style="visibility:hidden">${t}</span>`;
-  let inner, rowClass = "";
-  if (type === "time") {
-    // seg (60px, .vt-set-input-clock) + kg (30px, .vt-set-input-sm en fila
-    // angosta) + hueco reservado para el botón de cronómetro (36px, .vt-timer-btn).
-    inner = cap("tiempo", 60) + cap("+kg", 30) + `<span class="vt-cap-timerbtn" aria-hidden="true"></span>`;
-    rowClass = "vt-set-caps-time";
-  } else if (unilateral) {
-    // kg (44px, .vt-set-input-uniw) + izq/der (36px c/u, .vt-set-input-uni).
-    inner = cap("kg", 44) + cap("izq", 36) + cap("der", 36);
-    rowClass = "vt-set-caps-uni";
-  } else if (type === "bodyweight") {
-    inner = cap("reps", 52) + cap("+kg", 52);
-  } else {
-    inner = cap("kg", 52) + gap("×") + cap("reps", 52);
-  }
-  // settype (30px, botón único) + check (30px) — reemplaza los viejos
-  // spacers de warmup(28)+num(16) de cuando eran elementos separados.
-  return `<div class="vt-set-caps ${rowClass}" aria-hidden="true"><span class="vt-cap-settype"></span><span class="vt-cap-check"></span>${inner}</div>`;
+  const cols = setColumns(type, unilateral).map((c) =>
+    c.x ? `<span class="vt-col-x"></span>`
+      : c.timer ? `<span class="vt-col-timer"></span>`
+      : `<span class="vt-cap vt-col-val">${c.cap}</span>`).join("");
+  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-col-num"></span>${cols}<span class="vt-col-rpe"></span><span class="vt-col-check"></span></div>`;
 }
 
 // "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
@@ -1166,40 +1163,25 @@ function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
   const attrs = (f) =>
     `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
 
-  let fields = "";
-  if (type === "time") {
-    const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
-    fields = `
-      <input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds")}>
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-sm" value="${num(st.weight)}" ${attrs("weight")}>
-      <button class="vt-timer-btn ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
+  const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
+  const fields = setColumns(type, unilateral).map((c) => {
+    if (c.x) return `<span class="vt-x vt-col-x">×</span>`;
+    if (c.timer) return `<button class="vt-timer-btn vt-col-timer ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
-  } else if (unilateral) {
-    // Peso compartido + reps por lado (izq/der) en vez de un solo input de reps.
-    fields = `
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input vt-set-input-uniw" value="${num(st.weight)}" ${attrs("weight")}>
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-uni" value="${repsL(st)}" ${attrs("repsL")}>
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-set-input-uni" value="${repsR(st)}" ${attrs("repsR")}>`;
-  } else if (type === "bodyweight") {
-    fields = `
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.reps)}" ${attrs("reps")}>
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>`;
-  } else {
-    fields = `
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-set-input" value="${num(st.weight)}" ${attrs("weight")}>
-      <span class="vt-x">×</span>
-      <input type="number" inputmode="numeric" class="vt-input vt-mono vt-set-input" value="${num(st.reps)}" ${attrs("reps")}>`;
-  }
+    if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds")}>`;
+    const value = c.f === "repsL" ? repsL(st) : c.f === "repsR" ? repsR(st) : num(st[c.f]);
+    return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-mono vt-set-input vt-col-val" value="${value}" ${attrs(c.f)}>`;
+  }).join("");
 
   return `
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${unilateral ? "vt-set-row-uni" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
-        <button class="vt-settype-btn ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Tipo de serie">${label}</button>
-        <button class="vt-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+        <button class="vt-settype-btn vt-col-num ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Tipo de serie">${label}</button>
         ${fields}
+        <button class="vt-rpe-btn vt-col-rpe ${st.rpe ? "has-value" : ""}" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE">${icon("gauge", 15)}</button>
+        <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
         ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
-        <button class="vt-btn-ghost" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE" style="${st.rpe ? "color:var(--amber)" : ""}">${icon("gauge", 15)}</button>
       </div>
     </div>
     ${openType ? typeSelectorHTML(exIdx, setIdx) : ""}
@@ -1235,7 +1217,7 @@ function sessionRowHTML(s) {
   const open = ui.openHistory === s.id;
   const volume = sessionVolume(s, false);
   return `<div class="vt-block">
-    <div style="display:flex;align-items:center;gap:6px">
+    <div style="display:flex;align-items:center;gap:var(--sp-2)">
       <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
         <div>
           <h3>${esc(s.routineName)}</h3>
@@ -1275,10 +1257,10 @@ function historyListHTML() {
   if (sessions.length === 0)
     return emptyHTML("Todavía no hay historial", "Cuando termines un entrenamiento, va a aparecer acá.", "");
   return `
-    <div class="vt-search" style="margin-bottom:14px">${icon("search", 16)}
+    <div class="vt-search" style="margin-bottom:var(--sp-4)">${icon("search", 16)}
       <input placeholder="Buscar por nombre…" value="${esc(ui.historyQuery)}" data-i="history-q" autocomplete="off">
     </div>
-    <div class="vt-metric-toggle vt-metric-toggle-scroll" style="margin-bottom:14px">
+    <div class="vt-metric-toggle vt-metric-toggle-scroll" style="margin-bottom:var(--sp-4)">
       ${HISTORY_RANGE_CHIPS.map((c) => `<button class="${ui.historyRange === c.id ? "is-active" : ""}" data-a="history-range" data-range="${c.id}">${c.label}</button>`).join("")}
     </div>
     <div id="history-filtered-list">${historyFilteredListHTML()}</div>`;
@@ -1460,10 +1442,10 @@ const fmtPRValue = (hit) =>
 
 function prsRecentHTML() {
   const prs = computeAllPRs().slice(0, 5);
-  return `<div style="margin:22px 0">
+  return `<div style="margin:var(--sp-6) 0">
     <p class="vt-section-eyebrow">PRs recientes</p>
     ${prs.length === 0
-      ? `<p class="vt-muted" style="padding:4px 0">Todavía no hay PRs registrados.</p>`
+      ? `<p class="vt-muted" style="padding:var(--sp-1) 0">Todavía no hay PRs registrados.</p>`
       : prs.map((p, i) => `
         <div class="vt-pr-recent-row">
           <span class="vt-pr">${icon("trophy", 15)}</span>
@@ -1577,7 +1559,7 @@ function featuredHTML() {
       <span class="vt-muted-sm">kg</span>
       <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 14)}</button>
     </div>`).join("");
-  return `<div class="vt-card" style="margin-top:18px">
+  return `<div class="vt-card" style="margin-top:var(--sp-4)">
     <h3>Tus máximos</h3>
     ${slots || `<p class="vt-muted">Destaca hasta 5 ejercicios y edita su 1RM aquí mismo.</p>`}
     ${ids.length < 5 ? `<button class="vt-btn-outline vt-flex-center vt-small" style="width:100%" data-a="picker-open" data-ctx="featured">${icon("plus", 14)} Agregar</button>` : ""}
@@ -1620,7 +1602,7 @@ function progressHTML() {
   return `${head}${toggle}${summary}${prsRecentHTML()}
     <p class="vt-section-eyebrow">Rango</p>
     ${rangeChipsHTML()}
-    <div class="vt-metric-toggle" style="margin-top:14px">
+    <div class="vt-metric-toggle" style="margin-top:var(--sp-4)">
       ${PROGRESS_VIEWS.map((v) => `<button class="${ui.progressView === v.id ? "is-active" : ""}" data-a="prog-view" data-view="${v.id}">${v.label}</button>`).join("")}
     </div>
     ${body}
@@ -1765,21 +1747,21 @@ function settingsHTML() {
       <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
       <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
     </div>
-    <p class="vt-section-eyebrow" style="margin-top:26px">Datos</p>
+    <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Exportar datos<small>Descarga un respaldo JSON de todo</small></div>
       <button class="vt-btn-icon" data-a="export">${icon("download", 16)}</button>
     </div>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:var(--sp-2)">
         <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
           <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
         </label>
         <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
       </div>
     </div>
-    <p class="vt-muted" style="text-align:center;margin-top:16px">GOAT · datos guardados en este dispositivo</p>`;
+    <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -1833,12 +1815,12 @@ function exercisesManagerHTML() {
   return `
     <header class="vt-header">
       ${tabHeaderHTML("Set 02 · Catálogo", "Ejercicios")}
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:var(--sp-2)">
         <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 18)}</button>
         <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 20)}</button>
       </div>
     </header>
-    <div class="vt-search" style="margin-bottom:18px">${icon("search", 16)}
+    <div class="vt-search" style="margin-bottom:var(--sp-4)">${icon("search", 16)}
       <input placeholder="Buscar ejercicio…" value="${esc(ui.exercisesQuery)}" data-i="exercises-q" autocomplete="off">
     </div>
     <div id="exercises-list">${exercisesListHTML()}</div>`;
@@ -2256,8 +2238,8 @@ function sessionSummaryHTML() {
   const sum = ui.sessionSummary;
 
   const prSection = sum.prHits.length === 0
-    ? `<p class="vt-muted" style="text-align:center;margin-top:18px">Sin PRs esta vez</p>`
-    : `<div class="vt-card" style="margin-top:18px">
+    ? `<p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">Sin PRs esta vez</p>`
+    : `<div class="vt-card" style="margin-top:var(--sp-4)">
         <h3>PRs de hoy</h3>
         ${sum.prHits.map((hit) => {
           const applied = sum.appliedUpdates.has(hit.exerciseId);
@@ -2276,7 +2258,7 @@ function sessionSummaryHTML() {
       </div>`;
 
   const routineSection = !sum.routineDiff ? "" : `
-    <div class="vt-card" style="margin-top:18px">
+    <div class="vt-card" style="margin-top:var(--sp-4)">
       <h3>Cambios respecto a tu rutina guardada</h3>
       <ul class="vt-diff-list">
         ${sum.routineDiff.added.map((x) => `<li class="vt-diff-added">+ ${esc(x.name)}</li>`).join("")}
@@ -2288,7 +2270,7 @@ function sessionSummaryHTML() {
     </div>`;
 
   const saveAsRoutineSection = sum.routineId !== null ? "" : `
-    <div class="vt-card" style="margin-top:18px">
+    <div class="vt-card" style="margin-top:var(--sp-4)">
       <h3>Esta fue una sesión libre</h3>
       ${sum.savedAsRoutine
         ? `<p class="vt-pr-hit-applied">${icon("check", 13)} Guardada como rutina</p>`
@@ -2301,7 +2283,7 @@ function sessionSummaryHTML() {
       <div class="vt-summary-inner">
         <p class="vt-eyebrow">${fmtDate(sum.date)}</p>
         <h1 class="vt-summary-title">${esc(sum.routineName)}</h1>
-        <div class="vt-stat-row" style="margin-top:16px">
+        <div class="vt-stat-row" style="margin-top:var(--sp-4)">
           <div class="vt-stat"><span class="vt-stat-label">Duración</span>
             <span class="vt-stat-value">${fmtDurationMin(sum.durationSec)}</span></div>
           <div class="vt-stat"><span class="vt-stat-label">Volumen</span>
@@ -2312,8 +2294,8 @@ function sessionSummaryHTML() {
         ${prSection}
         ${routineSection}
         ${saveAsRoutineSection}
-        <button class="vt-btn-outline vt-flex-center" style="margin-top:20px" data-a="summary-share">${icon("share", 16)} Compartir</button>
-        <button class="vt-btn-primary vt-full" style="margin-top:10px" data-a="summary-close">Cerrar</button>
+        <button class="vt-btn-outline vt-flex-center" style="margin-top:var(--sp-6)" data-a="summary-share">${icon("share", 16)} Compartir</button>
+        <button class="vt-btn-primary vt-full" style="margin-top:var(--sp-3)" data-a="summary-close">Cerrar</button>
       </div>
     </div>`;
 }

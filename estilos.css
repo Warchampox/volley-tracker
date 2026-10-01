@@ -13,6 +13,34 @@
   --red: #C1594F;
   --superset: #9B7FE0; /* reservado EXCLUSIVO para el acento de grupos de superserie */
   --dropset: #E0793B;  /* reservado EXCLUSIVO para el estado "drop set" de una serie */
+  --line-strong: #3A3A41; /* borde de controles vacíos que tienen que leerse (check sin marcar) */
+
+  /* ------------------------- Escala de diseño -------------------------
+     Regla: nunca valores sueltos de font-size / spacing / radius / tracking
+     en el resto del archivo, siempre estos tokens. Se quedan en px solo 0,
+     1px y 2px (ajustes ópticos), los calc(), y los anchos de columna. */
+
+  /* Tipografía: 7 pasos (+ héroe) */
+  --fs-xs: 11px;   /* labels en mayúscula: columnas, eyebrows, nav, títulos de grupo */
+  --fs-sm: 13px;   /* texto secundario: notas, "última vez", subtítulos, muted */
+  --fs-md: 15px;   /* texto base: nombres en listas, inputs, botones */
+  --fs-lg: 18px;   /* valores: stats, inputs de series, valores destacados */
+  --fs-xl: 20px;   /* títulos de bloque/rutina (Barlow), títulos de modal */
+  --fs-2xl: 24px;  /* títulos de header chico, nombre de sesión */
+  --fs-3xl: 32px;  /* título de pestaña, contador de descanso, titular del resumen */
+  --fs-hero: 88px; /* SOLO el número héroe del resumen de fin de sesión */
+
+  /* Espaciado: grilla de 4 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
+
+  /* Radios: 3 */
+  --r-sm: 8px;     /* controles chicos: icon buttons, inputs, check, buscador, filas de modal */
+  --r-md: 12px;    /* botones, barras, paneles, toasts, hoja de modal (12px 12px 0 0) */
+  --r-full: 999px; /* píldoras: tags, badges, chips de rango */
+
+  /* Tracking: 1 */
+  --track: 0.06em; /* todo lo que va en mayúscula */
 }
 
 * { box-sizing: border-box; }
@@ -50,7 +78,7 @@ button, svg {
 }
 .vt-content {
   flex: 1;
-  padding: 20px 16px 100px;
+  padding: var(--sp-6) var(--sp-4) 100px;
   /* En modo Organizar, updateOrganizePad() (app.js) mide el alto real de
      .vt-organize-footer-wrap y lo escribe acá — así el scroll deja subir el
      último ejercicio por sobre la barra en vez de quedar tapado. Fuera del
@@ -62,13 +90,13 @@ button, svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: var(--sp-4);
 }
-.vt-header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vt-header-brand { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
 .vt-eyebrow {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track);
   text-transform: uppercase;
   color: var(--blue);
   margin: 0 0 2px;
@@ -76,8 +104,8 @@ button, svg {
 .vt-header h1 {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 32px;
-  letter-spacing: 0.01em;
+  font-size: var(--fs-3xl);
+  letter-spacing: normal;
   margin: 0;
   text-transform: uppercase;
 }
@@ -89,15 +117,15 @@ button, svg {
   z-index: 25;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
-  margin: -20px -16px 18px;
-  padding: 16px 16px 10px;
+  margin: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-4)) var(--sp-4);
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
 }
 
-.vt-header-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; text-transform: uppercase; margin: 0; }
+.vt-header-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: var(--fs-2xl); text-transform: uppercase; margin: 0; }
 /* Nombre de rutina en la sesión activa: texto libre, sin mayúsculas forzadas.
    Selector reforzado para ganarle a la regla general .vt-header h1 de títulos fijos. */
 .vt-header h1.vt-header-title-sm,
-.vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 24px; margin: 0; text-transform: none; }
+.vt-header-title-sm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: var(--fs-2xl); margin: 0; text-transform: none; }
 /* Nombre editable de una sesión libre: mismo tamaño/tipografía que el título
    fijo de arriba, pero sin caja de formulario — se siente parte del header,
    con un borde punteado abajo como única pista de que se puede tocar. */
@@ -105,19 +133,19 @@ button, svg {
   display: block; width: 100%; min-width: 0;
   background: transparent; border: none; border-bottom: 1px dashed var(--line);
   color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
-  font-size: 24px; padding: 0 0 2px;
+  font-size: var(--fs-2xl); padding: 0 0 2px;
 }
 .vt-session-name-input:focus { outline: none; border-bottom-color: var(--blue); }
 
 .vt-scoreboard {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--blue);
   white-space: nowrap;
   text-align: right;
 }
-.vt-scoreboard small { display: block; font-size: 9px; color: var(--text-dim); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.vt-scoreboard small { display: block; font-size: var(--fs-xs); color: var(--text-dim); font-weight: 500; letter-spacing: var(--track); text-transform: uppercase; }
 
 .vt-btn-icon, .vt-btn-ghost {
   background: transparent;
@@ -127,15 +155,15 @@ button, svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
-  border-radius: 8px;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
   font-family: inherit;
-  font-size: 13px;
-  gap: 5px;
+  font-size: var(--fs-sm);
+  gap: var(--sp-1);
 }
 .vt-btn-icon { background: var(--surface); border: 1px solid var(--line); transition: filter 100ms ease; }
 .vt-btn-icon:active { filter: brightness(0.85); }
-.vt-btn-ghost { color: var(--text-dim); padding: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.vt-btn-ghost { color: var(--text-dim); padding: var(--sp-2); text-transform: uppercase; letter-spacing: var(--track); }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red) !important; }
 
@@ -145,15 +173,15 @@ button, svg {
   border: none;
   font-family: inherit;
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--fs-md);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 11px 18px;
-  border-radius: 10px;
+  letter-spacing: var(--track);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
   justify-content: center;
   transition: filter 100ms ease, transform 100ms ease;
 }
@@ -165,30 +193,30 @@ button, svg {
   color: var(--text-dim);
   font-family: inherit;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 12px;
-  border-radius: 10px;
+  letter-spacing: var(--track);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
   width: 100%;
   cursor: pointer;
-  font-size: 14px;
-  margin-top: 8px;
+  font-size: var(--fs-md);
+  margin-top: var(--sp-2);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 .vt-btn-outline:hover { border-color: var(--blue); color: var(--blue); }
-.vt-flex { display: inline-flex; align-items: center; gap: 6px; }
+.vt-flex { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }
-.vt-small { padding: 7px 10px; font-size: 12.5px; width: auto; margin-top: 10px; }
+.vt-small { padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); width: auto; margin-top: var(--sp-3); }
 
-.vt-list { display: flex; flex-direction: column; gap: 12px; }
+.vt-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-list:has(.vt-block) { gap: 0; }
 .vt-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
 }
 
 /* Bloque plano tipo tabla (referencia Hevy): sin caja, acento lateral de 3px.
@@ -198,24 +226,27 @@ button, svg {
   border: none;
   border-left: 3px solid var(--line);
   border-radius: 0;
-  padding: 14px 4px 14px 14px;
-  margin-bottom: 22px;
+  padding: var(--sp-3) var(--sp-1) var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-8);
 }
 .vt-block:last-child { margin-bottom: 0; }
 /* Superseries: bloques encadenados se pegan y llevan etiqueta A1/A2 en azul. */
-.vt-block.vt-linked-next { margin-bottom: 5px; }
+.vt-block.vt-linked-next { margin-bottom: var(--sp-1); }
 .vt-ss-badge {
-  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); font-weight: 600;
   border: 1px solid var(--superset); color: var(--superset);
-  padding: 1px 7px; border-radius: 20px; margin-right: 7px;
-  vertical-align: 2px; letter-spacing: 0.04em;
+  padding: 1px var(--sp-2); border-radius: var(--r-full); margin-right: var(--sp-2);
+  vertical-align: 2px; letter-spacing: var(--track);
 }
 
-/* Los nombres de rutina/ejercicio son texto libre del usuario: sin mayúsculas forzadas. */
+/* Los nombres de rutina/ejercicio son texto libre del usuario: sin mayúsculas forzadas.
+   Siempre en --text: el grupo muscular ya lo muestra la barra vertical del
+   bloque — teñir el nombre hacía que Core/Custom (grises) parecieran desactivados. */
 .vt-block h3 {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 19px; font-weight: 700;
-  margin: 0; letter-spacing: 0.01em;
+  font-size: var(--fs-xl); font-weight: 700;
+  color: var(--text);
+  margin: 0; letter-spacing: normal;
   text-transform: none;
   /* Acá es donde escucha el long-press para entrar a Organizar (ver
      pointerdown en app.js) — sin esto, el navegador dispara su propia
@@ -229,7 +260,7 @@ button, svg {
 /* Manija de arrastre para reordenar ejercicios — SOLO existe en modo
    Organizar (exerciseOrganizeRowHTML); la vista normal no la renderiza en
    absoluto, así el bloque recupera todo el ancho horizontal sin hueco fantasma. */
-.vt-block-row { display: flex; align-items: flex-start; gap: 6px; }
+.vt-block-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
 .vt-block-body { flex: 1; min-width: 0; }
 .vt-drag-handle {
   flex-shrink: 0;
@@ -248,8 +279,8 @@ button, svg {
 /* ---------------------- Modo "Organizar ejercicios" ---------------------- */
 /* Fila compacta: manija + nombre + círculo de selección — nada más. */
 .vt-organize-name {
-  flex: 1; min-width: 0; padding-top: 3px;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700;
+  flex: 1; min-width: 0; padding-top: var(--sp-1);
+  font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-lg); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .vt-select-circle {
@@ -261,7 +292,7 @@ button, svg {
 }
 .vt-select-circle:active { transform: scale(0.96); }
 .vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
-.vt-select-circle.is-on::after { content: "✓"; font-size: 13px; line-height: 1; }
+.vt-select-circle.is-on::after { content: "✓"; font-size: var(--fs-sm); line-height: 1; }
 
 /* Pulso breve al entrar a Organizar por mantener presionado (~180ms, sobre la
    fila compacta ya en modo Organizar) — feedback de que el gesto se registró. */
@@ -282,39 +313,41 @@ button, svg {
   bottom: calc(64px + env(safe-area-inset-bottom));
   width: 100%; max-width: 480px;
   z-index: 45;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
 }
 /* Barra de acciones sobre la selección — pill flotante (ya no fija/sola: es
    un hijo normal del wrapper de arriba). */
 .vt-organize-bar {
   background: var(--surface-2);
-  border-radius: 10px;
-  padding: 12px 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
-.vt-organize-count { font-size: 13px; color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
-.vt-organize-actions { display: flex; gap: 4px; }
+.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
+.vt-organize-actions { display: flex; gap: var(--sp-1); }
 /* Cancelar / Guardar cambios — única forma de salir del modo Organizar,
    mismo tratamiento visual que el footer de "Finalizar sesión". */
 .vt-organize-savebar {
-  display: flex; gap: 10px;
+  display: flex; gap: var(--sp-3);
   background: var(--surface-2);
-  border-radius: 10px;
-  padding: 12px 16px;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
-.vt-organize-savebar .vt-btn-ghost { flex: 1; justify-content: center; }
-.vt-organize-savebar .vt-btn-primary { flex: 1; }
+/* Mismo reparto que el footer de sesión (Descartar / Finalizar): Cancelar
+   ocupa lo suyo y el primario se lleva el resto, sin partirse en dos líneas. */
+.vt-organize-savebar .vt-btn-ghost { flex: 0 0 auto; justify-content: center; padding: var(--sp-2) var(--sp-4); }
+.vt-organize-savebar .vt-btn-primary { flex: 1; white-space: nowrap; }
 
 /* ------------------- Ejercicio colapsado (sesión activa) ----------------- */
 .vt-collapsed-row {
   width: 100%; background: transparent; border: none; color: inherit; font: inherit;
-  display: flex; align-items: center; gap: 8px; padding: 10px 4px; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-1); cursor: pointer; text-align: left;
 }
 .vt-collapsed-name {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700;
+  font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-md); font-weight: 700;
 }
 .vt-collapsed-check {
   width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%;
@@ -323,83 +356,96 @@ button, svg {
 }
 
 .vt-full-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 0; font: inherit; text-align: left; }
-.vt-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.vt-card h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 19px; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 0.01em; }
-.vt-muted { color: var(--text-dim); font-size: 12.5px; margin: 4px 0 0; }
-.vt-muted-sm { color: var(--text-dim); font-size: 11.5px; font-family: 'IBM Plex Mono', monospace; }
-.vt-lasttime { color: var(--text-dim); font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin: 6px 0 10px; }
+.vt-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+.vt-card h3 { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: normal; }
+.vt-muted { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
+.vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
+.vt-lasttime { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; margin: var(--sp-2) 0 var(--sp-3); }
 
-.vt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-.vt-tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--line); color: var(--text-dim); }
+.vt-tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.vt-tag { font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-full); border: 1px solid var(--line); color: var(--text-dim); }
 .vt-tag-more { opacity: 0.6; }
 
-.vt-card-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.vt-card-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); align-items: center; }
 
 /* Carpetas de rutinas: encabezado colapsable + acciones, mismo estilo de
    card de rutina (.vt-block) adentro cuando está expandida. */
-.vt-folder { margin-bottom: 22px; }
-.vt-folder-head-row { display: flex; align-items: center; gap: 4px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.vt-folder { margin-bottom: var(--sp-6); }
+.vt-folder-head-row { display: flex; align-items: center; gap: var(--sp-1); padding-bottom: var(--sp-3); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
 .vt-folder-toggle {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2);
   background: transparent; border: none; color: var(--text); cursor: pointer;
-  padding: 4px 0; font: inherit; text-align: left;
+  padding: var(--sp-1) 0; font: inherit; text-align: left;
 }
 /* Nombre de carpeta es texto libre del usuario: sin mayúsculas forzadas. */
-.vt-folder-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; text-transform: none; }
+.vt-folder-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: var(--fs-md); text-transform: none; }
 
 .vt-input {
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--text);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
+  border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-3);
+  font-size: var(--fs-md);
   font-family: inherit;
   width: 100%;
 }
 .vt-input:focus { outline: none; border-color: var(--blue); }
-.vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-bottom: 14px; }
+.vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); margin-bottom: var(--sp-4); }
 .vt-mono { font-family: 'IBM Plex Mono', monospace; }
-.vt-select { margin-bottom: 12px; }
+.vt-select { margin-bottom: var(--sp-3); }
 select.vt-input { appearance: none; -webkit-appearance: none; }
 
-.vt-target-row { display: flex; gap: 8px; margin-top: 10px; }
-.vt-numfield { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-dim); flex: 1; }
+.vt-target-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); }
+.vt-numfield { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--text-dim); flex: 1; }
 
-.vt-sets { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
-/* El gap/padding de acá debe calzar EXACTO con el de la fila real que
-   encabeza: .vt-set-row usa gap:5px/padding:7px 4px, .vt-set-row-time (más
-   angosta, un control de más) usa gap:3px/padding:7px 2px — variante abajo.
-   Los anchos de columna van inline por tipo (ver setCapsHTML en app.js). */
+/* ------------------------- Fila de serie (tabla) -------------------------
+   Orden: [nº] [valor] [×] [valor] [RPE] [✓]. Los valores son columnas
+   flex:1 que se reparten el ancho por igual; todo lo demás es de ancho fijo.
+   El encabezado (.vt-set-caps) y la fila (.vt-set-row) se arman con la MISMA
+   plantilla de columnas (setColumns en app.js) y las mismas clases .vt-col-*,
+   así KG/REPS quedan centrados sobre sus valores sin anchos a mano por tipo. */
+.vt-sets {
+  --col-num: 24px;    /* nº de serie / letra C·D·F */
+  --col-x: 12px;      /* el "×" entre kg y reps */
+  --col-timer: 36px;  /* botón de cronómetro (solo filas de tiempo) */
+  --col-rpe: 26px;
+  --col-check: 34px;
+  display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-1);
+}
+.vt-col-num { width: var(--col-num); flex: 0 0 var(--col-num); }
+.vt-col-val { flex: 1 1 0; min-width: 0; width: 0; }
+.vt-col-x { width: var(--col-x); flex: 0 0 var(--col-x); text-align: center; }
+.vt-col-timer { width: var(--col-timer); flex: 0 0 var(--col-timer); }
+.vt-col-rpe { width: var(--col-rpe); flex: 0 0 var(--col-rpe); }
+.vt-col-check { width: var(--col-check); flex: 0 0 var(--col-check); }
+
 /* border-left transparente: calza con el acento de estado (is-done/is-pr/is-warmup)
    de .vt-set-row, si no las columnas quedan 2px desalineadas contra la fila real. */
-.vt-set-caps { display: flex; align-items: center; gap: 5px; padding: 0 4px; margin-bottom: -2px; border-left: 2px solid transparent; }
-.vt-set-caps-time { gap: 2px; padding: 0 2px; }
-.vt-cap-settype { width: 30px; flex-shrink: 0; }
-.vt-cap-check { width: 30px; flex-shrink: 0; }
+.vt-set-caps { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-1); margin-bottom: -2px; border-left: 2px solid transparent; }
 .vt-cap {
-  text-align: center; white-space: nowrap; flex-shrink: 0;
-  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: 0.06em;
+  text-align: center; white-space: nowrap;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: var(--track);
 }
-/* Hueco reservado para el botón de cronómetro (solo tipo "tiempo") — antes no
-   estaba contemplado y por eso "seg"/"+kg" no calzaban con sus columnas. */
-.vt-cap-timerbtn { width: 36px; flex-shrink: 0; }
-.vt-rest-mini { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Descanso del ejercicio: ícono de reloj + valor editable + "s", sin la
+   palabra "Descanso" (hacía partir en dos líneas los nombres largos). */
+.vt-rest-mini { display: inline-flex; align-items: center; gap: var(--sp-1); color: var(--text-dim); font-size: var(--fs-sm); }
 .vt-rest-mini input {
-  width: 48px; padding: 6px 2px; text-align: center;
-  font-size: 12px; font-weight: 600;
+  width: 40px; padding: var(--sp-2) 2px; text-align: center;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim);
   background: transparent; border: none; border-radius: 0;
 }
-.vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
-/* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
+.vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; color: var(--text); }
+
 /* Swipe-to-delete: fondo rojo detrás, oculto (opacity:0) hasta que arranca el arrastre. */
 .vt-swipe-wrap { position: relative; overflow: hidden; touch-action: pan-y; }
 .vt-swipe-bg {
   position: absolute; inset: 0;
   background: var(--red);
   display: flex; align-items: center; justify-content: flex-end;
-  padding-right: 22px;
+  padding-right: var(--sp-6);
   color: #fff;
   opacity: 0;
   pointer-events: none;
@@ -407,31 +453,29 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 .vt-swipe-wrap.is-swiping .vt-swipe-bg { opacity: 1; }
 .vt-swipe-wrap.is-removing { transition: opacity 180ms ease; opacity: 0; }
 
+/* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
 .vt-set-row {
-  display: flex; align-items: center; gap: 5px;
-  padding: 7px 4px;
+  position: relative; /* ancla del trofeo de PR (absoluto, no ocupa columna) */
+  display: flex; align-items: center; gap: var(--sp-1);
+  padding: var(--sp-1);
   border-radius: 0;
   border-bottom: 1px solid var(--line);
   border-left: 2px solid transparent;
   background: var(--bg); /* opaco: evita que el fondo rojo del swipe se traslunca en reposo */
   transition: background-color 180ms ease, border-left-color 180ms ease, transform 200ms ease;
 }
-/* Nota (y RPE) con menos padding solo dentro de la fila de serie: en pantallas
-   angostas la fila (check + calentamiento + inputs + trofeo + nota) no cabía
-   con el padding por defecto de .vt-btn-ghost y se recortaba contra el
-   overflow:hidden del swipe. */
-.vt-set-row .vt-btn-ghost { padding: 4px; }
 .vt-sets .vt-set-row:last-child { border-bottom: none; }
 /* Tinte + fondo opaco en una sola declaración (dos capas): mismo resultado visual
    que antes, pero opaco de verdad para que el rojo del swipe no se transluzca. */
 .vt-set-row.is-done { background: linear-gradient(rgba(111, 174, 124, 0.10), rgba(111, 174, 124, 0.10)), var(--bg); border-left-color: var(--green); }
 .vt-set-row.is-pr { background: linear-gradient(rgba(232, 163, 61, 0.12), rgba(232, 163, 61, 0.12)), var(--bg); border-left-color: var(--amber); }
-/* Valores de serie como texto plano de tabla: sin caja; al enfocar, subrayado ámbar
-   (box-shadow inset: no mueve el layout). El tap target se mantiene con el padding. */
+/* Valores de serie como texto plano de tabla: sin caja; al enfocar, subrayado azul
+   (box-shadow inset: no mueve el layout). El tap target se mantiene con el padding.
+   El ancho lo pone .vt-col-val (flex), no un width fijo por tipo. */
 .vt-set-input {
-  width: 52px; text-align: center; padding: 10px 4px;
+  text-align: center; padding: var(--sp-3) var(--sp-1);
   background: transparent; border: none; border-radius: 0;
-  font-weight: 600; font-size: 15px;
+  font-weight: 600; font-size: var(--fs-lg);
 }
 .vt-set-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 
@@ -439,7 +483,7 @@ select.vt-input { appearance: none; -webkit-appearance: none; }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-.vt-x { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+.vt-x { color: var(--text-dim); font-size: var(--fs-sm); }
 
 /* Trofeo de PR: entrada con pop (scale 0.5→1) en vez de aparecer de golpe. */
 @keyframes vt-pop-in {
@@ -447,12 +491,26 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   to { transform: scale(1); opacity: 1; }
 }
 .vt-pr { color: var(--amber); flex-shrink: 0; display: inline-flex; animation: vt-pop-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* Dentro de la fila de serie el trofeo NO es una columna: va absoluto, pegado
+   a la izquierda del RPE, así una fila con PR no se desalinea respecto de las
+   demás. --pr-right = todo lo que hay a su derecha (padding + check + RPE y
+   sus gaps); la fila de tiempo suma además el botón de cronómetro. */
+.vt-set-row {
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-rpe) + var(--sp-1));
+}
+.vt-set-row-time {
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-rpe) + var(--sp-1) + var(--col-timer) + var(--sp-1));
+}
+.vt-set-row .vt-pr {
+  position: absolute; top: 0; bottom: 0; right: var(--pr-right);
+  align-items: center; pointer-events: none;
+}
 
 .vt-check {
-  width: 30px; height: 30px; flex-shrink: 0;
-  border-radius: 9px;
-  border: 1.5px solid var(--line);
-  background: var(--surface-2);
+  width: var(--col-check); height: var(--col-check); flex-shrink: 0;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--line-strong);
+  background: transparent;
   color: transparent;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
@@ -462,38 +520,46 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-done .vt-check { background: var(--green); border-color: var(--green); color: #0E1512; }
 .vt-set-row.is-done .vt-check:active { filter: brightness(0.85); }
 
-/* Botón único de tipo/número de serie (reemplaza el número suelto + el
-   toggle de calentamiento aparte). Muestra el número en reposo (Normal) o
-   la letra C/D/F con el color de ese estado; un tap abre el selector chico
-   (.vt-type-picker) de las 4 opciones. */
+/* Nº/tipo de serie: texto suelto, sin caja ni borde. Muestra el número en
+   reposo (Normal) o la letra C/D/F con el color de ese estado; un tap abre
+   el selector chico (.vt-type-picker) de las 4 opciones. El alto calza con el
+   del check para conservar el área táctil aunque visualmente sea solo texto. */
 .vt-settype-btn {
-  width: 30px; height: 30px; flex-shrink: 0;
-  border-radius: 9px;
-  border: 1.5px solid var(--line);
-  background: var(--surface-2);
+  height: var(--col-check); padding: 0;
+  border: none; background: transparent;
   color: var(--text-dim);
-  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); font-weight: 600;
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: filter 100ms ease, transform 100ms ease, color 180ms ease, border-color 180ms ease;
+  transition: filter 100ms ease, transform 100ms ease, color 180ms ease;
 }
 .vt-settype-btn:active { transform: scale(0.96); }
-.vt-settype-btn.is-warmup { color: var(--blue); border-color: var(--blue); }
-.vt-settype-btn.is-dropset { color: var(--dropset); border-color: var(--dropset); }
-.vt-settype-btn.is-failed { color: var(--red); border-color: var(--red); }
+.vt-settype-btn.is-warmup { color: var(--blue); }
+.vt-settype-btn.is-dropset { color: var(--dropset); }
+.vt-settype-btn.is-failed { color: var(--red); }
 
-.vt-type-picker { display: flex; gap: 6px; padding: 4px 6px 8px; }
+/* RPE: ícono apagado en su columna fija; se enciende solo cuando la serie
+   tiene un RPE anotado (.has-value). */
+.vt-rpe-btn {
+  height: var(--col-check); padding: 0;
+  border: none; background: transparent; color: var(--text-dim);
+  cursor: pointer; opacity: 0.4;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.vt-rpe-btn.has-value { opacity: 1; color: var(--text); }
+
+.vt-type-picker { display: flex; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2) var(--sp-2); }
 .vt-type-picker-opt {
   flex: 1; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim);
-  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
-  padding: 8px; border-radius: 8px; cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); font-weight: 600;
+  padding: var(--sp-2); border-radius: var(--r-sm); cursor: pointer;
 }
 .vt-type-picker-opt.is-warmup { color: var(--blue); border-color: var(--blue); }
 .vt-type-picker-opt.is-dropset { color: var(--dropset); border-color: var(--dropset); }
 .vt-type-picker-opt.is-failed { color: var(--red); border-color: var(--red); }
 
 .vt-timer-btn {
-  width: 36px; height: 36px; flex-shrink: 0;
+  width: var(--col-timer); height: var(--col-timer); flex-shrink: 0;
   border-radius: 50%;
   border: 1.5px solid var(--line);
   background: var(--surface-2);
@@ -511,7 +577,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   animation: vt-timer-pulse 1.6s ease-in-out infinite;
 }
 .vt-timer-btn:active { filter: brightness(0.85); transform: scale(0.96); }
-/* El input de segundos cambia a azul mientras esa serie se está cronometrando
+/* El input de tiempo cambia a azul mientras esa serie se está cronometrando
    (vuelve a blanco al detenerse — ver clase is-running en setRowHTML). */
 .vt-set-input-clock.is-running { color: var(--blue); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva (misma
@@ -519,40 +585,24 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(143, 160, 172, 0.08), rgba(143, 160, 172, 0.08)), var(--bg); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
 
-/* Fila tipo "tiempo": seg + peso + botón de cronómetro son un control más que
-   las demás filas, así que aun con la fila más angosta de arriba seguía sin
-   caber. Encoge el input de peso y el gap de esta variante para compensar
-   el botón de cronómetro (36px, tap target grande — ver .vt-timer-btn). */
-.vt-set-row-time { gap: 2px; padding: 7px 2px; }
-.vt-set-row-time .vt-set-input-sm { width: 30px; }
-/* El campo de tiempo ahora muestra mm:ss ("01:00"), más ancho que un número
-   crudo — le da su propio tamaño en vez de compartir el de "peso". */
-.vt-set-input-clock { width: 60px; }
-
-/* Fila de ejercicio unilateral: peso + dos inputs de reps (izq/der) en vez
-   de peso + un input de reps — un control más, mismo achique de gap/padding
-   que la fila de tiempo para seguir cabiendo a 360px. */
-.vt-set-row-uni { gap: 2px; padding: 7px 2px; }
-.vt-set-input-uniw { width: 44px; }
-.vt-set-input-uni { width: 36px; }
-.vt-set-caps-uni { gap: 2px; padding: 0 2px; }
-
-.vt-setline2 { display: flex; gap: 8px; padding: 2px 6px 6px 29px; align-items: center; }
+/* Línea de RPE bajo la fila: arranca alineada con la primera columna de valor
+   (borde de estado 2px + padding de la fila + columna del nº + gap). */
+.vt-setline2 { display: flex; gap: var(--sp-2); padding: 2px var(--sp-2) var(--sp-2) calc(2px + var(--sp-1) + var(--col-num) + var(--sp-1)); align-items: center; }
 .vt-rpe-input {
-  width: 64px; text-align: center; padding: 10px 4px;
+  width: 64px; text-align: center; padding: var(--sp-3) var(--sp-1);
   background: transparent; border: none; border-radius: 0; font-weight: 600;
 }
 .vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
-.vt-note-line { color: var(--text-dim); font-size: 11.5px; font-style: italic; margin-top: 2px; }
+.vt-note-line { color: var(--text-dim); font-size: var(--fs-sm); font-style: italic; margin-top: 2px; }
 /* Nota de entrenador por ejercicio (instrucción, sin comillas) */
-.vt-coach-note { color: var(--text-dim); font-size: 12px; font-style: italic; margin: 6px 0 2px; }
+.vt-coach-note { color: var(--text-dim); font-size: var(--fs-sm); font-style: italic; margin: var(--sp-2) 0 2px; }
 
 /* Toggle mini KG / %1RM en el editor de rutina */
-.vt-loadmode { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.vt-loadmode { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
 .vt-loadmode button {
   background: var(--surface); border: 1px solid var(--line); color: var(--text-dim);
-  font-family: inherit; font-size: 10.5px; padding: 4px 10px; border-radius: 20px;
-  cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em;
+  font-family: inherit; font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-full);
+  cursor: pointer; text-transform: uppercase; letter-spacing: var(--track);
 }
 .vt-loadmode button.is-active { border-color: var(--blue); color: var(--blue); }
 
@@ -560,11 +610,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   position: sticky;
   bottom: 62px;
   background: linear-gradient(to top, var(--bg) 70%, transparent);
-  padding: 14px 0 4px;
-  margin-top: 10px;
+  padding: var(--sp-4) 0 var(--sp-1);
+  margin-top: var(--sp-3);
   z-index: 20;
 }
-.vt-footer-split { display: flex; gap: 10px; }
+.vt-footer-split { display: flex; gap: var(--sp-3); }
 .vt-footer-split .vt-btn-primary { flex: 1; }
 
 .vt-nav {
@@ -584,52 +634,52 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border: none;
   color: var(--text-dim);
   font-family: inherit;
-  padding: 10px 2px 12px;
+  padding: var(--sp-3) 2px var(--sp-3);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  font-size: 10px;
+  gap: var(--sp-1);
+  font-size: var(--fs-xs);
   cursor: pointer;
   position: relative;
   border-top: 2px solid transparent;
 }
-.vt-nav-item span { text-transform: uppercase; letter-spacing: 0.06em; }
+.vt-nav-item span { text-transform: uppercase; letter-spacing: var(--track); }
 .vt-nav-item.is-active { color: var(--blue); border-top-color: var(--blue); }
 .vt-dot { position: absolute; top: 6px; right: 26%; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
-.vt-empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
-.vt-empty-mascot { width: 72px; height: 72px; object-fit: contain; opacity: 0.55; margin-bottom: 14px; }
-.vt-empty h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--text); text-transform: uppercase; margin-bottom: 8px; }
-.vt-empty p { font-size: 13.5px; line-height: 1.5; margin-bottom: 18px; }
+.vt-empty { text-align: center; padding: var(--sp-16) var(--sp-6); color: var(--text-dim); }
+.vt-empty-mascot { width: 72px; height: 72px; object-fit: contain; opacity: 0.55; margin-bottom: var(--sp-4); }
+.vt-empty h3 { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-2xl); color: var(--text); text-transform: uppercase; margin-bottom: var(--sp-2); }
+.vt-empty p { font-size: var(--fs-sm); line-height: 1.5; margin-bottom: var(--sp-4); }
 
 .vt-modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: flex-end; justify-content: center; z-index: 50;
 }
 .vt-modal {
-  background: var(--surface); width: 100%; max-width: 480px; border-radius: 16px 16px 0 0;
+  background: var(--surface); width: 100%; max-width: 480px; border-radius: var(--r-md) var(--r-md) 0 0;
   max-height: 75vh; display: flex; flex-direction: column; border: 1px solid var(--line); border-bottom: none;
 }
-.vt-modal-head { display: flex; align-items: center; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line); }
-.vt-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; text-transform: uppercase; margin: 0; flex: 1; }
-.vt-search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; color: var(--text-dim); }
-.vt-search input { background: transparent; border: none; color: var(--text); flex: 1; font-size: 14px; font-family: inherit; min-width: 0; }
+.vt-modal-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4); border-bottom: 1px solid var(--line); }
+.vt-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); text-transform: uppercase; margin: 0; flex: 1; }
+.vt-search { flex: 1; display: flex; align-items: center; gap: var(--sp-2); background: var(--surface-2); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); color: var(--text-dim); }
+.vt-search input { background: transparent; border: none; color: var(--text); flex: 1; font-size: var(--fs-md); font-family: inherit; min-width: 0; }
 .vt-search input:focus { outline: none; }
-.vt-modal-body { overflow-y: auto; padding: 8px; }
+.vt-modal-body { overflow-y: auto; padding: var(--sp-2); }
 .vt-modal-row {
   width: 100%; text-align: left; background: transparent; border: none; color: var(--text); font-family: inherit;
-  padding: 12px 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; border-radius: 8px; font-size: 14px;
+  padding: var(--sp-3) var(--sp-3); display: flex; align-items: center; gap: var(--sp-3); cursor: pointer; border-radius: var(--r-sm); font-size: var(--fs-md);
 }
 .vt-modal-row:hover { background: var(--surface-2); }
 .vt-modal-row .vt-muted-sm { margin-left: auto; }
 .vt-modal-add { color: var(--amber); }
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.vt-modal-form { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-.vt-modal-form label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
-.vt-textarea { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; resize: vertical; min-height: 160px; }
-.vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-dim); }
-.vt-modal-actions { display: flex; gap: 10px; padding: 0 14px 18px; }
+.vt-modal-form { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.vt-modal-form label { font-size: var(--fs-xs); color: var(--text-dim); display: flex; flex-direction: column; gap: var(--sp-1); }
+.vt-textarea { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); resize: vertical; min-height: 160px; }
+.vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-modal-actions { display: flex; gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-4); }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
 .vt-modal-actions .vt-btn-ghost { flex: 1; justify-content: center; }
 /* Modal de confirmación propio: variante danger sobre .vt-btn-primary. */
@@ -643,62 +693,62 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   display: flex; justify-content: center;
   overflow-y: auto;
 }
-.vt-summary-inner { width: 100%; max-width: 480px; padding: 40px 16px 32px; }
+.vt-summary-inner { width: 100%; max-width: 480px; padding: var(--sp-12) var(--sp-4) var(--sp-8); }
 /* Detalle sutil, no un elemento central — se oculta solo si el archivo no existe. */
 .vt-summary-mascot { position: absolute; top: 20px; right: 20px; width: 56px; height: 56px; object-fit: contain; opacity: 0.3; pointer-events: none; }
 /* El nombre de rutina es texto libre del usuario: sin mayúsculas forzadas
    (misma regla que .vt-block h3). */
 .vt-summary-title {
   font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 700; font-size: 26px;
-  margin: 4px 0 0; letter-spacing: 0.01em;
+  font-weight: 700; font-size: var(--fs-2xl);
+  margin: var(--sp-1) 0 0; letter-spacing: normal;
   text-transform: none;
 }
-.vt-pr-hit { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.vt-pr-hit { padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
 .vt-pr-hit:last-child { border-bottom: none; padding-bottom: 0; }
-.vt-pr-hit-row { display: flex; align-items: center; gap: 8px; }
-.vt-pr-hit-name { flex: 1; font-size: 14px; min-width: 0; }
-.vt-pr-hit-value { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
-.vt-pr-hit-applied { color: var(--green); font-size: 12.5px; display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
+.vt-pr-hit-row { display: flex; align-items: center; gap: var(--sp-2); }
+.vt-pr-hit-name { flex: 1; font-size: var(--fs-md); min-width: 0; }
+.vt-pr-hit-value { color: var(--text-dim); font-size: var(--fs-sm); flex-shrink: 0; }
+.vt-pr-hit-applied { color: var(--green); font-size: var(--fs-sm); display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0 0; }
 
-.vt-diff-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-family: 'IBM Plex Mono', monospace; }
+.vt-diff-list { list-style: none; padding: 0; margin: var(--sp-2) 0 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
 .vt-diff-added { color: var(--blue); }
 .vt-diff-removed { color: var(--red); }
 
-.vt-session-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-.vt-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.vt-session-detail { margin-top: var(--sp-3); border-top: 1px solid var(--line); padding-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.vt-detail-row { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); }
 .vt-detail-row .vt-mono { text-align: right; }
 
-.vt-metric-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
+.vt-metric-toggle { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
 .vt-metric-toggle button {
   flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text-dim); font-family: inherit;
-  padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  padding: var(--sp-2); border-radius: var(--r-sm); font-size: var(--fs-sm); cursor: pointer;
 }
 .vt-metric-toggle button.is-active { border-color: var(--blue); color: var(--blue); }
 /* Chips de rango temporal: no entran los 8 a lo ancho de 360px, scroll
    horizontal en vez de encogerlos hasta ilegibles. */
 .vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
-.vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: 7px 10px; }
+.vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: var(--sp-2) var(--sp-3); }
 
-.vt-stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
-.vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.vt-stat-label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
-.vt-stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; }
+.vt-stat-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-3); }
+.vt-stat-label { display: block; font-size: var(--fs-xs); color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: var(--track); }
+.vt-stat-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; }
 .vt-stat-delta { color: var(--green); }
 
 /* Resumen semanal / stats de ejercicio en Progreso: sin caja, mismo
    lenguaje que .vt-settings-row (divisores finos en vez de bordes). */
-.vt-stat-row-flat { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
-.vt-stat-flat { flex: 1; padding: 12px 6px; text-align: center; }
+.vt-stat-row-flat { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-6); }
+.vt-stat-flat { flex: 1; padding: var(--sp-3) var(--sp-2); text-align: center; }
 .vt-stat-flat + .vt-stat-flat { border-left: 1px solid var(--line); }
 
 /* Lista de PRs recientes: fila plana con divisor, mismo patrón que vt-detail-row. */
-.vt-pr-recent-row { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.vt-pr-recent-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 2px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
 .vt-pr-recent-row:last-child { border-bottom: none; }
 .vt-pr-recent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-pr-recent-value { color: var(--text-dim); flex-shrink: 0; }
 
-.vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 10px 8px; margin-bottom: 18px; }
+.vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-3) var(--sp-2); margin-bottom: var(--sp-4); }
 
 /* -------------------- Aviso de actualización disponible ------------------ */
 /* Barra delgada de ancho completo, pegada arriba de todo (por sobre el
@@ -711,18 +761,18 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   width: 100%; max-width: 480px;
   background: var(--surface-2);
   display: flex; align-items: center; justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  font-size: 13px;
-  border-radius: 0 0 10px 10px;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  border-radius: 0 0 var(--r-md) var(--r-md);
   z-index: 100;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
 #update-toast button {
   background: transparent; border: none; color: var(--blue);
-  font-family: inherit; font-weight: 600; font-size: 13px;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  cursor: pointer; padding: 4px 8px; flex-shrink: 0;
+  font-family: inherit; font-weight: 600; font-size: var(--fs-sm);
+  text-transform: uppercase; letter-spacing: var(--track);
+  cursor: pointer; padding: var(--sp-1) var(--sp-2); flex-shrink: 0;
 }
 #update-toast button:active { filter: brightness(0.85); }
 
@@ -732,12 +782,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   position: fixed;
   top: 12px; left: 50%; transform: translateX(-50%);
   max-width: calc(100% - 32px);
+  white-space: nowrap; /* con left:50% el ancho disponible es media pantalla: sin esto la píldora se parte en dos líneas */
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--text-dim);
-  font-size: 12.5px;
-  padding: 9px 16px;
-  border-radius: 20px;
+  font-size: var(--fs-sm);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-full);
   z-index: 100;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
   animation: vt-toast-fade 3.5s ease forwards;
@@ -758,7 +809,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   width: 100%; max-width: 480px;
   z-index: 40;
   display: flex; flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 /* Barra delgada, ancho completo, pegada arriba de la nav (sin márgenes
    laterales, sin esquinas redondeadas abajo). La cuenta regresiva se ve en
@@ -767,9 +818,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 #restbar {
   position: relative;
   background: var(--surface-2);
-  border-radius: 10px 10px 0 0;
-  padding: 12px 16px;
-  display: flex; align-items: center; gap: 12px;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-3);
   overflow: hidden;
   box-shadow: 0 -4px 18px rgba(0,0,0,0.35);
 }
@@ -782,12 +833,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 #restbar.is-hidden { display: none; }
 .vt-rest-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.vt-rest-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; }
-.vt-rest-time { font-family: 'IBM Plex Mono', monospace; font-size: 27px; font-weight: 700; color: var(--blue); }
+.vt-rest-label { font-size: var(--fs-xs); color: var(--text-dim); letter-spacing: var(--track); text-transform: uppercase; }
+.vt-rest-time { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-3xl); font-weight: 700; color: var(--blue); }
 .vt-rest-cancel {
   flex-shrink: 0;
   background: transparent; border: none; color: var(--text-dim); cursor: pointer;
-  padding: 6px; display: inline-flex; align-items: center; justify-content: center;
+  padding: var(--sp-2); display: inline-flex; align-items: center; justify-content: center;
 }
 .vt-rest-cancel:active { color: var(--text); }
 
@@ -796,86 +847,86 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 #minimized-bar.is-hidden { display: none; }
 .vt-minibar-btn {
   width: 100%; background: var(--surface-2); border: 1px solid var(--line);
-  border-radius: 12px; padding: 10px 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   cursor: pointer; color: inherit; font: inherit; text-align: left;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
 .vt-minibar-btn:active { filter: brightness(0.9); }
 .vt-minibar-name {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: var(--fs-md);
 }
 .vt-minibar-stats {
-  flex-shrink: 0; display: flex; gap: 10px;
-  font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--blue); font-weight: 600;
+  flex-shrink: 0; display: flex; gap: var(--sp-3);
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--blue); font-weight: 600;
 }
 
 /* Encabezado de sección genérico (Ajustes, PRs recientes, etc.): mayúscula
    con tracking, sin caja — reemplaza los .vt-card que agrupaban secciones. */
 .vt-section-eyebrow {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 600;
+  letter-spacing: var(--track); text-transform: uppercase;
   color: var(--text-dim);
-  margin: 0 0 4px;
+  margin: 0 0 var(--sp-1);
 }
 
 /* ------------------------------ Ajustes -------------------------------- */
 .vt-settings-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 4px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-1); border-bottom: 1px solid var(--line);
 }
 .vt-settings-row:last-child { border-bottom: none; }
-.vt-settings-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
-.vt-settings-label small { display: block; color: var(--text-dim); font-size: 11.5px; margin-top: 2px; text-transform: none; letter-spacing: normal; }
+.vt-settings-label { font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: var(--track); }
+.vt-settings-label small { display: block; color: var(--text-dim); font-size: var(--fs-sm); margin-top: 2px; text-transform: none; letter-spacing: normal; }
 .vt-settings-row .vt-input { width: 90px; text-align: center; }
 .vt-switch { width: 22px; height: 22px; accent-color: var(--amber); cursor: pointer; }
 .vt-badge {
-  font-size: 10.5px; padding: 2px 8px; border-radius: 20px;
+  font-size: var(--fs-xs); padding: 2px var(--sp-2); border-radius: var(--r-full);
   border: 1px solid var(--line); color: var(--text-dim);
   font-family: 'IBM Plex Mono', monospace; white-space: nowrap;
-  text-transform: uppercase; letter-spacing: 0.04em;
+  text-transform: uppercase; letter-spacing: var(--track);
 }
 /* Dos filas: nombre + acciones arriba, badges abajo — sin solapamientos con nombres largos. */
-.vt-ex-row { padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.vt-ex-row { padding: var(--sp-3) var(--sp-1); border-bottom: 1px solid var(--line); }
 .vt-ex-row:last-child { border-bottom: none; }
-.vt-ex-row-top { display: flex; align-items: center; gap: 10px; }
-.vt-ex-badges { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
-.vt-ex-name { flex: 1; font-size: 14px; min-width: 0; }
+.vt-ex-row-top { display: flex; align-items: center; gap: var(--sp-3); }
+.vt-ex-badges { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); flex-wrap: wrap; }
+.vt-ex-name { flex: 1; font-size: var(--fs-md); min-width: 0; }
 
 /* Catálogo de ejercicios estilo tabla (ref. Hevy, igual que .vt-block): sin
    caja, acento vertical de 2-3px en el color del grupo para TODO el bloque
    (no por fila), encabezado de grupo en mayúscula con tracking. Las filas
    .vt-ex-row de adentro ya traen su propio divisor fino (border-bottom). */
 /* Wrapper de la pestaña Ejercicios: sin gap propio, la separación la da el
-   margin-bottom de cada .vt-group-block (20-24px, ver abajo) — evita sumar
-   el gap:12px de .vt-list encima y dejar demasiado aire. */
+   margin-bottom de cada .vt-group-block (--sp-6, ver abajo) — evita sumar
+   el gap de .vt-list encima y dejar demasiado aire. */
 .vt-ex-groups { display: flex; flex-direction: column; }
-.vt-group-block { border-left: 3px solid var(--line); padding: 2px 4px 4px 14px; margin-bottom: 22px; }
+.vt-group-block { border-left: 3px solid var(--line); padding: 2px var(--sp-1) var(--sp-1) var(--sp-4); margin-bottom: var(--sp-6); }
 .vt-group-block:last-child { margin-bottom: 0; }
 .vt-group-title {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11.5px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 600;
+  letter-spacing: var(--track); text-transform: uppercase;
   color: var(--text-dim);
-  margin: 6px 0 4px;
+  margin: var(--sp-2) 0 var(--sp-1);
 }
 
 /* Paleta de swatches para elegir color de grupo (excluye ámbar/verde, reservados). */
-.vt-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+.vt-swatches { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: 2px; }
 .vt-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .vt-swatch.is-active { border-color: var(--text); }
 
 /* Panel "Tus máximos" en Progreso */
-.vt-max-slot { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.vt-max-slot { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
 .vt-max-slot:last-of-type { border-bottom: none; }
-.vt-max-name { flex: 1; font-size: 13.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt-max-name { flex: 1; font-size: var(--fs-sm); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vt-max-input {
-  width: 68px; text-align: center; padding: 9px 2px;
+  width: 68px; text-align: center; padding: var(--sp-2) 2px;
   background: transparent; border: none; border-radius: 0;
-  font-weight: 600; font-size: 15px;
+  font-weight: 600; font-size: var(--fs-md);
 }
 .vt-max-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
-.vt-ex-name small { display: block; color: var(--text-dim); font-size: 11px; }
+.vt-ex-name small { display: block; color: var(--text-dim); font-size: var(--fs-xs); }
 input[type="file"] { display: none; }

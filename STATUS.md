@@ -1000,3 +1000,28 @@ Entradas nuevas al final. No reescribir lo anterior.
   rutina sin nombre, grupo duplicado, e importación exitosa — los tres
   muestran el modal propio. Sin errores de consola en las 4 pestañas.
 - sw.js goat-v27 → v28.
+
+## 2026-10-01 cont. — Rediseño visual, Fase 1 de 3
+- Escala de diseño en `:root` de estilos.css (--fs-*, --sp-*, --r-*,
+  --track, más --line-strong #3A3A41) y TODO el CSS + los style=""
+  inline de app.js remapeados a tokens. Conteo final fuera de :root:
+  0 font-size sueltos, 0 letter-spacing sueltos; border-radius solo
+  `0`, `50%` y esquinas parciales con token. Espaciados que quedan en
+  px: 0/1px/2px, el 100px de holgura de la nav y los calc(). Valores
+  que el prompt no listaba y se llevaron al token más cercano: 22px y
+  26px → --sp-6.
+- Fila de serie rehecha como tabla `[nº] [valor] [×] [valor] [RPE] [✓]`
+  con una sola plantilla de columnas por tipo (`setColumns` en app.js,
+  la usan encabezado y fila; anchos fijos como variables --col-* en
+  `.vt-sets`). Trofeo de PR absoluto, no corre columnas. Encabezado de
+  ejercicio: nombre siempre en --text, descanso con ícono de reloj.
+- Decisión: el RPE anotado se muestra en --text a opacidad completa (ya
+  no en ámbar — ámbar es solo PR). Pendiente fuera de esta fase: la
+  nota de ejercicio con contenido y los checkbox de Ajustes siguen
+  usando ámbar.
+- Verificado a 393 y 360px: peso×reps, tiempo (con timer corriendo),
+  unilateral, peso corporal, superserie, C/D/F, PR en vivo, colapsado,
+  Organizar, swipe, barra de descanso y sesión minimizada. Sin errores
+  de consola. Sin probar todavía en teléfono real (tacto/gestos/teclado).
+- sw.js NO se subió de versión todavía (va al cerrar las 3 fases, o
+  antes si se quiere publicar la Fase 1 sola).
