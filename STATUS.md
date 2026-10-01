@@ -974,3 +974,29 @@ Entradas nuevas al final. No reescribir lo anterior.
   GitHub libere runners.
 - sw.js goat-v26 → v27 (icons/goat-face.png y goat-body.png sumados
   al APP_SHELL).
+
+## 2026-10-01
+- Limpieza de código muerto confirmada post-remoción de Partidos: se
+  eliminó `.vt-card-button` (CSS sin uso) y el ícono `history` de
+  PATHS (huérfano desde la fusión de Historial en Progreso). Barrido
+  completo de todos los íconos de PATHS contra sus llamadores
+  (incluyendo los dinámicos vía NAV_ITEMS/ternarios) — el resto está
+  todo en uso, no quedó ningún otro huérfano. Confirmado también sin
+  ningún rastro textual de "partidos"/"volleyball"/"highlightly" en
+  app.js/estilos.css/index.html.
+- Modal propio para avisos informativos: `askAlert(message)` +
+  `ui.infoDialog` + `infoDialogHTML()` (mismo lenguaje visual que
+  askConfirm, un solo botón "Entendido", cierra con
+  "info-dialog-close" o tocando el fondo). Reemplazados los 14
+  `alert()` nativos que quedaban en el archivo (validaciones de
+  nombre vacío en rutina/ejercicio/carpeta/grupo, JSON inválido al
+  importar por archivo o pegando texto, duplicados de nombre de grupo,
+  confirmación de importación exitosa/respaldo restaurado, aviso de
+  ejercicio en modo %1RM sin 1RM configurado, error al generar la
+  imagen para compartir). Sin alert()/confirm() nativos en ningún
+  punto del archivo.
+- Verificado en browser: modal de aviso con el estilo correcto
+  (screenshot), cierre con el botón y con el fondo, flujo de guardar
+  rutina sin nombre, grupo duplicado, e importación exitosa — los tres
+  muestran el modal propio. Sin errores de consola en las 4 pestañas.
+- sw.js goat-v27 → v28.

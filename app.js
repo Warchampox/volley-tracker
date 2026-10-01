@@ -154,6 +154,7 @@ const ui = {
   openTypeSelector: null, // "exIdx:setIdx" con el selector de tipo de serie abierto, o null
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, danger, onYes}
+  infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
   pasteJsonModal: false,  // modal de "Pegar JSON"
@@ -169,6 +170,13 @@ const ui = {
 // toca "Confirmar"/"Eliminar"; si cancela o cierra, no pasa nada.
 function askConfirm(message, onYes, danger = false, onNo = null) {
   ui.confirmDialog = { message, danger, onYes, onNo };
+  render();
+}
+
+// Reemplaza alert() nativo por un modal propio (mismo lenguaje visual que
+// askConfirm), con un solo botón — para avisos que no piden una decisión.
+function askAlert(message) {
+  ui.infoDialog = { message };
   render();
 }
 
@@ -196,7 +204,6 @@ const typePrefix = (t) => t === "warmup" ? "c" : t === "dropset" ? "D" : t === "
 const PATHS = {
   barbell: '<path d="M6.5 5.5v13"/><path d="M17.5 5.5v13"/><path d="M3 8.5v7"/><path d="M21 8.5v7"/><path d="M6.5 12h11"/>',
   play: '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
-  history: '<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>',
   trend: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
   sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
@@ -604,6 +611,7 @@ function render() {
     ${ui.exerciseModal ? exerciseModalHTML() : ""}
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
+    ${ui.infoDialog ? infoDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
     ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}
     ${ui.groupModal ? groupModalHTML() : ""}
@@ -1977,6 +1985,23 @@ function confirmDialogHTML() {
     </div>`;
 }
 
+// Modal propio para avisos informativos (reemplaza alert() nativo). Mismo
+// lenguaje visual que confirmDialogHTML, pero un solo botón, sin Cancelar.
+function infoDialogHTML() {
+  const d = ui.infoDialog;
+  return `
+    <div class="vt-modal-backdrop" data-a="info-dialog-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-form">
+          <p style="margin:0;white-space:pre-line">${esc(d.message)}</p>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-primary vt-full" data-a="info-dialog-close">Entendido</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function emptyHTML(title, detail, action) {
   // onerror oculta la mascota sin romper el layout si icons/goat-face.png
   // todavía no existe en este dispositivo/deploy — el resto del estado
@@ -2428,7 +2453,7 @@ async function buildShareBlob(kind, data) {
 // una descarga normal (mismo patrón que exportJSON: <a download> + blob URL).
 async function shareImage(kind, data, filename, shareTitle) {
   const blob = await buildShareBlob(kind, data);
-  if (!blob) { alert("No se pudo generar la imagen para compartir."); return; }
+  if (!blob) { askAlert("No se pudo generar la imagen para compartir."); return; }
   const file = new File([blob], filename, { type: "image/png" });
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2480,7 +2505,7 @@ function processImportedData(data) {
         sessions = data.sessions; persistSessions();
         if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
         if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
-        alert("Respaldo restaurado ✔");
+        askAlert("Respaldo restaurado ✔");
       }, true);
       return;
     }
@@ -2512,9 +2537,9 @@ function processImportedData(data) {
         }
         persistRoutines();
       }
-      alert(`Importado ✔  ${nRt} rutina(s) y ${nEx} ejercicio(s) nuevos.`);
+      askAlert(`Importado ✔  ${nRt} rutina(s) y ${nEx} ejercicio(s) nuevos.`);
     } else {
-      alert("El archivo no tiene rutinas, ejercicios ni un respaldo reconocible.");
+      askAlert("El archivo no tiene rutinas, ejercicios ni un respaldo reconocible.");
     }
     render();
 }
@@ -2524,7 +2549,7 @@ function importJSON(file) {
   reader.onload = () => {
     let data;
     try { data = JSON.parse(reader.result); }
-    catch { alert("El archivo no es un JSON válido."); return; }
+    catch { askAlert("El archivo no es un JSON válido."); return; }
     processImportedData(data);
   };
   reader.readAsText(file);
@@ -2684,6 +2709,10 @@ document.addEventListener("click", (e) => {
       ui.confirmDialog = null;
       render();
       break;
+    case "info-dialog-close":
+      ui.infoDialog = null;
+      render();
+      break;
 
     /* Rutinas */
     case "routine-new":
@@ -2763,7 +2792,7 @@ document.addEventListener("click", (e) => {
     case "folder-modal-cancel": ui.folderModal = null; render(); break;
     case "folder-modal-save": {
       const name = document.getElementById("fold-name").value.trim();
-      if (!name) { alert("Ponle un nombre a la carpeta."); break; }
+      if (!name) { askAlert("Ponle un nombre a la carpeta."); break; }
       const m = ui.folderModal;
       let folderId;
       if (m.id) {
@@ -2816,13 +2845,13 @@ document.addEventListener("click", (e) => {
     }
     case "editor-save": {
       const r = ui.editingRoutine;
-      if (!r.name.trim()) { alert("Ponle un nombre a la rutina."); break; }
-      if (r.exercises.length === 0) { alert("Agrega al menos un ejercicio."); break; }
+      if (!r.name.trim()) { askAlert("Ponle un nombre a la rutina."); break; }
+      if (r.exercises.length === 0) { askAlert("Agrega al menos un ejercicio."); break; }
       // Modo %1RM exige tener 1RM en el catálogo; el peso nunca se congela en la rutina.
       const mapEx = exMap();
       const sinRM = r.exercises.find((it) => it.loadMode === "percent" && !(num(mapEx[it.exerciseId]?.oneRM) > 0));
       if (sinRM) {
-        alert(`"${mapEx[sinRM.exerciseId]?.name || "Un ejercicio"}" está en modo %1RM pero no tiene 1RM definido. Configúralo en Ajustes → Ejercicios.`);
+        askAlert(`"${mapEx[sinRM.exerciseId]?.name || "Un ejercicio"}" está en modo %1RM pero no tiene 1RM definido. Configúralo en Ajustes → Ejercicios.`);
         break;
       }
       r.exercises.forEach((it) => { if (it.loadMode === "percent") delete it.targetWeight; });
@@ -3233,7 +3262,7 @@ document.addEventListener("click", (e) => {
       const name = document.getElementById("exm-name").value.trim();
       const group = document.getElementById("exm-group").value;
       const type = document.getElementById("exm-type").value;
-      if (!name) { alert("Ponle un nombre al ejercicio."); break; }
+      if (!name) { askAlert("Ponle un nombre al ejercicio."); break; }
       const ormVal = num(document.getElementById("exm-onerm")?.value);
       const oneRM = type !== "time" && ormVal > 0 ? ormVal : undefined;
       const uniVal = document.getElementById("exm-unilateral")?.checked;
@@ -3286,11 +3315,11 @@ document.addEventListener("click", (e) => {
     case "group-modal-cancel": ui.groupModal = null; render(); break;
     case "group-modal-save": {
       const name = document.getElementById("grp-name").value.trim();
-      if (!name) { alert("Ponle un nombre al grupo."); break; }
+      if (!name) { askAlert("Ponle un nombre al grupo."); break; }
       const m = ui.groupModal;
       if (m.originalName) {
         if (name !== m.originalName && exerciseGroups.some((g) => g.name === name)) {
-          alert("Ya existe un grupo con ese nombre.");
+          askAlert("Ya existe un grupo con ese nombre.");
           break;
         }
         const g = exerciseGroups.find((x) => x.name === m.originalName);
@@ -3304,7 +3333,7 @@ document.addEventListener("click", (e) => {
           persistGroups();
         }
       } else {
-        if (exerciseGroups.some((g) => g.name === name)) { alert("Ya existe un grupo con ese nombre."); break; }
+        if (exerciseGroups.some((g) => g.name === name)) { askAlert("Ya existe un grupo con ese nombre."); break; }
         exerciseGroups.push({ name, color: m.color });
         persistGroups();
       }
@@ -3320,7 +3349,7 @@ document.addEventListener("click", (e) => {
       const text = document.getElementById("paste-json-text").value;
       let data;
       try { data = JSON.parse(text); }
-      catch { alert("El texto pegado no es un JSON válido."); break; }
+      catch { askAlert("El texto pegado no es un JSON válido."); break; }
       ui.pasteJsonModal = false;
       processImportedData(data);
       break;
