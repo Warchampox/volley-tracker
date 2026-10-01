@@ -65,6 +65,9 @@ const fmtDateShort = (iso) =>
   new Date(iso).toLocaleDateString("es-CL", { day: "2-digit", month: "short" });
 
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+// Número con formato chileno: miles con punto, decimales con coma (52,5).
+// Regla de toda la app: SIEMPRE espacio antes de la unidad ("53 kg", no "53kg").
+const fmtNum = (n) => num(n).toLocaleString("es-CL", { maximumFractionDigits: 2 });
 
 // Clonado profundo para el borrador del modo Organizar (los datos son planos,
 // JSON-serializables, sin fechas ni funciones) — nunca comparte referencias
@@ -140,10 +143,10 @@ const ui = {
   openHistory: null,
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
-  progressEx: null,
-  progressMetric: null,
-  progressView: "ejercicio", // "total" | "grupo" | "ejercicio"
-  progressRange: "2m",       // "1sem"|"2sem"|"1m"|"2m"|"4m"|"6m"|"8m"|"1a"
+  progressDetail: null,      // id del ejercicio cuyo detalle está abierto en Progreso, o null
+  progressMetric: null,      // métrica del gráfico del detalle (weight | reps | seconds | volume)
+  progressRange: "2m",       // "1m" | "2m" | "6m" | "1a"
+  featuredSheet: false,      // hoja "Tus ejercicios → Editar" (destacados)
   progressSection: "resumen", // "resumen" | "historial" — Historial se fusionó dentro de Progreso
   exercisesQuery: "",        // buscador de la pestaña Ejercicios
   manageGroups: false,
@@ -396,7 +399,7 @@ function organizeActionBarHTML() {
   const n = ui.selectedExercises.size;
   if (n === 0) return "";
   return `<div class="vt-organize-bar">
-    <span class="vt-organize-count">${n} seleccionado${n !== 1 ? "s" : ""}</span>
+    <span class="vt-organize-count">${n} elegido${n !== 1 ? "s" : ""}</span>
     <div class="vt-organize-actions">
       <button class="vt-btn-ghost vt-danger" data-a="organize-delete">${icon("trash", 16)} Eliminar</button>
       ${n >= 2 ? `<button class="vt-btn-ghost" data-a="organize-group">${icon("link", 16)} Agrupar</button>` : ""}
@@ -475,14 +478,14 @@ function sessionSetsFromHistory(exId, type, unilateral) {
 function fmtSet(type, s, unilateral) {
   const w = typePrefix(getSetType(s));
   const rpe = s.rpe ? ` @${s.rpe}` : "";
-  if (type === "time") return `${w}${fmtClock(num(s.seconds))}${num(s.weight) > 0 ? ` +${num(s.weight)}kg` : ""}${rpe}`;
+  if (type === "time") return `${w}${fmtClock(num(s.seconds))}${num(s.weight) > 0 ? ` +${fmtNum(s.weight)} kg` : ""}${rpe}`;
   if (unilateral) {
     const sides = `I${repsL(s)} D${repsR(s)}`;
-    return num(s.weight) > 0 ? `${w}${num(s.weight)}kg · ${sides}${rpe}` : `${w}${sides}${rpe}`;
+    return num(s.weight) > 0 ? `${w}${fmtNum(s.weight)} kg · ${sides}${rpe}` : `${w}${sides}${rpe}`;
   }
   if (type === "bodyweight")
-    return num(s.weight) > 0 ? `${w}+${num(s.weight)}kg×${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
-  return `${w}${num(s.weight)}×${num(s.reps)}${rpe}`;
+    return num(s.weight) > 0 ? `${w}+${fmtNum(s.weight)} kg × ${num(s.reps)}${rpe}` : `${w}${num(s.reps)}${rpe}`;
+  return `${w}${fmtNum(s.weight)}×${num(s.reps)}${rpe}`;
 }
 
 /* -------------------------- Cronómetro de descanso ------------------------------- */
@@ -637,6 +640,7 @@ function render() {
     ${ui.folderModal ? folderModalHTML() : ""}
     ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}
     ${ui.actionSheet ? actionSheetHTML() : ""}
+    ${ui.featuredSheet && !ui.picker ? featuredSheetHTML() : ""}
     ${ui.groupModal ? groupModalHTML() : ""}
     ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}`;
 
@@ -920,7 +924,7 @@ function editorHTML() {
         let loadmode = "";
         if (t !== "time") {
           const calc = !isPct ? "" : (oneRM > 0
-            ? `= ${pctKg(oneRM, it.targetPercent ?? 70)} kg (1RM ${oneRM} kg)`
+            ? `= ${fmtNum(pctKg(oneRM, it.targetPercent ?? 70))} kg (1RM ${fmtNum(oneRM)} kg)`
             : "Define el 1RM de este ejercicio en Ajustes → Ejercicios");
           loadmode = `<div class="vt-loadmode">
             <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg">KG</button>
@@ -1346,27 +1350,17 @@ function metricOptions(exId) {
   return opts;
 }
 
-// Volumen total de un ejercicio dentro de una sesión (sets ya guardados = todos done).
-function exerciseVolume(e) {
-  const t = exType(e.exerciseId);
-  const uni = exUnilateral(e.exerciseId);
-  return e.sets.reduce((a, st) => a + setVol(t, st, uni), 0);
-}
+/* ----------------------------- Rango temporal ----------------------------- */
 
-/* ------------------------- Rango temporal (Bloque 4) ------------------------- */
-
-const RANGE_CHIPS = [
-  { id: "1sem", label: "1SEM" }, { id: "2sem", label: "2SEM" },
-  { id: "1m", label: "1M" }, { id: "2m", label: "2M" },
-  { id: "4m", label: "4M" }, { id: "6m", label: "6M" },
-  { id: "8m", label: "8M" }, { id: "1a", label: "1A" },
-];
-const RANGE_DAYS = { "1sem": 7, "2sem": 14, "1m": 30, "2m": 60, "4m": 120, "6m": 180, "8m": 240, "1a": 365 };
+// Solo 4 opciones, sin scroll horizontal. El mismo rango gobierna el gráfico
+// de volumen, el reparto, las mini curvas de "Tus ejercicios" y el detalle.
+const RANGE_CHIPS = [{ id: "1m", label: "1M" }, { id: "2m", label: "2M" }, { id: "6m", label: "6M" }, { id: "1a", label: "1A" }];
+const RANGE_DAYS = { "1m": 30, "2m": 60, "6m": 180, "1a": 365 };
+const RANGE_WORDS = { "1m": "1 mes", "2m": "2 meses", "6m": "6 meses", "1a": "1 año" };
 const rangeToDays = (range) => RANGE_DAYS[range] || 60;
 
-// Granularidad adaptativa: rangos cortos agrupan por semana, los largos por
-// mes calendario (si no, con "1a" terminarían 52 barras chicas).
-const bucketGranularity = (range) => (range === "4m" || range === "6m" || range === "8m" || range === "1a") ? "month" : "week";
+// Granularidad: semanal hasta 6M, mensual en 1A (si no, serían 52 barras).
+const bucketGranularity = (range) => range === "1a" ? "month" : "week";
 
 function sessionsInRange(range) {
   const cutoff = Date.now() - rangeToDays(range) * 86400000;
@@ -1382,6 +1376,8 @@ function mondayOf(d) {
   return dt;
 }
 const weekKey = (d) => mondayOf(d).toISOString().slice(0, 10);
+// "YYYY-MM-DD" → Date a medianoche LOCAL (new Date("YYYY-MM-DD") lo toma como UTC).
+const localKeyToDate = (key) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d); };
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 function bucketLabel(key, granularity) {
@@ -1394,27 +1390,44 @@ function bucketLabel(key, granularity) {
   return fmtDateShort(localKeyToDate(key));
 }
 
-// Agrupa las sesiones del rango en buckets (semanales o mensuales según el
-// rango, ver bucketGranularity), ordenados cronológicamente ascendente.
+// Agrupa las sesiones del rango en períodos (semanas o meses, ver
+// bucketGranularity), en orden cronológico. La serie es CONTINUA: va desde
+// el primer período con sesiones hasta el actual, incluyendo los vacíos (en
+// 0) — así el eje no esconde las semanas sin entrenar y el período actual
+// siempre existe (es la barra azul). `isCurrent` marca ese último.
 function computeBuckets(range) {
   const granularity = bucketGranularity(range);
+  const keyOf = (d) => granularity === "month" ? monthKey(d) : weekKey(d);
   const map = new Map();
   sessionsInRange(range).forEach((s) => {
-    const d = new Date(s.date);
-    const key = granularity === "month" ? monthKey(d) : weekKey(d);
+    const key = keyOf(new Date(s.date));
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(s);
   });
-  return [...map.keys()].sort().map((key) => ({ key, label: bucketLabel(key, granularity), sessions: map.get(key) }));
+  if (map.size === 0) return [];
+  const nowKey = keyOf(new Date());
+  const keys = [];
+  // El cursor avanza en hora local (mediodía, para no cruzarse con cambios
+  // de hora) desde el primer período con datos hasta el actual.
+  const cursor = granularity === "month"
+    ? (() => { const [y, m] = [...map.keys()].sort()[0].split("-").map(Number); return new Date(y, m - 1, 1, 12); })()
+    : (() => { const d = localKeyToDate([...map.keys()].sort()[0]); d.setHours(12); return d; })();
+  for (let guard = 0; guard < 80; guard++) {
+    const k = keyOf(cursor);
+    keys.push(k);
+    if (k >= nowKey) break;
+    if (granularity === "month") cursor.setMonth(cursor.getMonth() + 1); else cursor.setDate(cursor.getDate() + 7);
+  }
+  return keys.map((key) => ({ key, label: bucketLabel(key, granularity), sessions: map.get(key) || [], isCurrent: key === nowKey }));
 }
 
 function rangeChipsHTML() {
-  return `<div class="vt-metric-toggle vt-metric-toggle-scroll">
+  return `<div class="vt-pills">
     ${RANGE_CHIPS.map((c) => `<button class="${ui.progressRange === c.id ? "is-active" : ""}" data-a="prog-range" data-range="${c.id}">${c.label}</button>`).join("")}
   </div>`;
 }
 
-/* ---------------------------- Resumen semanal (Bloque 3.2) ---------------------------- */
+/* ------------------------------- Resumen semanal ------------------------------- */
 
 // Semanas consecutivas (hacia atrás desde hoy) con al menos 1 sesión. Si la
 // semana en curso todavía no tiene sesión, no rompe la racha por eso solo —
@@ -1438,13 +1451,7 @@ function weeklyStats() {
   return { count: thisWeekSessions.length, volume, streak: currentStreakWeeks() };
 }
 
-// Fila de stats plana (sin caja), mismo lenguaje visual que .vt-settings-row.
-function statRowFlatHTML(items) {
-  return `<div class="vt-stat-row-flat">${items.map((it) => `
-    <div class="vt-stat-flat"><span class="vt-stat-label">${it.label}</span><span class="vt-stat-value ${it.deltaClass || ""}">${it.value}</span></div>`).join("")}</div>`;
-}
-
-/* ------------------------------ PRs recientes (Bloque 3.3) ----------------------------- */
+/* --------------------------------- Récords --------------------------------- */
 
 // Recorre las sesiones de la más vieja a la más nueva llevando un máximo
 // incremental por ejercicio (mismo criterio que priorStats/isPR: C/D/F no
@@ -1487,26 +1494,27 @@ function computeAllPRs() {
 }
 
 const fmtPRValue = (hit) =>
-  hit.metric === "seconds" ? fmtClock(hit.value) : hit.metric === "reps" ? `${hit.value} reps` : `${hit.value}kg`;
+  hit.metric === "seconds" ? fmtClockInput(hit.value) : hit.metric === "reps" ? `${hit.value} reps` : `${fmtNum(hit.value)} kg`;
 
-function prsRecentHTML() {
-  const prs = computeAllPRs().slice(0, 5);
-  return `<div style="margin:var(--sp-6) 0">
-    <p class="vt-section-eyebrow">PRs recientes</p>
+// Récords recientes: máximo 3, uno por ejercicio (el más reciente de cada
+// uno). Compartir un PR vive en el detalle del ejercicio, no acá.
+function recentRecordsHTML() {
+  const seen = new Set();
+  const prs = computeAllPRs().filter((p) => !seen.has(p.exerciseId) && seen.add(p.exerciseId)).slice(0, 3);
+  return `<section class="vt-section">
+    <p class="vt-section-eyebrow vt-eyebrow-pr">Récords recientes</p>
     ${prs.length === 0
-      ? `<p class="vt-muted" style="padding:var(--sp-1) 0">Todavía no hay PRs registrados.</p>`
-      : prs.map((p, i) => `
-        <div class="vt-pr-recent-row">
-          <span class="vt-pr">${icon("trophy", 15)}</span>
-          <span class="vt-pr-recent-name">${esc(p.exerciseName)}</span>
-          <span class="vt-mono vt-pr-recent-value">${fmtPRValue(p)}</span>
-          <span class="vt-muted-sm">${fmtDateShort(p.date)}</span>
-          <button class="vt-btn-ghost" data-a="pr-share" data-idx="${i}" aria-label="Compartir">${icon("share", 14)}</button>
-        </div>`).join("")}
-  </div>`;
+      ? `<p class="vt-muted">Todavía no hay récords registrados.</p>`
+      : `<div class="vt-records">${prs.map((p) => `
+        <div class="vt-record">
+          <span class="vt-pr">${icon("trophy", 16)}</span>
+          <div class="vt-record-main"><span class="vt-record-name">${esc(p.exerciseName)}</span></div>
+          <span class="vt-record-value">${fmtPRValue(p)}</span>
+        </div>`).join("")}</div>`}
+  </section>`;
 }
 
-/* --------------------------- Vista Ejercicio (comportamiento previo) -------------------------- */
+/* ---------------------------- Datos por ejercicio ---------------------------- */
 
 function progressData(exId, metric) {
   const t = exType(exId);
@@ -1547,88 +1555,190 @@ function progressDataSide(exId, field) {
   return pts;
 }
 
-const metricUnit = (m) => (m === "seconds" ? "s" : m === "reps" ? "reps" : "kg");
-
-function exerciseViewHTML() {
-  const ids = exercisesWithHistory();
-  if (!ui.progressEx || !ids.includes(ui.progressEx)) ui.progressEx = ids[0];
-  const options = metricOptions(ui.progressEx);
-  if (!ui.progressMetric || !options.some((o) => o.id === ui.progressMetric)) ui.progressMetric = options[0].id;
-  const unit = metricUnit(ui.progressMetric);
-  // Unilateral: solo la métrica "reps" se desglosa por lado — peso es
-  // compartido y volumen ya suma ambos lados, ahí un único dataset alcanza.
-  const splitBySide = exUnilateral(ui.progressEx) && ui.progressMetric === "reps";
-
-  let stats = "";
-  if (splitBySide) {
-    const dataL = progressDataSide(ui.progressEx, "repsL");
-    const dataR = progressDataSide(ui.progressEx, "repsR");
-    const curL = dataL[dataL.length - 1], curR = dataR[dataR.length - 1];
-    if (curL || curR) {
-      stats = statRowFlatHTML([
-        curL ? { label: "Izquierda", value: `${curL.v} ${unit}` } : null,
-        curR ? { label: "Derecha", value: `${curR.v} ${unit}` } : null,
-      ].filter(Boolean));
-    }
-  } else {
-    const data = progressData(ui.progressEx, ui.progressMetric);
-    const current = data[data.length - 1];
-    const first = data[0];
-    if (current) {
-      const delta = data.length > 1 ? current.v - first.v : null;
-      stats = statRowFlatHTML([
-        { label: "Actual", value: `${current.v} ${unit}` },
-        delta !== null ? { label: "Desde el inicio", value: `${delta >= 0 ? "+" : ""}${Math.round(delta * 10) / 10} ${unit}`, deltaClass: "vt-stat-delta" } : null,
-      ].filter(Boolean));
-    }
-  }
-
-  return `
-    <select class="vt-input vt-select" data-c="prog-ex">
-      ${ids.map((id) => `<option value="${id}" ${id === ui.progressEx ? "selected" : ""}>${esc(exName(id))}</option>`).join("")}
-    </select>
-    <div class="vt-metric-toggle">
-      ${options.map((o) => `<button class="${ui.progressMetric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}">${o.label}</button>`).join("")}
-    </div>
-    ${stats}
-    <div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
+// Valor de una métrica con su unidad, en formato chileno ("52,5 kg", "12 reps",
+// "1:30"). `sign` antepone +/− (para deltas).
+function fmtMetric(v, metric, sign = false) {
+  const pre = !sign ? "" : v < 0 ? "−" : "+";
+  const a = sign ? Math.abs(v) : v;
+  if (metric === "seconds") return `${pre}${fmtClockInput(a)}`;
+  return `${pre}${fmtNum(a)} ${metric === "reps" ? "reps" : "kg"}`;
 }
 
-/* -------------------------- Panel "Tus máximos" (sin cambios, reubicado) ------------------------- */
+/* ------------------------------ "Tus ejercicios" ------------------------------ */
 
-function featuredHTML() {
+// Los destacados que eligió el usuario (hasta 5, los mismos del viejo panel
+// "Tus máximos"); si no eligió ninguno, los 5 más entrenados. Los de tiempo
+// quedan fuera de la lista automática igual que del selector de destacados —
+// se llega a su detalle por "Ver todos".
+function featuredIds() {
   const map = exMap();
-  const ids = (settings.featuredExercises || []).filter((id) => map[id]); // ids huérfanos se ignoran
-  const slots = ids.map((id) => `
-    <div class="vt-max-slot">
-      <span class="vt-max-name">${esc(map[id].name)}</span>
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
-        value="${num(map[id].oneRM) > 0 ? num(map[id].oneRM) : ""}" data-i="featured-rm" data-id="${id}"
-        autocomplete="off" autocorrect="off" spellcheck="false" name="f_maxrm_${id}">
-      <span class="vt-muted-sm">kg</span>
-      <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 14)}</button>
-    </div>`).join("");
-  return `<div class="vt-card" style="margin-top:var(--sp-4)">
-    <h3>Tus máximos</h3>
-    ${slots || `<p class="vt-muted">Destaca hasta 5 ejercicios y edita su 1RM aquí mismo.</p>`}
-    ${ids.length < 5 ? `<button class="vt-btn-outline vt-flex-center vt-small" style="width:100%" data-a="picker-open" data-ctx="featured">${icon("plus", 14)} Agregar</button>` : ""}
-  </div>`;
+  const chosen = (settings.featuredExercises || []).filter((id) => map[id]); // ids huérfanos se ignoran
+  if (chosen.length) return chosen;
+  const counts = {};
+  sessions.forEach((s) => s.exercises.forEach((e) => {
+    if (e.sets.length && map[e.exerciseId] && map[e.exerciseId].type !== "time")
+      counts[e.exerciseId] = (counts[e.exerciseId] || 0) + 1;
+  }));
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id);
+}
+
+// Mini curva SVG de 72×24 con la mejor marca por sesión dentro del rango.
+// La escala Y va del mínimo al máximo del propio ejercicio (no desde 0): acá
+// importa la forma de la tendencia, el valor exacto va al lado en texto.
+function sparklineHTML(values) {
+  const W = 72, H = 24, PAD = 3;
+  if (!values.length) return `<svg class="vt-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg>`;
+  const min = Math.min(...values), max = Math.max(...values);
+  const x = (i) => values.length === 1 ? W - PAD : PAD + i * (W - 2 * PAD) / (values.length - 1);
+  const y = (v) => max === min ? H / 2 : H - PAD - (v - min) * (H - 2 * PAD) / (max - min);
+  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const last = pts[pts.length - 1].split(",");
+  return `<svg class="vt-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    ${values.length > 1 ? `<polyline points="${pts.join(" ")}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>` : ""}
+    <circle cx="${last[0]}" cy="${last[1]}" r="2.5" fill="currentColor"/>
+  </svg>`;
+}
+
+function exerciseRowHTML(exId) {
+  const metric = metricOptions(exId)[0].id; // peso / lastre / reps según el tipo
+  const data = progressData(exId, metric);
+  const words = RANGE_WORDS[ui.progressRange] || "2 meses";
+  const current = data[data.length - 1];
+  const delta = data.length > 1 ? current.v - data[0].v : 0;
+  const sub = !current ? `sin registros en ${words}`
+    : delta === 0 ? `sin cambios en ${words}`
+    : `<b class="${delta > 0 ? "vt-sum-up" : ""}">${fmtMetric(delta, metric, true)}</b> en ${words}`;
+  const [val, unit] = current ? fmtMetric(current.v, metric).split(" ") : ["—", ""];
+  return `<button class="vt-exrow" data-a="prog-detail-open" data-id="${exId}">
+    <span class="vt-exrow-text"><span class="vt-exrow-name">${esc(exName(exId))}</span><span class="vt-exrow-sub">${sub}</span></span>
+    ${sparklineHTML(data.map((p) => p.v))}
+    <span class="vt-exrow-value">${val}${unit ? `<small>${unit}</small>` : ""}</span>
+  </button>`;
+}
+
+function yourExercisesHTML() {
+  const ids = featuredIds();
+  return `<section class="vt-section">
+    <div class="vt-sec-head">
+      <p class="vt-section-eyebrow">Tus ejercicios</p>
+      <button class="vt-text-btn" data-a="featured-sheet-open">Editar</button>
+    </div>
+    <div class="vt-rows">${ids.map(exerciseRowHTML).join("")}</div>
+    <button class="vt-text-btn" data-a="picker-open" data-ctx="detail">Ver todos</button>
+  </section>`;
+}
+
+// Hoja "Editar" de Tus ejercicios: el selector de destacados de siempre
+// (quitar con ✕, agregar abre el picker) — hasta 5.
+function featuredSheetHTML() {
+  const map = exMap();
+  const ids = (settings.featuredExercises || []).filter((id) => map[id]);
+  return `
+    <div class="vt-modal-backdrop" data-a="featured-sheet-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">Tus ejercicios</h2>
+          <button class="vt-btn-ghost" data-a="featured-sheet-close" aria-label="Cerrar">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-body">
+          ${ids.length ? "" : `<p class="vt-muted vt-modal-note">Destaca hasta 5 ejercicios. Mientras no elijas ninguno, se muestran los 5 que más entrenas.</p>`}
+          ${ids.map((id) => `<div class="vt-modal-row vt-modal-row-static">
+            <span class="vt-dotgroup" style="background:${groupColor(map[id].group) || "var(--text-dim)"}"></span>
+            <span class="vt-modal-row-name">${esc(map[id].name)}</span>
+            <button class="vt-btn-ghost vt-danger" data-a="featured-remove" data-id="${id}" aria-label="Quitar de destacados">${icon("x", 16)}</button>
+          </div>`).join("")}
+          ${ids.length < 5 ? `<button class="vt-modal-row vt-modal-row-action" data-a="picker-open" data-ctx="featured">${icon("plus", 16)} Agregar ejercicio</button>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ----------------------------- Detalle de ejercicio ----------------------------- */
+
+// Pantalla que se abre al tocar una fila de "Tus ejercicios": lo que antes
+// estaba suelto en Resumen (gráfico con toggle de métrica y soporte
+// unilateral, rango, 1RM editable y compartir PR). El ejercicio es siempre el
+// que se tocó — ya no parte con uno que nunca se hizo.
+function exerciseDetailHTML() {
+  const exId = ui.progressDetail;
+  const ex = exMap()[exId];
+  const options = metricOptions(exId);
+  if (!ui.progressMetric || !options.some((o) => o.id === ui.progressMetric)) ui.progressMetric = options[0].id;
+  const metric = ui.progressMetric;
+  // Unilateral: solo la métrica "reps" se desglosa por lado — peso es
+  // compartido y volumen ya suma ambos lados, ahí un único dataset alcanza.
+  const splitBySide = exUnilateral(exId) && metric === "reps";
+
+  let cells;
+  if (splitBySide) {
+    const dataL = progressDataSide(exId, "repsL"), dataR = progressDataSide(exId, "repsR");
+    const curL = dataL[dataL.length - 1], curR = dataR[dataR.length - 1];
+    cells = [{ label: "Izquierda", v: curL?.v }, { label: "Derecha", v: curR?.v }].map((c) => ({ label: c.label, text: c.v == null ? "—" : fmtMetric(c.v, "reps") }));
+  } else {
+    const data = progressData(exId, metric);
+    const m = metric === "volume" ? "weight" : metric; // el volumen se muestra en kg
+    const current = data[data.length - 1];
+    cells = [
+      { label: "Actual", text: current ? fmtMetric(current.v, m) : "—" },
+      { label: `En ${RANGE_WORDS[ui.progressRange]}`, text: data.length > 1 ? fmtMetric(current.v - data[0].v, m, true) : "—" },
+    ];
+  }
+  const strip = statStripHTML(cells.map((c) => { const [value, unit] = c.text.split(" "); return { label: c.label, value, unit }; }));
+
+  const lastPR = computeAllPRs().find((p) => p.exerciseId === exId);
+  return `
+    <header class="vt-header">
+      <div class="vt-header-brand">
+        <button class="vt-btn-icon" data-a="prog-detail-close" aria-label="Volver">${icon("back", 18)}</button>
+        <div class="vt-detail-title"><p class="vt-eyebrow">${esc(ex.group || "Custom")}</p><h1 class="vt-header-title-sm">${esc(ex.name)}</h1></div>
+      </div>
+    </header>
+    ${strip}
+    <section class="vt-section">
+      <div class="vt-sec-head">
+        <div class="vt-pills">
+          ${options.map((o) => `<button class="${metric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}">${o.label}</button>`).join("")}
+        </div>
+        ${rangeChipsHTML()}
+      </div>
+      <div class="vt-chart-flat"><canvas id="prog-canvas" height="220"></canvas></div>
+    </section>
+    ${ex.type === "time" ? "" : `<section class="vt-section">
+      <p class="vt-section-eyebrow">1RM estimado</p>
+      <div class="vt-rows"><label class="vt-row vt-row-center">
+        <span class="vt-row-name">Tu máximo a una repetición</span>
+        <span class="vt-row-input"><input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
+          value="${num(ex.oneRM) > 0 ? num(ex.oneRM) : ""}" data-i="featured-rm" data-id="${exId}"
+          autocomplete="off" autocorrect="off" spellcheck="false" name="f_maxrm_${exId}"> kg</span>
+      </label></div>
+    </section>`}
+    ${!lastPR ? "" : `<section class="vt-section">
+      <p class="vt-section-eyebrow vt-eyebrow-pr">Último récord</p>
+      <div class="vt-records"><div class="vt-record">
+        <span class="vt-pr">${icon("trophy", 16)}</span>
+        <div class="vt-record-main"><span class="vt-record-name">${fmtDate(lastPR.date)}</span></div>
+        <span class="vt-record-value">${fmtPRValue(lastPR)}</span>
+      </div></div>
+      <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-section-btn" data-a="pr-share" data-id="${exId}">${icon("share", 16)} Compartir récord</button>
+    </section>`}`;
 }
 
 /* --------------------------------- Vista principal de Progreso -------------------------------- */
 
-const PROGRESS_VIEWS = [{ id: "total", label: "Total" }, { id: "grupo", label: "Grupo muscular" }, { id: "ejercicio", label: "Ejercicio" }];
-// Segmentado superior de la pestaña Progreso — Historial se fusionó acá,
-// dejó de ser una pestaña propia (ver NAV_ITEMS).
+// Pestañas superiores de Progreso — Historial se fusionó acá, dejó de ser
+// una pestaña propia (ver NAV_ITEMS). Estilo subrayado, sin cajas.
 const PROGRESS_SECTIONS = [{ id: "resumen", label: "Resumen" }, { id: "historial", label: "Historial" }];
 
 function progressSectionToggleHTML() {
-  return `<div class="vt-metric-toggle">
+  return `<div class="vt-tabs">
     ${PROGRESS_SECTIONS.map((s) => `<button class="${ui.progressSection === s.id ? "is-active" : ""}" data-a="progress-section" data-section="${s.id}">${s.label}</button>`).join("")}
   </div>`;
 }
 
 function progressHTML() {
+  if (ui.progressDetail && !exMap()[ui.progressDetail]) ui.progressDetail = null; // el ejercicio se eliminó
+  if (ui.progressDetail) return exerciseDetailHTML();
+
   const head = `<header class="vt-header">${tabHeaderHTML("Set 04 · Análisis", "Progreso")}</header>`;
   const toggle = progressSectionToggleHTML();
 
@@ -1638,37 +1748,50 @@ function progressHTML() {
     return `${head}${toggle}${emptyHTML("Todavía no hay nada que mostrar", "Registra al menos una sesión y tu progreso va a empezar a aparecer acá.", "")}`;
 
   const ws = weeklyStats();
-  const summary = statRowFlatHTML([
-    { label: "Sesiones esta semana", value: ws.count },
-    { label: "Volumen esta semana", value: `${Math.round(ws.volume).toLocaleString("es-CL")} kg` },
-    { label: "Racha", value: `${ws.streak} sem${ws.streak !== 1 ? "s" : ""}` },
-  ]);
+  const vol = ws.volume >= 1000
+    ? { value: (ws.volume / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 }), unit: "t" }
+    : { value: Math.round(ws.volume).toLocaleString("es-CL"), unit: "kg" };
+  const monthly = bucketGranularity(ui.progressRange) === "month";
+  const reparto = groupSetCounts(sessionsInRange(ui.progressRange).flatMap((s) => s.exercises));
 
-  let body = "";
-  if (ui.progressView === "total" || ui.progressView === "grupo") body = `<div class="vt-chart"><canvas id="prog-canvas" height="240"></canvas></div>`;
-  else body = exerciseViewHTML();
-
-  return `${head}${toggle}${summary}${prsRecentHTML()}
-    <p class="vt-section-eyebrow">Rango</p>
-    ${rangeChipsHTML()}
-    <div class="vt-metric-toggle" style="margin-top:var(--sp-4)">
-      ${PROGRESS_VIEWS.map((v) => `<button class="${ui.progressView === v.id ? "is-active" : ""}" data-a="prog-view" data-view="${v.id}">${v.label}</button>`).join("")}
-    </div>
-    ${body}
-    ${featuredHTML()}`;
+  return `${head}${toggle}
+    <section class="vt-section vt-section-first">
+      <p class="vt-section-eyebrow">Esta semana</p>
+      ${weekDotsHTML()}
+    </section>
+    <div class="vt-section">${statStripHTML([
+      { label: "Sesiones", value: ws.count },
+      { label: "Volumen", value: vol.value, unit: vol.unit },
+      { label: "Racha", value: ws.streak, unit: "sem" },
+    ])}</div>
+    <section class="vt-section">
+      <div class="vt-sec-head">
+        <p class="vt-section-eyebrow">Volumen ${monthly ? "mensual" : "semanal"}</p>
+        ${rangeChipsHTML()}
+      </div>
+      ${computeBuckets(ui.progressRange).length
+        ? `<div class="vt-chart-flat"><canvas id="prog-canvas" height="200"></canvas></div>`
+        : `<p class="vt-muted">Sin sesiones en ${RANGE_WORDS[ui.progressRange]}.</p>`}
+    </section>
+    ${reparto.length ? `<section class="vt-section"><p class="vt-section-eyebrow">Reparto</p>${repartoHTML(reparto)}</section>` : ""}
+    ${recentRecordsHTML()}
+    ${yourExercisesHTML()}`;
 }
 
-// El <canvas> de Chart.js no resuelve var(--nombre) como color (a diferencia
-// del DOM normal): un fillStyle inválido se ignora en silencio y queda
-// negro. groupColor() devuelve var(--amber) etc. para los grupos semilla —
-// hay que resolverlo a su valor real antes de pasarlo a un dataset.
-function resolveCssColor(c) {
-  if (typeof c === "string" && c.startsWith("var(")) {
-    const name = c.slice(4, -1).trim();
-    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return v || c;
-  }
-  return c;
+// Estilo común de ejes para los dos gráficos (barras de volumen y línea del
+// detalle): ticks mono 10px, sin grilla en X, grilla Y tenue, sin bordes de
+// eje ni leyenda. El eje Y SIEMPRE parte en 0 — con un solo punto Chart.js
+// centraba el eje en el dato y mostraba valores negativos (−1,0 a 1,0).
+function chartScales(yFormat) {
+  const tick = { color: "#8FA0AC", font: { family: "'IBM Plex Mono', monospace", size: 10 } };
+  return {
+    x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8 } },
+    y: {
+      beginAtZero: true, min: 0, grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
+      grid: { color: "#1B1B1F" }, border: { display: false },
+      ticks: { ...tick, maxTicksLimit: 4, callback: yFormat },
+    },
+  };
 }
 
 function mountChart() {
@@ -1676,106 +1799,54 @@ function mountChart() {
   if (!canvas || typeof Chart === "undefined") return;
   if (chart) { chart.destroy(); chart = null; }
 
-  const gridColor = "rgba(44,55,66,0.6)";
-  const tickColor = "#8FA0AC";
-  const legendOpts = { display: true, labels: { color: tickColor, font: { size: 11 } } };
-
-  if (ui.progressView === "total") {
+  if (!ui.progressDetail) {
+    // Volumen por período: el actual en azul, el resto apagado.
     const buckets = computeBuckets(ui.progressRange);
+    const values = buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + sessionVolume(s, false), 0)));
+    const inTons = Math.max(0, ...values) >= 1000;
     chart = new Chart(canvas, {
       type: "bar",
       data: {
         labels: buckets.map((b) => b.label),
         datasets: [{
-          data: buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + sessionVolume(s, false), 0))),
-          backgroundColor: "#3B6FE0",
+          data: values,
+          backgroundColor: buckets.map((b) => b.isCurrent ? "#3B6FE0" : "#2A2A2F"),
           borderRadius: 4,
         }],
       },
       options: {
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-        },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${fmtNum(c.parsed.y)} kg` } } },
+        scales: chartScales((v) => inTons ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })}t` : fmtNum(v)),
       },
     });
     return;
   }
 
-  if (ui.progressView === "grupo") {
-    const buckets = computeBuckets(ui.progressRange);
-    const groupsPresent = [];
-    buckets.forEach((b) => b.sessions.forEach((s) => s.exercises.forEach((e) => {
-      const g = exGroup(e.exerciseId);
-      if (!groupsPresent.includes(g)) groupsPresent.push(g);
-    })));
-    const datasets = groupsPresent.map((g) => ({
-      label: g,
-      data: buckets.map((b) => Math.round(b.sessions.reduce((a, s) =>
-        a + s.exercises.filter((e) => exGroup(e.exerciseId) === g).reduce((aa, e) => aa + exerciseVolume(e), 0), 0))),
-      backgroundColor: resolveCssColor(groupColor(g)) || "#8FA0AC",
-    }));
-    chart = new Chart(canvas, {
-      type: "bar",
-      data: { labels: buckets.map((b) => b.label), datasets },
-      options: {
-        plugins: { legend: legendOpts },
-        scales: {
-          x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-          y: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-        },
-      },
-    });
-    return;
-  }
-
-  // Vista Ejercicio
-  const splitBySide = exUnilateral(ui.progressEx) && ui.progressMetric === "reps";
+  // Detalle de ejercicio. Azul para la serie principal; ámbar no se usa acá
+  // (reservado para PR) — en unilateral el segundo lado va en blanco.
+  const exId = ui.progressDetail, metric = ui.progressMetric;
+  const line = (label, data, color) => ({ label, data: data.map((p) => p.v), borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 3, cubicInterpolationMode: "monotone" }); // monotone: la curva no se pasa de los puntos (ni baja de 0)
+  const yFormat = (v) => metric === "seconds" ? fmtClockInput(v) : fmtNum(v);
+  const splitBySide = exUnilateral(exId) && metric === "reps";
+  let labels, datasets;
   if (splitBySide) {
-    const dataL = progressDataSide(ui.progressEx, "repsL");
-    const dataR = progressDataSide(ui.progressEx, "repsR");
-    const labels = (dataL.length >= dataR.length ? dataL : dataR).map((p) => p.date);
-    chart = new Chart(canvas, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "Izquierda", data: dataL.map((p) => p.v), borderColor: "#3B6FE0", backgroundColor: "#3B6FE0", borderWidth: 2.5, pointRadius: 3.5, tension: 0.3 },
-          { label: "Derecha", data: dataR.map((p) => p.v), borderColor: "#E8A33D", backgroundColor: "#E8A33D", borderWidth: 2.5, pointRadius: 3.5, tension: 0.3 },
-        ],
-      },
-      options: {
-        plugins: { legend: legendOpts },
-        scales: {
-          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-        },
-      },
-    });
-    return;
+    const dataL = progressDataSide(exId, "repsL"), dataR = progressDataSide(exId, "repsR");
+    labels = (dataL.length >= dataR.length ? dataL : dataR).map((p) => p.date);
+    datasets = [line("Izquierda", dataL, "#3B6FE0"), line("Derecha", dataR, "#FFFFFF")];
+  } else {
+    const data = progressData(exId, metric);
+    labels = data.map((p) => p.date);
+    datasets = [line("", data, "#3B6FE0")];
   }
-
-  const data = progressData(ui.progressEx, ui.progressMetric);
   chart = new Chart(canvas, {
     type: "line",
-    data: {
-      labels: data.map((p) => p.date),
-      datasets: [{
-        data: data.map((p) => p.v),
-        borderColor: "#E8A33D",
-        backgroundColor: "#E8A33D",
-        borderWidth: 2.5,
-        pointRadius: 3.5,
-        tension: 0.3,
-      }],
-    },
+    data: { labels, datasets },
     options: {
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+      plugins: {
+        legend: { display: splitBySide, labels: { color: "#8FA0AC", boxWidth: 10, boxHeight: 10, font: { family: "'IBM Plex Mono', monospace", size: 10 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label ? c.dataset.label + ": " : ""}${yFormat(c.parsed.y)}` } },
       },
+      scales: chartScales(yFormat),
     },
   });
 }
@@ -1850,7 +1921,7 @@ function exercisesListHTML() {
             <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
           </div>
           <div class="vt-ex-badges">
-            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${e.oneRM}kg</span>` : ""}
+            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${fmtNum(e.oneRM)} kg</span>` : ""}
             <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
           </div>
         </div>`).join("") : ""}
@@ -1981,6 +2052,11 @@ function pickerListHTML() {
   // Para "Tus máximos" solo tienen sentido ejercicios con peso, y no repetidos.
   if (ui.picker === "featured")
     pool = exercises.filter((e) => e.type !== "time" && !(settings.featuredExercises || []).includes(e.id));
+  // "Ver todos" de Progreso: solo los que tienen algo que mostrar.
+  if (ui.picker === "detail") {
+    const withHistory = new Set(exercisesWithHistory());
+    pool = exercises.filter((e) => withHistory.has(e.id));
+  }
   const filtered = pool.filter((e) => e.name.toLowerCase().includes(q));
   let html = filtered.map((ex) => `
     <button class="vt-modal-row" data-a="picker-pick" data-id="${ex.id}">
@@ -1988,7 +2064,7 @@ function pickerListHTML() {
       ${esc(ex.name)}
       <span class="vt-muted-sm">${esc(ex.group)}</span>
     </button>`).join("");
-  if (q && !filtered.some((e) => e.name.toLowerCase() === q)) {
+  if (q && ui.picker !== "detail" && !filtered.some((e) => e.name.toLowerCase() === q)) {
     html += `<button class="vt-modal-row vt-modal-add" data-a="picker-create">
       ${icon("plus", 16)} Crear "${esc(ui.pickerQuery.trim())}" (peso × reps — edítalo en Ajustes)
     </button>`;
@@ -2300,9 +2376,6 @@ function finishSession() {
 /* ------------------------ Piezas reutilizables del resumen ------------------------ */
 // (weekDotsHTML, statStripHTML y repartoHTML también las usa Progreso.)
 
-// Número con formato chileno: miles con punto, decimales con coma (52,5).
-const fmtNum = (n) => num(n).toLocaleString("es-CL", { maximumFractionDigits: 2 });
-
 // Duración partida en valor + unidad, para mostrarlos con tamaños distintos:
 // "58" + "min", o "1:12" + "h" pasada la hora.
 function durationParts(sec) {
@@ -2376,9 +2449,9 @@ function fmtDoneSets(e) {
   const reps = (st) => uni ? `I${repsL(st)} D${repsR(st)}` : String(num(st.reps));
   const one = (st) => {
     const w = num(st.weight);
-    if (type === "time") return `${fmtClockInput(num(st.seconds))}${w > 0 ? ` +${fmtNum(w)}kg` : ""}`;
+    if (type === "time") return `${fmtClockInput(num(st.seconds))}${w > 0 ? ` +${fmtNum(w)} kg` : ""}`;
     if (type === "bodyweight") return w > 0 ? `+${fmtNum(w)}×${reps(st)}` : reps(st);
-    return uni ? `${fmtNum(w)}kg ${reps(st)}` : `${fmtNum(w)}×${reps(st)}`;
+    return uni ? `${fmtNum(w)} kg ${reps(st)}` : `${fmtNum(w)}×${reps(st)}`;
   };
   const all = e.sets.map(one);
   if (!all.every((x) => x === all[0])) return all.join("  ");
@@ -2396,7 +2469,7 @@ function sessionSummaryHTML() {
   const done = sum.exercisesSnapshot;
   const nPR = sum.prHits.length;
   const prIds = new Set(sum.prHits.map((h) => h.exerciseId));
-  const section = (label, body, cls = "") => `<section class="vt-sum-section"><p class="vt-section-eyebrow ${cls}">${label}</p>${body}</section>`;
+  const section = (label, body, cls = "") => `<section class="vt-section"><p class="vt-section-eyebrow ${cls}">${label}</p>${body}</section>`;
 
   const headline = nPR > 0 ? (nPR === 1 ? "Récord nuevo" : `${nPR} récords nuevos`)
     : sum.prevVolume !== null && sum.prevVolume < sum.volume ? "Más fuerte que la última vez"
@@ -2859,6 +2932,7 @@ document.addEventListener("click", (e) => {
       ui.exerciseEditMode = false;
       ui.exerciseEditDraft = null;
       ui.selectedExercises.clear();
+      ui.progressDetail = null;
       ui.tab = el.dataset.tab;
       render();
       break;
@@ -3148,7 +3222,7 @@ document.addEventListener("click", (e) => {
 
     /* Selector de ejercicios */
     case "picker-open": ui.picker = el.dataset.ctx; ui.pickerQuery = ""; render(); break;
-    case "picker-close": ui.picker = null; render(); break;
+    case "picker-close": ui.picker = null; render(); break; // si venía de la hoja de destacados, esa sigue abierta debajo
     case "picker-pick": pickExercise(id); break;
     case "picker-create": {
       const name = ui.pickerQuery.trim();
@@ -3342,7 +3416,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "pr-share": {
-      const p = computeAllPRs().slice(0, 5)[+el.dataset.idx];
+      const p = computeAllPRs().find((x) => x.exerciseId === id); // el más reciente de ese ejercicio
       if (p) shareImage("pr", p, `goat-pr-${p.exerciseName.toLowerCase().replace(/\s+/g, "-")}.png`, `PR: ${p.exerciseName}`);
       break;
     }
@@ -3377,7 +3451,10 @@ document.addEventListener("click", (e) => {
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
-    case "prog-view": ui.progressView = el.dataset.view; render(); break;
+    case "prog-detail-open": ui.progressDetail = id; ui.progressMetric = null; window.scrollTo(0, 0); render(); break;
+    case "prog-detail-close": ui.progressDetail = null; render(); break;
+    case "featured-sheet-open": ui.featuredSheet = true; render(); break;
+    case "featured-sheet-close": ui.featuredSheet = false; render(); break;
     case "prog-range": ui.progressRange = el.dataset.range; render(); break;
     case "history-range": {
       ui.historyRange = el.dataset.range;
@@ -3531,6 +3608,11 @@ function pickExercise(id) {
       settings.featuredExercises.push(id);
       persistSettings();
     }
+  } else if (ui.picker === "detail") {
+    // "Ver todos" en Progreso: abre el detalle del ejercicio elegido.
+    ui.progressDetail = id;
+    ui.progressMetric = null;
+    window.scrollTo(0, 0);
   } else if (ui.picker === "editor" && ui.editingRoutine) {
     const t = exType(id);
     const newItem = {
@@ -3601,7 +3683,7 @@ document.addEventListener("input", (e) => {
       if (it && el.dataset.field === "targetPercent") {
         const span = document.getElementById("pct-calc-" + el.dataset.idx);
         const orm = num(exMap()[it.exerciseId]?.oneRM);
-        if (span && orm > 0) span.textContent = `= ${pctKg(orm, it.targetPercent)} kg (1RM ${orm} kg)`;
+        if (span && orm > 0) span.textContent = `= ${fmtNum(pctKg(orm, it.targetPercent))} kg (1RM ${fmtNum(orm)} kg)`;
       }
       break;
     }
@@ -3678,7 +3760,6 @@ document.addEventListener("change", (e) => {
   switch (el.dataset.c) {
     case "set-sound": settings.sound = el.checked; persistSettings(); break;
     case "set-vibrate": settings.vibrate = el.checked; persistSettings(); break;
-    case "prog-ex": ui.progressEx = el.value; ui.progressMetric = null; render(); break;
     case "exm-type": {
       // El 1RM y "unilateral" solo aplican a peso/corporal; se ocultan en
       // tipo tiempo (sin re-render).

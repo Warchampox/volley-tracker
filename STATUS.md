@@ -1057,3 +1057,39 @@ Entradas nuevas al final. No reescribir lo anterior.
   cambió en esta fase, pero no se generó una de prueba).
 - Pendiente fuera de fase: "Nueva carpeta" y "crear ejercicio" en los
   modales siguen en ámbar (.vt-modal-add).
+
+## 2026-10-01 cont. — Rediseño visual, Fase 3 de 3 (cierre)
+- Progreso/Resumen rehecho: pestañas subrayadas, "Esta semana"
+  (`weekDotsHTML` + `statStripHTML`), gráfico único de barras de
+  volumen (período actual en azul, eje desde 0, sin caja) con rango de
+  4 opciones (1M/2M/6M/1A, mensual solo en 1A), Reparto, Récords
+  recientes (máx. 3, uno por ejercicio) y "Tus ejercicios" (destacados
+  o los 5 más entrenados, con mini curva SVG). Tocar una fila abre el
+  detalle del ejercicio (`ui.progressDetail`): gráfico con métrica y
+  rango, soporte unilateral, 1RM editable y compartir récord.
+- Se fueron: vistas Total/Grupo/Ejercicio, el desplegable de ejercicio,
+  el panel "Tus máximos", `.vt-card` y los rangos 1SEM/2SEM/4M/8M.
+- Decisiones no pedidas en el prompt: (1) botón "Ver todos" bajo "Tus
+  ejercicios", que abre el detalle de cualquier ejercicio con historial
+  — sin esto los no destacados y los de tiempo quedaban sin gráfico;
+  (2) el gráfico rellena en 0 los períodos sin sesiones, para que el
+  eje sea continuo y el período actual siempre exista; (3) en el
+  gráfico unilateral el lado derecho va en blanco, ya no en ámbar;
+  (4) en Organizar, "N seleccionados" pasó a "N elegidos" para que
+  quepa a 360px.
+- Bug latente arreglado: `localKeyToDate` se había borrado junto con
+  Partidos y las vistas Total/Grupo de Progreso tiraban error al
+  abrirlas. Restaurada (la usa `bucketLabel`).
+- Formato de números unificado en toda la app (`fmtNum`, espacio antes
+  de la unidad): fmtSet, fmtPRValue, badge de 1RM, cálculo de %1RM.
+- CLAUDE.md: sección "Escala de diseño" + patrones. sw.js v28 → v29.
+- Regresiones verificadas a 393 y 360px (sin errores de consola):
+  swipe, long-press → Organizar, Organizar completo, superseries,
+  colapsados, tiempo con timer, unilateral, peso corporal, C/D/F en
+  vivo y completadas, PR en vivo, barra de descanso, sesión
+  minimizada, mover a carpeta, sesión libre → rutina, sincronizar
+  rutina, 1RM desde resumen y desde detalle, vacíos de Rutinas y
+  Progreso, generación de las dos imágenes de compartir.
+- Pendiente: probar tacto, gestos y teclado en teléfono real. Ámbar
+  fuera de PR que sigue sin tocar: nota de ejercicio con contenido,
+  checkbox de Ajustes, "Nueva carpeta"/"crear ejercicio" en modales.

@@ -216,13 +216,6 @@ button, svg {
 
 .vt-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-list:has(.vt-block) { gap: 0; }
-.vt-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: var(--sp-4);
-}
-
 /* Bloque plano tipo tabla (referencia Hevy): sin caja, acento lateral de 3px.
    El color del acento lo pone cada ejercicio inline (color de grupo muscular). */
 .vt-block {
@@ -324,12 +317,16 @@ button, svg {
 .vt-organize-bar {
   background: var(--surface-2);
   border-radius: var(--r-md);
-  padding: var(--sp-3) var(--sp-4);
-  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-3);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
-.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
-.vt-organize-actions { display: flex; gap: var(--sp-1); }
+.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A 360px tienen que caber la cuenta + Eliminar + Reemplazar en una línea:
+   por eso el padding horizontal de estos botones es el mínimo. */
+.vt-organize-actions { display: flex; flex-shrink: 0; }
+.vt-organize-actions .vt-btn-ghost { padding: var(--sp-2) var(--sp-1); white-space: nowrap; }
+.vt-organize-actions .vt-btn-ghost + .vt-btn-ghost { margin-left: var(--sp-2); }
 /* Cancelar / Guardar cambios — única forma de salir del modo Organizar,
    mismo tratamiento visual que el footer de "Finalizar sesión". */
 .vt-organize-savebar {
@@ -361,7 +358,6 @@ button, svg {
 
 .vt-full-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 0; font: inherit; text-align: left; }
 .vt-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
-.vt-card h3 { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: normal; }
 .vt-muted { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
 .vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
 .vt-lasttime { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; margin: var(--sp-2) 0 var(--sp-3); }
@@ -429,7 +425,6 @@ button, svg {
 .vt-input:focus { outline: none; border-color: var(--blue); }
 .vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); margin-bottom: var(--sp-4); }
 .vt-mono { font-family: 'IBM Plex Mono', monospace; }
-.vt-select { margin-bottom: var(--sp-3); }
 select.vt-input { appearance: none; -webkit-appearance: none; }
 
 .vt-target-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); }
@@ -709,6 +704,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-modal-row:hover { background: var(--surface-2); }
 .vt-modal-row-danger { color: var(--red); }
+.vt-modal-row-action { color: var(--blue); }
+/* Fila que no es un botón entero (trae su propio botón de quitar a la derecha). */
+.vt-modal-row-static { cursor: default; padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
+.vt-modal-row-static:hover { background: transparent; }
+.vt-modal-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-modal-note { margin: 0; padding: var(--sp-2) var(--sp-3); }
 /* Título de hoja con texto libre del usuario (nombre de rutina/carpeta). */
 .vt-modal-title-free { text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-modal-row .vt-muted-sm { margin-left: auto; }
@@ -752,12 +753,19 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-sum-hero-sub b { color: var(--text); font-weight: 600; }
 .vt-sum-up { color: var(--blue); }
 
-.vt-sum-section { margin-top: var(--sp-6); }
-.vt-sum-section > .vt-section-eyebrow { margin-bottom: var(--sp-2); }
+/* Sección genérica (resumen de sesión y Progreso): label en mayúscula + contenido. */
+.vt-section { margin-top: var(--sp-6); }
+.vt-section-first { margin-top: 0; }
+.vt-section-btn { margin-top: var(--sp-3); }
+/* Encabezado de sección con un control a la derecha (rango, "Editar"). */
+.vt-sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); }
+.vt-sec-head .vt-section-eyebrow { margin: 0; }
+.vt-sec-head .vt-text-btn { padding: 0; }
+.vt-section > .vt-section-eyebrow { margin-bottom: var(--sp-2); }
 .vt-section-eyebrow.vt-eyebrow-pr { color: var(--amber); }
 .vt-sum-done { color: var(--text-dim); font-size: var(--fs-sm); display: inline-flex; align-items: center; gap: var(--sp-1); }
-.vt-sum-section > .vt-sum-done { margin-top: var(--sp-2); }
-.vt-sum-section > .vt-section-eyebrow + .vt-text-btn { padding-top: 0; }
+.vt-section > .vt-sum-done { margin-top: var(--sp-2); }
+.vt-section > .vt-section-eyebrow + .vt-text-btn { padding-top: 0; }
 .vt-sum-actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-8); }
 .vt-sum-actions .vt-btn-outline { margin-top: 0; }
 .vt-sum-actions .vt-btn-primary { min-height: 48px; }
@@ -831,23 +839,51 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
 .vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: var(--sp-2) var(--sp-3); }
 
-.vt-stat-label { display: block; font-size: var(--fs-xs); color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: var(--track); }
-.vt-stat-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; }
-.vt-stat-delta { color: var(--green); }
+/* ------------------------------- Progreso ------------------------------- */
+/* Pestañas Resumen / Historial: subrayado, sin cajas. */
+.vt-tabs { display: flex; gap: var(--sp-6); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-6); }
+.vt-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: var(--sp-1) 0 var(--sp-3);
+  font-family: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--text-dim); cursor: pointer;
+}
+.vt-tabs button.is-active { color: var(--text); border-bottom-color: var(--blue); }
 
-/* Resumen semanal / stats de ejercicio en Progreso: sin caja, mismo
-   lenguaje que .vt-settings-row (divisores finos en vez de bordes). */
-.vt-stat-row-flat { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-6); }
-.vt-stat-flat { flex: 1; padding: var(--sp-3) var(--sp-2); text-align: center; }
-.vt-stat-flat + .vt-stat-flat { border-left: 1px solid var(--line); }
+/* Selector chico de píldoras (rango 1M·2M·6M·1A, métrica del detalle): la
+   activa con fondo --surface-2. Cabe entero a 360px, sin scroll horizontal. */
+.vt-pills { display: flex; gap: 2px; flex-shrink: 0; }
+.vt-pills button {
+  background: transparent; border: none; border-radius: var(--r-full);
+  padding: var(--sp-1) var(--sp-2);
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: var(--track);
+  color: var(--text-dim); cursor: pointer; white-space: nowrap;
+}
+.vt-pills button.is-active { background: var(--surface-2); color: var(--text); }
 
-/* Lista de PRs recientes: fila plana con divisor, mismo patrón que vt-detail-row. */
-.vt-pr-recent-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 2px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
-.vt-pr-recent-row:last-child { border-bottom: none; }
-.vt-pr-recent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vt-pr-recent-value { color: var(--text-dim); flex-shrink: 0; }
+/* Gráfico sin caja alrededor. */
+.vt-chart-flat { margin-top: var(--sp-2); }
 
-.vt-chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-3) var(--sp-2); margin-bottom: var(--sp-4); }
+/* "Tus ejercicios": fila [nombre + delta 1fr] [mini curva 72px] [marca 72px]. */
+.vt-exrow {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 72px 72px; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.vt-exrow:active { background: var(--surface); }
+.vt-exrow-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vt-exrow-name { font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-exrow-sub { font-size: var(--fs-sm); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-exrow-sub b { font-weight: 600; }
+.vt-spark { color: var(--blue); display: block; }
+.vt-exrow-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; text-align: right; white-space: nowrap; }
+.vt-exrow-value small { font-size: var(--fs-sm); font-weight: 500; color: var(--text-dim); margin-left: var(--sp-1); }
+
+/* Detalle de ejercicio. */
+.vt-detail-title { min-width: 0; }
+.vt-row-center { align-items: center; }
+.vt-row-input .vt-max-input { text-align: right; }
+.vt-row-input { display: inline-flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); }
 
 /* -------------------- Aviso de actualización disponible ------------------ */
 /* Barra delgada de ancho completo, pegada arriba de todo (por sobre el
@@ -1017,10 +1053,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .vt-swatch.is-active { border-color: var(--text); }
 
-/* Panel "Tus máximos" en Progreso */
-.vt-max-slot { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
-.vt-max-slot:last-of-type { border-bottom: none; }
-.vt-max-name { flex: 1; font-size: var(--fs-sm); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Input de 1RM en el detalle de ejercicio: sin caja, subrayado al enfocar. */
 .vt-max-input {
   width: 68px; text-align: center; padding: var(--sp-2) 2px;
   background: transparent; border: none; border-radius: 0;

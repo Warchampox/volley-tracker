@@ -34,6 +34,50 @@
 - No reproducir escudos/logos de clubes o marcas registradas. Dejar
   placeholders de imagen con fallback para que el usuario los agregue.
 
+## Escala de diseño (2026-10-01, no reabrir sin pedido explícito)
+Regla: **nunca valores sueltos de font-size / spacing / radius /
+tracking; siempre tokens** (definidos en `:root` de estilos.css). Vale
+también para los `style=""` inline de app.js. Se quedan en px solo 0,
+1px y 2px (ajustes ópticos), los `calc()`, el 100px de holgura de la
+nav y los anchos/altos de elementos (columnas, botones, círculos).
+- Tipografía: `--fs-xs` 11px (labels en mayúscula) · `--fs-sm` 13px
+  (texto secundario) · `--fs-md` 15px (texto base) · `--fs-lg` 18px
+  (valores) · `--fs-xl` 20px (títulos de bloque/rutina/modal) ·
+  `--fs-2xl` 24px (header chico, nombre de sesión) · `--fs-3xl` 32px
+  (título de pestaña, descanso, titular del resumen) · `--fs-hero`
+  88px (SOLO el número héroe del resumen de sesión).
+- Espaciado (grilla de 4): `--sp-1` 4px · `--sp-2` 8px · `--sp-3` 12px
+  · `--sp-4` 16px · `--sp-6` 24px · `--sp-8` 32px · `--sp-12` 48px ·
+  `--sp-16` 64px.
+- Radios: `--r-sm` 8px (controles chicos) · `--r-md` 12px (botones,
+  barras, hoja de modal) · `--r-full` 999px (píldoras). `50%` solo
+  para círculos.
+- Tracking: `--track` 0.06em para todo lo que va en mayúscula.
+- Números: siempre con `fmtNum()` (coma decimal chilena) y espacio
+  antes de la unidad: `52,5 kg`, nunca `52.5kg`.
+
+Patrones (reutilizar, no inventar variantes):
+- Fila de serie tipo tabla `[nº] [valor] [×] [valor] [RPE] [✓]`: check
+  a la derecha, nº sin caja, valores en columnas flex iguales.
+  Encabezado y fila salen de la misma plantilla (`setColumns`), con
+  anchos fijos en variables `--col-*` de `.vt-sets`. El trofeo de PR
+  va absoluto, nunca como columna.
+- Fila de rutina: texto + círculo azul de Iniciar; las acciones
+  secundarias van en una hoja inferior desde el botón ⋯
+  (`actionSheetHTML`), no como íconos sueltos.
+- `weekDotsHTML()`: 7 círculos L–D de "Esta semana".
+- `statStripHTML()`: franja de stats plana, columnas con divisores
+  verticales, sin cajas; los labels no se parten en dos líneas.
+- `repartoHTML()`: barras de reparto por grupo en BLANCO (no con el
+  color del grupo: esa paleta repite ámbar y verde, reservados).
+- Selectores chicos como píldoras (`.vt-pills`), pestañas internas
+  subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
+  acciones secundarias, borde sólido (`.vt-btn-solid`) para acciones
+  reales de ancho completo — el punteado queda solo para "agregar".
+- Sin `.vt-card`: no existen tarjetas encajonadas en la app.
+- Gráficos (Chart.js): sin caja, eje Y siempre desde 0, serie
+  principal en azul. Ámbar no se usa en gráficos.
+
 ## Reglas de compactación
 Al compactar (automático o manual), preserva siempre:
 - Las rutas de archivo que se estén editando
