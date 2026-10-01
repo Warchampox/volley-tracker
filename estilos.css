@@ -205,6 +205,10 @@ button, svg {
   gap: var(--sp-2);
 }
 .vt-btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+/* Variante de borde SÓLIDO para acciones reales de ancho completo (Sesión
+   libre, Compartir): el punteado se leía como un espacio sin terminar y
+   queda solo para "agregar" (serie, ejercicio). */
+.vt-btn-solid { border-style: solid; color: var(--text); min-height: 48px; }
 .vt-flex { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }
@@ -362,23 +366,55 @@ button, svg {
 .vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
 .vt-lasttime { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; margin: var(--sp-2) 0 var(--sp-3); }
 
-.vt-tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
-.vt-tag { font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-full); border: 1px solid var(--line); color: var(--text-dim); }
-.vt-tag-more { opacity: 0.6; }
+/* ------------------------------ Lista de rutinas ------------------------------
+   Cada rutina es una fila [texto 1fr] [Iniciar 44px] separada por divisor
+   fino. Sin barra vertical izquierda: las rutinas no tienen grupo muscular.
+   Editar/Duplicar/Mover/Eliminar viven en la hoja del ⋯. */
+.vt-free-btn { margin: 0 0 var(--sp-4); }
+.vt-routine-list { border-top: 1px solid var(--line); }
+.vt-routine-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) 0; border-bottom: 1px solid var(--line);
+}
+.vt-routine-head { display: flex; align-items: center; gap: var(--sp-2); }
+/* Nombre de rutina es texto libre del usuario: sin mayúsculas forzadas. */
+.vt-routine-name {
+  flex: 1; min-width: 0; margin: 0;
+  font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vt-routine-meta, .vt-routine-exs { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
+.vt-routine-exs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-more-btn {
+  width: 36px; height: 28px; flex-shrink: 0; padding: 0;
+  background: transparent; border: none; border-radius: var(--r-sm);
+  color: var(--text-dim); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.vt-more-btn:active { background: var(--surface-2); color: var(--text); }
+/* Iniciar: círculo azul con triángulo relleno (no el ícono "play" de la nav,
+   que ya trae su propio círculo — quedaría un círculo dentro de otro). */
+.vt-play-btn {
+  width: 44px; height: 44px; padding: 0;
+  border-radius: 50%; border: none;
+  background: var(--blue); color: #FFFFFF; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: filter 100ms ease, transform 100ms ease;
+}
+.vt-play-btn:active { filter: brightness(0.85); transform: scale(0.96); }
 
-.vt-card-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); align-items: center; }
-
-/* Carpetas de rutinas: encabezado colapsable + acciones, mismo estilo de
-   card de rutina (.vt-block) adentro cuando está expandida. */
-.vt-folder { margin-bottom: var(--sp-6); }
-.vt-folder-head-row { display: flex; align-items: center; gap: var(--sp-1); padding-bottom: var(--sp-3); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
+/* Carpetas de rutinas: encabezado con el mismo patrón que los títulos de
+   grupo de la pestaña Ejercicios (chevron + .vt-group-title + cantidad). */
+.vt-folder { margin-top: var(--sp-4); }
+.vt-folder-head-row { display: flex; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0; }
 .vt-folder-toggle {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2);
-  background: transparent; border: none; color: var(--text); cursor: pointer;
+  background: transparent; border: none; color: var(--text-dim); cursor: pointer;
   padding: var(--sp-1) 0; font: inherit; text-align: left;
 }
-/* Nombre de carpeta es texto libre del usuario: sin mayúsculas forzadas. */
-.vt-folder-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: var(--fs-md); text-transform: none; }
+.vt-folder-toggle .vt-group-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-folder-count { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); color: var(--text-dim); flex-shrink: 0; }
+.vt-folder-empty { margin: 0; padding: 0 0 var(--sp-4); }
 
 .vt-input {
   background: var(--surface-2);
@@ -672,6 +708,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   padding: var(--sp-3) var(--sp-3); display: flex; align-items: center; gap: var(--sp-3); cursor: pointer; border-radius: var(--r-sm); font-size: var(--fs-md);
 }
 .vt-modal-row:hover { background: var(--surface-2); }
+.vt-modal-row-danger { color: var(--red); }
+/* Título de hoja con texto libre del usuario (nombre de rutina/carpeta). */
+.vt-modal-title-free { text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-modal-row .vt-muted-sm { margin-left: auto; }
 .vt-modal-add { color: var(--amber); }
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -694,26 +733,88 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   overflow-y: auto;
 }
 .vt-summary-inner { width: 100%; max-width: 480px; padding: var(--sp-12) var(--sp-4) var(--sp-8); }
-/* Detalle sutil, no un elemento central — se oculta solo si el archivo no existe. */
-.vt-summary-mascot { position: absolute; top: 20px; right: 20px; width: 56px; height: 56px; object-fit: contain; opacity: 0.3; pointer-events: none; }
-/* El nombre de rutina es texto libre del usuario: sin mayúsculas forzadas
-   (misma regla que .vt-block h3). */
-.vt-summary-title {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 700; font-size: var(--fs-2xl);
-  margin: var(--sp-1) 0 0; letter-spacing: normal;
-  text-transform: none;
-}
-.vt-pr-hit { padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
-.vt-pr-hit:last-child { border-bottom: none; padding-bottom: 0; }
-.vt-pr-hit-row { display: flex; align-items: center; gap: var(--sp-2); }
-.vt-pr-hit-name { flex: 1; font-size: var(--fs-md); min-width: 0; }
-.vt-pr-hit-value { color: var(--text-dim); font-size: var(--fs-sm); flex-shrink: 0; }
-.vt-pr-hit-applied { color: var(--green); font-size: var(--fs-sm); display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0 0; }
 
-.vt-diff-list { list-style: none; padding: 0; margin: var(--sp-2) 0 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
+/* Encabezado centrado: mascota, eyebrow, titular y nombre de rutina. */
+.vt-sum-head { text-align: center; }
+.vt-sum-mascot { width: 56px; height: 56px; object-fit: contain; margin-bottom: var(--sp-4); }
+.vt-sum-headline {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+  font-size: var(--fs-3xl); line-height: 1.05; text-transform: uppercase;
+  margin: var(--sp-1) 0;
+}
+.vt-sum-routine { font-size: var(--fs-md); color: var(--text-dim); margin: 0; }
+/* Número héroe (volumen, o duración si no hubo volumen). El divisor que lo
+   cierra es el borde superior de la franja de stats que viene debajo. */
+.vt-sum-hero { text-align: center; padding: var(--sp-6) 0; }
+.vt-sum-hero-num { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: var(--fs-hero); line-height: 1; margin: 0; }
+.vt-sum-hero-num small { font-size: var(--fs-3xl); color: var(--text-dim); margin-left: var(--sp-1); }
+.vt-sum-hero-sub { font-size: var(--fs-sm); color: var(--text-dim); margin: var(--sp-2) 0 0; }
+.vt-sum-hero-sub b { color: var(--text); font-weight: 600; }
+.vt-sum-up { color: var(--blue); }
+
+.vt-sum-section { margin-top: var(--sp-6); }
+.vt-sum-section > .vt-section-eyebrow { margin-bottom: var(--sp-2); }
+.vt-section-eyebrow.vt-eyebrow-pr { color: var(--amber); }
+.vt-sum-done { color: var(--text-dim); font-size: var(--fs-sm); display: inline-flex; align-items: center; gap: var(--sp-1); }
+.vt-sum-section > .vt-sum-done { margin-top: var(--sp-2); }
+.vt-sum-section > .vt-section-eyebrow + .vt-text-btn { padding-top: 0; }
+.vt-sum-actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-8); }
+.vt-sum-actions .vt-btn-outline { margin-top: 0; }
+.vt-sum-actions .vt-btn-primary { min-height: 48px; }
+
+/* Botón de texto (sin caja): acciones secundarias dentro de una sección. */
+.vt-text-btn {
+  background: transparent; border: none; padding: var(--sp-2) 0;
+  color: var(--blue); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
+  cursor: pointer; text-align: left;
+}
+.vt-text-btn:active { filter: brightness(0.8); }
+.vt-text-btn-pr { color: var(--amber); padding: var(--sp-1) 0; }
+
+/* "Esta semana": 7 círculos L–D (weekDotsHTML). También lo usa Progreso. */
+.vt-week { display: grid; grid-template-columns: repeat(7, 1fr); }
+.vt-week-day {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); color: var(--text-dim);
+}
+.vt-week-day.is-today span { color: var(--text); }
+.vt-week-day i { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); }
+.vt-week-day i.is-on { background: var(--blue); border-color: var(--blue); }
+
+/* Franja de stats plana (statStripHTML): columnas iguales con divisores
+   verticales, sin cajas. Los labels nunca se parten en dos líneas. */
+.vt-strip { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.vt-strip-cell { flex: 1; min-width: 0; padding: var(--sp-4) var(--sp-2); text-align: center; }
+.vt-strip-cell + .vt-strip-cell { border-left: 1px solid var(--line); }
+.vt-strip-label { display: block; font-size: var(--fs-xs); color: var(--text-dim); text-transform: uppercase; letter-spacing: var(--track); white-space: nowrap; margin-bottom: var(--sp-1); }
+.vt-strip-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-2xl); font-weight: 600; }
+.vt-strip-value small { font-size: var(--fs-sm); font-weight: 500; color: var(--text-dim); margin-left: var(--sp-1); }
+
+/* Récords: barra ámbar a la izquierda de todo el grupo + trofeo por fila. */
+.vt-records { border-left: 2px solid var(--amber); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.vt-record { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3) 0 var(--sp-3) var(--sp-3); border-bottom: 1px solid var(--line); }
+.vt-record:last-child { border-bottom: none; }
+.vt-record .vt-pr { margin-top: 2px; }
+.vt-record-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.vt-record-name { font-size: var(--fs-md); }
+.vt-record-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-md); font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+
+/* Filas planas genéricas nombre → valor, con divisor fino. */
+.vt-rows { border-top: 1px solid var(--line); }
+.vt-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
+.vt-row-name { font-size: var(--fs-md); min-width: 0; }
+.vt-row-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); text-align: right; flex-shrink: 0; max-width: 58%; }
+.vt-pr-inline { margin-left: var(--sp-1); vertical-align: -1px; animation: none; }
 .vt-diff-added { color: var(--blue); }
 .vt-diff-removed { color: var(--red); }
+
+/* Reparto por grupo muscular (repartoHTML): barras BLANCAS, no con el color
+   del grupo — esa paleta repite ámbar y verde, que están reservados. */
+.vt-reparto { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.vt-reparto-name { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-reparto-track { height: 6px; background: var(--surface-2); border-radius: var(--r-full); overflow: hidden; }
+.vt-reparto-track i { display: block; height: 100%; background: var(--text); border-radius: var(--r-full); }
+.vt-reparto-n { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); text-align: right; }
 
 .vt-session-detail { margin-top: var(--sp-3); border-top: 1px solid var(--line); padding-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
 .vt-detail-row { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); }
@@ -730,8 +831,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-metric-toggle-scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; margin-bottom: 0; -webkit-overflow-scrolling: touch; }
 .vt-metric-toggle-scroll button { flex: 0 0 auto; min-width: 46px; padding: var(--sp-2) var(--sp-3); }
 
-.vt-stat-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-4); }
-.vt-stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-3); }
 .vt-stat-label { display: block; font-size: var(--fs-xs); color: var(--text-dim); margin-bottom: 2px; text-transform: uppercase; letter-spacing: var(--track); }
 .vt-stat-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; }
 .vt-stat-delta { color: var(--green); }

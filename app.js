@@ -157,6 +157,7 @@ const ui = {
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
+  actionSheet: null,      // null | {kind: "routine"|"folder", id} — hoja inferior del botón ⋯
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
   exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
@@ -230,6 +231,8 @@ const PATHS = {
   tag: '<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/>',
   clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/>',
   gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+  playFill: '<polygon points="8 5 19 12 8 19 8 5" fill="currentColor"/>',
   timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
 };
@@ -288,6 +291,24 @@ function isPR(type, st, prior, unilateral) {
     return !prior.anyLastre && r > 0 && r > prior.maxR;
   }
   return num(st.weight) > 0 && num(st.weight) > prior.maxW;
+}
+
+// PR por serie DENTRO de una sesión: una serie es PR solo si supera
+// estrictamente el máximo del historial (prior) Y el de las series anteriores
+// de esta misma sesión — un empate no es PR. Sin esto, 3 series iguales que
+// superan el historial contaban como 3 PRs. Devuelve un booleano por serie,
+// en el mismo orden; mismo máximo incremental que computeAllPRs.
+function prFlags(type, sets, prior, unilateral) {
+  const run = { ...prior };
+  return sets.map((st) => {
+    if (!st.done || getSetType(st)) return false;
+    const hit = isPR(type, st, run, unilateral);
+    run.maxW = Math.max(run.maxW, num(st.weight));
+    run.maxR = Math.max(run.maxR, unilateral ? Math.min(repsL(st), repsR(st)) : num(st.reps));
+    run.maxS = Math.max(run.maxS, num(st.seconds));
+    if (num(st.weight) > 0) run.anyLastre = true;
+    return hit;
+  });
 }
 
 // Superseries: por índice devuelve null (suelto) o {letter, pos, isLast}.
@@ -615,6 +636,7 @@ function render() {
     ${ui.infoDialog ? infoDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
     ${ui.movingRoutineId && !ui.folderModal ? moveRoutineHTML() : ""}
+    ${ui.actionSheet ? actionSheetHTML() : ""}
     ${ui.groupModal ? groupModalHTML() : ""}
     ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}`;
 
@@ -704,34 +726,33 @@ function mountSortables() {
 
 /* --------------------------------- Vista Rutinas -------------------------------- */
 
-function routineCardHTML(r, map, lastUsed) {
+// Una rutina = una fila: texto a la izquierda, botón redondo de Iniciar a la
+// derecha. Editar / Duplicar / Mover / Eliminar viven en la hoja del ⋯
+// (actionSheetHTML), no como íconos sueltos.
+function routineRowHTML(r, map, lastUsed) {
   const last = lastUsed(r.id);
-  return `<div class="vt-block">
-    <div class="vt-card-top"><div>
-      <h3>${esc(r.name) || "Sin nombre"}</h3>
-      <p class="vt-muted">${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
-    </div></div>
-    <div class="vt-tags">
-      ${r.exercises.slice(0, 4).map((re) =>
-        `<span class="vt-tag" style="border-color:${groupColor(map[re.exerciseId]?.group) || "var(--line)"}">${esc(map[re.exerciseId]?.name || "Ejercicio")}</span>`).join("")}
-      ${r.exercises.length > 4 ? `<span class="vt-tag vt-tag-more">+${r.exercises.length - 4}</span>` : ""}
+  const n = r.exercises.length;
+  const names = r.exercises.map((re) => map[re.exerciseId]?.name || "Ejercicio").join(" · ");
+  return `<div class="vt-routine-row">
+    <div class="vt-routine-text">
+      <div class="vt-routine-head">
+        <h3 class="vt-routine-name">${esc(r.name) || "Sin nombre"}</h3>
+        <button class="vt-more-btn" data-a="sheet-open" data-kind="routine" data-id="${r.id}" aria-label="Más opciones">${icon("more", 18)}</button>
+      </div>
+      <p class="vt-routine-meta">${n} ejercicio${n !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
+      ${names ? `<p class="vt-routine-exs">${esc(names)}</p>` : ""}
     </div>
-    <div class="vt-card-actions">
-      <button class="vt-btn-primary vt-flex" data-a="routine-start" data-id="${r.id}">${icon("play", 18)} Iniciar</button>
-      <button class="vt-btn-ghost" data-a="routine-edit" data-id="${r.id}" aria-label="Editar">${icon("pencil", 16)}</button>
-      <button class="vt-btn-ghost" data-a="routine-dup" data-id="${r.id}" aria-label="Duplicar">${icon("copy", 16)}</button>
-      <button class="vt-btn-ghost" data-a="routine-move" data-id="${r.id}" aria-label="Mover a carpeta">${icon("folder", 16)}</button>
-      <button class="vt-btn-ghost vt-danger" data-a="routine-del" data-id="${r.id}" aria-label="Eliminar">${icon("trash", 16)}</button>
-    </div>
+    <button class="vt-play-btn" data-a="routine-start" data-id="${r.id}" aria-label="Iniciar">${icon("playFill", 18)}</button>
   </div>`;
 }
 
 function routinesHTML() {
   const map = exMap();
   const lastUsed = (rid) => { const s = sessions.find((s) => s.routineId === rid); return s ? s.date : null; };
+  const listHTML = (list) => `<div class="vt-routine-list">${list.map((r) => routineRowHTML(r, map, lastUsed)).join("")}</div>`;
 
   const loose = routines.filter((r) => !r.folderId);
-  const looseHTML = loose.length ? `<div class="vt-list">${loose.map((r) => routineCardHTML(r, map, lastUsed)).join("")}</div>` : "";
+  const looseHTML = loose.length ? listHTML(loose) : "";
 
   const foldersHTML = routineFolders.map((f) => {
     const inFolder = routines.filter((r) => r.folderId === f.id);
@@ -741,15 +762,14 @@ function routinesHTML() {
       <div class="vt-folder-head-row">
         <button class="vt-folder-toggle" data-a="folder-toggle" data-id="${f.id}">
           ${icon(collapsed ? "chevDown" : "chevUp", 16)}
-          <span class="vt-folder-name">${esc(f.name)}</span>
-          <span class="vt-muted-sm">${inFolder.length} rutina${inFolder.length !== 1 ? "s" : ""}</span>
+          <span class="vt-group-title">${esc(f.name)}</span>
+          <span class="vt-folder-count">${inFolder.length} rutina${inFolder.length !== 1 ? "s" : ""}</span>
         </button>
-        <button class="vt-btn-ghost" data-a="folder-edit" data-id="${f.id}" aria-label="Renombrar carpeta">${icon("pencil", 14)}</button>
-        <button class="vt-btn-ghost vt-danger" data-a="folder-del" data-id="${f.id}" aria-label="Eliminar carpeta">${icon("trash", 14)}</button>
+        <button class="vt-more-btn" data-a="sheet-open" data-kind="folder" data-id="${f.id}" aria-label="Opciones de carpeta">${icon("more", 18)}</button>
       </div>
       ${collapsed ? "" : (inFolder.length
-        ? `<div class="vt-list">${inFolder.map((r) => routineCardHTML(r, map, lastUsed)).join("")}</div>`
-        : `<p class="vt-muted" style="padding:0 var(--sp-1) var(--sp-4)">Sin rutinas todavía — usa el ícono de carpeta en una rutina para moverla acá.</p>`)}
+        ? listHTML(inFolder)
+        : `<p class="vt-muted vt-folder-empty">Sin rutinas todavía — abre el menú de una rutina y elige "Mover a carpeta".</p>`)}
     </div>`;
   }).join("");
 
@@ -766,8 +786,37 @@ function routinesHTML() {
         <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 20)}</button>
         <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
       </div>
-    </header>${body}
-    <button class="vt-btn-outline vt-flex-center" data-a="train-free">${icon("plus", 18)} Sesión libre</button>`;
+    </header>
+    <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-free-btn" data-a="train-free">${icon("plus", 18)} Sesión libre</button>
+    ${body}`;
+}
+
+// Hoja inferior del botón ⋯ (rutina o carpeta): mismo estilo que los demás
+// modales. Cada fila dispara la acción de siempre (routine-edit, folder-del,
+// etc.); el click handler cierra la hoja antes de ejecutar cualquier acción.
+function actionSheetHTML() {
+  const { kind, id } = ui.actionSheet;
+  const row = (a, ic, label, danger) =>
+    `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
+  let title, rows;
+  if (kind === "folder") {
+    title = routineFolders.find((f) => f.id === id)?.name || "Carpeta";
+    rows = row("folder-edit", "pencil", "Renombrar") + row("folder-del", "trash", "Eliminar", true);
+  } else {
+    title = routines.find((r) => r.id === id)?.name || "Rutina";
+    rows = row("routine-edit", "pencil", "Editar") + row("routine-dup", "copy", "Duplicar")
+      + row("routine-move", "folder", "Mover a carpeta") + row("routine-del", "trash", "Eliminar", true);
+  }
+  return `
+    <div class="vt-modal-backdrop" data-a="sheet-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title vt-modal-title-free">${esc(title)}</h2>
+          <button class="vt-btn-ghost" data-a="sheet-close" aria-label="Cerrar">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-body">${rows}</div>
+      </div>
+    </div>`;
 }
 
 function folderModalHTML() {
@@ -955,7 +1004,8 @@ function trainActiveHTML() {
         const uni = !!ex?.unilateral;
         const prior = priorStats(e.exerciseId);
         const complete = isExerciseComplete(e);
-        const anyPR = e.sets.some((st) => isPR(t, st, prior, uni));
+        const prs = prFlags(t, e.sets, prior, uni);
+        const anyPR = prs.some(Boolean);
         const accent = blockAccentColor(ex, lbl);
 
         if (ui.collapsedExercises.has(exIdx)) {
@@ -995,7 +1045,7 @@ function trainActiveHTML() {
                 return e.sets.map((st, setIdx) => {
                   const stype = getSetType(st);
                   const label = stype === "warmup" ? "C" : stype === "dropset" ? "D" : stype === "failed" ? "F" : String(++n);
-                  return setRowHTML(t, st, exIdx, setIdx, prior, label, uni);
+                  return setRowHTML(t, st, exIdx, setIdx, prs[setIdx], label, uni);
                 }).join("");
               })()}
             </div>
@@ -1153,9 +1203,8 @@ function typeSelectorHTML(exIdx, setIdx) {
   </div>`;
 }
 
-function setRowHTML(type, st, exIdx, setIdx, prior, label, unilateral) {
+function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   const stype = getSetType(st);
-  const pr = isPR(type, st, prior, unilateral);
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
   const typeKey = `${exIdx}:${setIdx}`;
   const openType = ui.openTypeSelector === typeKey;
@@ -2134,34 +2183,48 @@ function finishSession() {
     // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
     // ejercicio terminaría comparándose contra sí mismo.
     const map = exMap();
+    // Una entrada por EJERCICIO (no por serie): la mejor serie PR. Como cada
+    // PR tiene que superar al anterior de la misma sesión (prFlags), la mejor
+    // es simplemente la última marcada.
     const prHits = [];
     for (const e of s.exercises) {
       const type = exType(e.exerciseId);
       const uni = exUnilateral(e.exerciseId);
-      const prior = priorStats(e.exerciseId);
-      for (const st of e.sets) {
-        if (!st.done || getSetType(st) || !isPR(type, st, prior, uni)) continue;
-        // Unilateral: reps del hit usa el lado más débil (mismo criterio que
-        // el PR); repsL/repsR se guardan aparte para el formato compacto de fmtSet.
-        const hit = {
-          exerciseId: e.exerciseId,
-          exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
-          type,
-          weight: num(st.weight),
-          reps: uni ? Math.min(repsL(st), repsR(st)) : num(st.reps),
-          repsL: uni ? repsL(st) : undefined,
-          repsR: uni ? repsR(st) : undefined,
-          seconds: num(st.seconds),
-        };
-        // Sugerencia de 1RM (Epley), solo confiable entre 1 y 12 reps.
-        if (type !== "time" && hit.weight > 0 && hit.reps >= 1 && hit.reps <= 12) {
-          const estimated = Math.round(hit.weight * (1 + hit.reps / 30) / 2.5) * 2.5;
-          const currentOneRM = num(map[e.exerciseId]?.oneRM);
-          if (estimated > currentOneRM) hit.suggestedOneRM = estimated;
+      const flags = prFlags(type, e.sets, priorStats(e.exerciseId), uni);
+      const bestIdx = flags.lastIndexOf(true);
+      if (bestIdx === -1) continue;
+      const st = e.sets[bestIdx];
+      // Unilateral: reps del hit usa el lado más débil (mismo criterio que
+      // el PR); repsL/repsR se guardan aparte para el formato compacto de fmtSet.
+      const hit = {
+        exerciseId: e.exerciseId,
+        exerciseName: map[e.exerciseId]?.name || "(ejercicio eliminado)",
+        type,
+        weight: num(st.weight),
+        reps: uni ? Math.min(repsL(st), repsR(st)) : num(st.reps),
+        repsL: uni ? repsL(st) : undefined,
+        repsR: uni ? repsR(st) : undefined,
+        seconds: num(st.seconds),
+      };
+      // Sugerencia de 1RM (Epley, solo confiable entre 1 y 12 reps): la mejor
+      // estimación entre TODAS las series efectivas hechas de este ejercicio
+      // hoy, no solo la del PR — 47,5×8 estima más que 50×3 aunque el PR de
+      // peso sea la de 50.
+      if (type !== "time") {
+        let best = 0;
+        for (const x of e.sets) {
+          if (!x.done || getSetType(x)) continue;
+          const w = num(x.weight), r = uni ? Math.min(repsL(x), repsR(x)) : num(x.reps);
+          if (w > 0 && r >= 1 && r <= 12) best = Math.max(best, Math.round(w * (1 + r / 30) / 2.5) * 2.5);
         }
-        prHits.push(hit);
+        if (best > num(map[e.exerciseId]?.oneRM)) hit.suggestedOneRM = best;
       }
+      prHits.push(hit);
     }
+
+    // Sesión anterior de la MISMA rutina (antes de meter esta en `sessions`),
+    // para el titular y el "+8% vs la última vez" del resumen.
+    const prevSame = s.routineId ? sessions.find((x) => x.routineId === s.routineId) : null;
 
     const cleaned = {
       ...s,
@@ -2202,6 +2265,8 @@ function finishSession() {
       durationSec: cleaned.durationSec,
       volume: sessionVolume(cleaned, false),
       setsCount: done,
+      sessionNumber: sessions.length, // total de sesiones guardadas, contando esta
+      prevVolume: prevSame ? sessionVolume(prevSame, false) : null, // null = primera vez con esta rutina
       prHits,
       appliedUpdates: new Set(),
       routineDiff,
@@ -2232,70 +2297,185 @@ function finishSession() {
   }
 }
 
+/* ------------------------ Piezas reutilizables del resumen ------------------------ */
+// (weekDotsHTML, statStripHTML y repartoHTML también las usa Progreso.)
+
+// Número con formato chileno: miles con punto, decimales con coma (52,5).
+const fmtNum = (n) => num(n).toLocaleString("es-CL", { maximumFractionDigits: 2 });
+
+// Duración partida en valor + unidad, para mostrarlos con tamaños distintos:
+// "58" + "min", o "1:12" + "h" pasada la hora.
+function durationParts(sec) {
+  const min = Math.max(1, Math.round(num(sec) / 60));
+  return min >= 60
+    ? { value: `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}`, unit: "h" }
+    : { value: String(min), unit: "min" };
+}
+
+// "Esta semana": 7 círculos de lunes a domingo, relleno azul si hubo sesión
+// ese día. La letra de hoy va en blanco.
+function weekDotsHTML() {
+  const monday = mondayOf(new Date());
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const trained = new Set(sessions.map((s) => dayKey(new Date(s.date))));
+  const today = dayKey(new Date());
+  return `<div class="vt-week">${["L", "M", "M", "J", "V", "S", "D"].map((letter, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const k = dayKey(d);
+    return `<div class="vt-week-day ${k === today ? "is-today" : ""}"><span>${letter}</span><i class="${trained.has(k) ? "is-on" : ""}"></i></div>`;
+  }).join("")}</div>`;
+}
+
+// Franja de stats plana: columnas iguales con divisores verticales, sin cajas.
+// items: [{label, value, unit?}]
+function statStripHTML(items) {
+  return `<div class="vt-strip">${items.map((it) => `
+    <div class="vt-strip-cell"><span class="vt-strip-label">${it.label}</span>
+      <span class="vt-strip-value">${it.value}${it.unit ? `<small>${it.unit}</small>` : ""}</span></div>`).join("")}</div>`;
+}
+
+// Series por grupo muscular de una lista de ejercicios de sesión ([{exerciseId,
+// sets}]), de mayor a menor: [[grupo, n], ...].
+function groupSetCounts(exerciseLists) {
+  const counts = {};
+  exerciseLists.forEach((e) => {
+    if (!e.sets.length) return;
+    const g = exGroup(e.exerciseId);
+    counts[g] = (counts[g] || 0) + e.sets.length;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+}
+
+// Barras de reparto: BLANCAS a propósito, no con el color del grupo — la
+// paleta de grupos repite el ámbar y el verde, que están reservados.
+function repartoHTML(entries) {
+  const max = Math.max(1, ...entries.map(([, n]) => n));
+  return `<div class="vt-reparto">${entries.map(([g, n]) => `
+    <span class="vt-reparto-name">${esc(g)}</span>
+    <span class="vt-reparto-track"><i style="width:${Math.round(n / max * 100)}%"></i></span>
+    <span class="vt-reparto-n">${n}</span>`).join("")}</div>`;
+}
+
+// Valor de un récord en el resumen: `50 × 6` (peso), `10 reps` / `+10 × 6`
+// (corporal sin/con lastre), `1:00` (+ ` · +10 kg`) para tiempo. Unilateral
+// conserva el formato compacto de siempre (fmtSet).
+function fmtRecordValue(hit) {
+  if (hit.type === "time") return `${fmtClockInput(hit.seconds)}${hit.weight > 0 ? ` · +${fmtNum(hit.weight)} kg` : ""}`;
+  if (exUnilateral(hit.exerciseId)) return fmtSet(hit.type, hit, true);
+  if (hit.type === "bodyweight") return hit.weight > 0 ? `+${fmtNum(hit.weight)} × ${hit.reps}` : `${hit.reps} reps`;
+  return `${fmtNum(hit.weight)} × ${hit.reps}`;
+}
+
+// Línea compacta de "lo que hiciste" para un ejercicio (sets ya hechos):
+// si todas las series son iguales `3 × 20 · 10 kg` / `3 × 1:00` / `3 × 10`;
+// si no, cada una por separado `45×6  45×6  50×6`.
+function fmtDoneSets(e) {
+  const type = exType(e.exerciseId);
+  const uni = exUnilateral(e.exerciseId);
+  const reps = (st) => uni ? `I${repsL(st)} D${repsR(st)}` : String(num(st.reps));
+  const one = (st) => {
+    const w = num(st.weight);
+    if (type === "time") return `${fmtClockInput(num(st.seconds))}${w > 0 ? ` +${fmtNum(w)}kg` : ""}`;
+    if (type === "bodyweight") return w > 0 ? `+${fmtNum(w)}×${reps(st)}` : reps(st);
+    return uni ? `${fmtNum(w)}kg ${reps(st)}` : `${fmtNum(w)}×${reps(st)}`;
+  };
+  const all = e.sets.map(one);
+  if (!all.every((x) => x === all[0])) return all.join("  ");
+  const st = e.sets[0], w = num(st.weight), n = e.sets.length;
+  if (type === "time") return `${n} × ${fmtClockInput(num(st.seconds))}${w > 0 ? ` · +${fmtNum(w)} kg` : ""}`;
+  if (type === "bodyweight") return `${n} × ${reps(st)}${w > 0 ? ` · +${fmtNum(w)} kg` : ""}`;
+  return `${n} × ${reps(st)}${w > 0 ? ` · ${fmtNum(w)} kg` : ""}`;
+}
+
 // Pantalla de resumen al finalizar sesión: overlay de pantalla completa
-// (no el bottom-sheet chico de picker/exerciseModal).
+// (no el bottom-sheet chico de picker/exerciseModal). Todo plano: secciones
+// con label en mayúscula y divisores finos, sin .vt-card.
 function sessionSummaryHTML() {
   const sum = ui.sessionSummary;
+  const done = sum.exercisesSnapshot;
+  const nPR = sum.prHits.length;
+  const prIds = new Set(sum.prHits.map((h) => h.exerciseId));
+  const section = (label, body, cls = "") => `<section class="vt-sum-section"><p class="vt-section-eyebrow ${cls}">${label}</p>${body}</section>`;
 
-  const prSection = sum.prHits.length === 0
-    ? `<p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">Sin PRs esta vez</p>`
-    : `<div class="vt-card" style="margin-top:var(--sp-4)">
-        <h3>PRs de hoy</h3>
-        ${sum.prHits.map((hit) => {
-          const applied = sum.appliedUpdates.has(hit.exerciseId);
-          return `<div class="vt-pr-hit">
-            <div class="vt-pr-hit-row">
-              <span class="vt-pr">${icon("trophy", 16)}</span>
-              <span class="vt-pr-hit-name">${esc(hit.exerciseName)}</span>
-              <span class="vt-pr-hit-value vt-mono">${esc(fmtSet(hit.type, hit, exUnilateral(hit.exerciseId)))}</span>
-            </div>
-            ${hit.suggestedOneRM ? (applied
-              ? `<p class="vt-pr-hit-applied">${icon("check", 13)} 1RM actualizado</p>`
-              : `<button class="vt-btn-outline vt-small" data-a="summary-apply-1rm" data-id="${hit.exerciseId}" data-value="${hit.suggestedOneRM}">Actualizar 1RM a ${hit.suggestedOneRM}kg</button>`
-            ) : ""}
-          </div>`;
-        }).join("")}
-      </div>`;
+  const headline = nPR > 0 ? (nPR === 1 ? "Récord nuevo" : `${nPR} récords nuevos`)
+    : sum.prevVolume !== null && sum.prevVolume < sum.volume ? "Más fuerte que la última vez"
+    : "Sesión cumplida";
 
-  const routineSection = !sum.routineDiff ? "" : `
-    <div class="vt-card" style="margin-top:var(--sp-4)">
-      <h3>Cambios respecto a tu rutina guardada</h3>
-      <ul class="vt-diff-list">
-        ${sum.routineDiff.added.map((x) => `<li class="vt-diff-added">+ ${esc(x.name)}</li>`).join("")}
-        ${sum.routineDiff.removed.map((x) => `<li class="vt-diff-removed">− ${esc(x.name)}</li>`).join("")}
-      </ul>
-      ${sum.routineSynced
-        ? `<p class="vt-pr-hit-applied">${icon("check", 13)} Rutina actualizada</p>`
-        : `<button class="vt-btn-outline vt-small" data-a="summary-sync-routine">Actualizar rutina "${esc(sum.routineDiff.routineName)}" con estos cambios</button>`}
-    </div>`;
+  // Número héroe: el volumen; si no hubo volumen (solo tiempo o peso
+  // corporal), la duración — y ahí no hay comparación ni cabras.
+  const dur = durationParts(sum.durationSec);
+  const hasVol = sum.volume > 0;
+  const hero = hasVol ? { value: Math.round(sum.volume).toLocaleString("es-CL"), unit: "kg" } : dur;
+  const subParts = [];
+  if (sum.routineId !== null) {
+    if (sum.prevVolume === null) subParts.push("Primera vez con esta rutina");
+    else if (hasVol && sum.prevVolume > 0) {
+      const pct = Math.round((sum.volume - sum.prevVolume) / sum.prevVolume * 100);
+      subParts.push(`<span class="${pct >= 0 ? "vt-sum-up" : ""}">${pct >= 0 ? "+" : "−"}${Math.abs(pct)}%</span> vs la última vez`);
+    }
+  }
+  const goats = Math.round(sum.volume / 60); // una cabra ≈ 60 kg
+  if (hasVol && goats > 0) subParts.push(`como levantar <b>${goats.toLocaleString("es-CL")} cabra${goats !== 1 ? "s" : ""}</b>`);
 
-  const saveAsRoutineSection = sum.routineId !== null ? "" : `
-    <div class="vt-card" style="margin-top:var(--sp-4)">
-      <h3>Esta fue una sesión libre</h3>
-      ${sum.savedAsRoutine
-        ? `<p class="vt-pr-hit-applied">${icon("check", 13)} Guardada como rutina</p>`
-        : `<button class="vt-btn-outline vt-small" data-a="summary-save-as-routine">${icon("plus", 14)} Guardar como rutina</button>`}
-    </div>`;
+  const recordsSection = nPR === 0 ? "" : section("Récords", `<div class="vt-records">${sum.prHits.map((hit) => `
+    <div class="vt-record">
+      <span class="vt-pr">${icon("trophy", 16)}</span>
+      <div class="vt-record-main">
+        <span class="vt-record-name">${esc(hit.exerciseName)}</span>
+        ${hit.suggestedOneRM ? (sum.appliedUpdates.has(hit.exerciseId)
+          ? `<span class="vt-sum-done">${icon("check", 12)} 1RM actualizado</span>`
+          : `<button class="vt-text-btn vt-text-btn-pr" data-a="summary-apply-1rm" data-id="${hit.exerciseId}" data-value="${hit.suggestedOneRM}">1RM → ${fmtNum(hit.suggestedOneRM)} kg</button>`) : ""}
+      </div>
+      <span class="vt-record-value">${esc(fmtRecordValue(hit))}</span>
+    </div>`).join("")}</div>`, "vt-eyebrow-pr");
+
+  const doneSection = section("Lo que hiciste", `<div class="vt-rows">${done.map((e) => `
+    <div class="vt-row">
+      <span class="vt-row-name">${esc(exName(e.exerciseId))}${prIds.has(e.exerciseId) ? `<span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span>` : ""}</span>
+      <span class="vt-row-value">${esc(fmtDoneSets(e))}</span>
+    </div>`).join("")}</div>`);
+
+  const routineSection = !sum.routineDiff ? "" : section("Cambios en tu rutina", `<div class="vt-rows">
+      ${sum.routineDiff.added.map((x) => `<div class="vt-row"><span class="vt-row-name vt-diff-added">+ ${esc(x.name)}</span></div>`).join("")}
+      ${sum.routineDiff.removed.map((x) => `<div class="vt-row"><span class="vt-row-name vt-diff-removed">− ${esc(x.name)}</span></div>`).join("")}
+    </div>
+    ${sum.routineSynced
+      ? `<span class="vt-sum-done">${icon("check", 12)} Rutina actualizada</span>`
+      : `<button class="vt-text-btn" data-a="summary-sync-routine">Actualizar "${esc(sum.routineDiff.routineName)}" con estos cambios</button>`}`);
+
+  const saveAsRoutineSection = sum.routineId !== null ? "" : section("Sesión libre", sum.savedAsRoutine
+    ? `<span class="vt-sum-done">${icon("check", 12)} Guardada como rutina</span>`
+    : `<button class="vt-text-btn" data-a="summary-save-as-routine">Guardar como rutina</button>`);
 
   return `
     <div class="vt-summary-overlay">
-      <img src="icons/goat-body.png" alt="" class="vt-summary-mascot" onerror="this.style.display='none'">
       <div class="vt-summary-inner">
-        <p class="vt-eyebrow">${fmtDate(sum.date)}</p>
-        <h1 class="vt-summary-title">${esc(sum.routineName)}</h1>
-        <div class="vt-stat-row" style="margin-top:var(--sp-4)">
-          <div class="vt-stat"><span class="vt-stat-label">Duración</span>
-            <span class="vt-stat-value">${fmtDurationMin(sum.durationSec)}</span></div>
-          <div class="vt-stat"><span class="vt-stat-label">Volumen</span>
-            <span class="vt-stat-value">${Math.round(sum.volume).toLocaleString("es-CL")} kg</span></div>
-          <div class="vt-stat"><span class="vt-stat-label">Series</span>
-            <span class="vt-stat-value">${sum.setsCount}</span></div>
+        <div class="vt-sum-head">
+          <img src="icons/goat-face.png" alt="" class="vt-sum-mascot" onerror="this.style.display='none'">
+          <p class="vt-eyebrow">Sesión nº ${sum.sessionNumber} · ${fmtDate(sum.date)}</p>
+          <h1 class="vt-sum-headline">${headline}</h1>
+          <p class="vt-sum-routine">${esc(sum.routineName)}</p>
         </div>
-        ${prSection}
+        <div class="vt-sum-hero">
+          <p class="vt-sum-hero-num">${hero.value}<small>${hero.unit}</small></p>
+          ${subParts.length ? `<p class="vt-sum-hero-sub">${subParts.join(" · ")}</p>` : ""}
+        </div>
+        ${statStripHTML([
+          { label: "Duración", value: dur.value, unit: dur.unit },
+          { label: "Series", value: sum.setsCount },
+          { label: "Ejercicios", value: done.length },
+        ])}
+        ${section("Esta semana", weekDotsHTML())}
+        ${recordsSection}
+        ${doneSection}
+        ${section("Reparto", repartoHTML(groupSetCounts(done)))}
         ${routineSection}
         ${saveAsRoutineSection}
-        <button class="vt-btn-outline vt-flex-center" style="margin-top:var(--sp-6)" data-a="summary-share">${icon("share", 16)} Compartir</button>
-        <button class="vt-btn-primary vt-full" style="margin-top:var(--sp-3)" data-a="summary-close">Cerrar</button>
+        <div class="vt-sum-actions">
+          <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="summary-share">${icon("share", 16)} Compartir</button>
+          <button class="vt-btn-primary vt-full" data-a="summary-close">Listo</button>
+        </div>
       </div>
     </div>`;
 }
@@ -2665,8 +2845,13 @@ document.addEventListener("click", (e) => {
   if (el.classList.contains("vt-modal-backdrop") && e.target.closest(".vt-modal")) return;
   const a = el.dataset.a;
   const id = el.dataset.id;
+  // Cualquier acción cierra la hoja del ⋯ (las filas de la hoja disparan las
+  // acciones de siempre: routine-edit, folder-del, etc., y todas renderizan).
+  if (a !== "sheet-open") ui.actionSheet = null;
 
   switch (a) {
+    case "sheet-open": ui.actionSheet = { kind: el.dataset.kind, id }; render(); break;
+    case "sheet-close": render(); break;
     case "tab":
       stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
       ui.editingRoutine = null;

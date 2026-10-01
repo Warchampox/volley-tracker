@@ -1025,3 +1025,35 @@ Entradas nuevas al final. No reescribir lo anterior.
   de consola. Sin probar todavía en teléfono real (tacto/gestos/teclado).
 - sw.js NO se subió de versión todavía (va al cerrar las 3 fases, o
   antes si se quiere publicar la Fase 1 sola).
+
+## 2026-10-01 cont. — Rediseño visual, Fase 2 de 3
+- Lista de rutinas: cada rutina es una fila (nombre, "N ejercicios ·
+  última vez", ejercicios como texto con elipsis) + botón redondo de
+  Iniciar. Editar/Duplicar/Mover/Eliminar pasaron a una hoja inferior
+  que abre el ⋯ (`ui.actionSheet`, `actionSheetHTML`); las carpetas
+  usan el mismo ⋯ para Renombrar/Eliminar y su encabezado va en
+  mayúscula como los grupos de Ejercicios. "Sesión libre" sube arriba
+  con borde sólido (`.vt-btn-solid`).
+- Bug de PRs corregido: `prFlags()` marca una serie como PR solo si
+  supera el historial Y las series anteriores de la misma sesión
+  (empate no cuenta). Lo usan el resaltado en vivo y `finishSession`,
+  que ahora deja UNA entrada por ejercicio en `prHits`. Decisión: la
+  sugerencia de 1RM toma la mejor estimación Epley entre todas las
+  series efectivas hechas del ejercicio, no solo la del PR.
+- Resumen de fin de sesión rehecho, plano y sin .vt-card: titular,
+  número héroe (volumen, o duración si no hubo volumen), franja de
+  stats, "Esta semana", Récords, Lo que hiciste, Reparto, y botón
+  "Listo". Piezas reutilizables para la Fase 3: `weekDotsHTML()`,
+  `statStripHTML()`, `repartoHTML()` + `groupSetCounts()`, `fmtNum()`.
+  Decisión: "1RM actualizado" / "Rutina actualizada" van en gris, ya
+  no en verde (verde es solo serie completada). En sesión libre no se
+  muestra la línea de comparación "vs la última vez".
+- Verificado a 393 y 360px: 3 series iguales → 1 PR en vivo y 1 fila;
+  45/47,5/50 → 3 en vivo y 1 fila con 50; hoja ⋯ (editar, duplicar,
+  mover, eliminar con confirmación) en rutina y carpeta; aplicar 1RM;
+  sincronizar rutina; sesión libre → guardar como rutina; sesión sin
+  volumen (héroe = duración); estado vacío de Rutinas. Sin errores de
+  consola. No probado: el botón Compartir del resumen (la imagen no
+  cambió en esta fase, pero no se generó una de prueba).
+- Pendiente fuera de fase: "Nueva carpeta" y "crear ejercicio" en los
+  modales siguen en ámbar (.vt-modal-add).
