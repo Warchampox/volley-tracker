@@ -47,6 +47,13 @@
   archivos parciales se AGREGAN sin borrar nada (las sesiones se
   fusionan por id). Los parciales no llevan `oneRM` (dato personal:
   pisaría el de quien recibe) ni cuentan como "último respaldo".
+- Compartir UNA rutina: ⋯ de la rutina → Compartir → "Como texto" o
+  "Como archivo" (`shareRoutine`, `buildRoutineShare`). El texto es un
+  mensaje con cabecera legible + JSON compacto, porque hay teléfonos
+  que no abren un .json recibido por WhatsApp; quien lo recibe lo
+  pega en Ajustes → Importar → pegar, y `extractJSON` ignora lo que
+  venga antes o después del JSON. Mismo formato que el export parcial
+  de rutinas (`kind: "routines"`), sin 1RM y sin carpeta.
 - Datos personales = entrenamientos (`sessions`, con su RPE) y 1RM.
   Solo el respaldo completo los restaura sin filtro. Un archivo
   parcial NUNCA importa 1RM (se descarta aunque venga) y los

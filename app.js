@@ -185,6 +185,7 @@ const ui = {
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
   actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise"|"session", id} — hoja inferior del botón ⋯
+  shareText: null,        // null | {title, text, copied} — texto de una rutina para copiar a mano
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
   exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
@@ -777,7 +778,8 @@ function render() {
     ${ui.actionSheet ? actionSheetHTML() : ""}
     ${ui.featuredSheet && !ui.picker ? featuredSheetHTML() : ""}
     ${ui.groupModal ? groupModalHTML() : ""}
-    ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}`;
+    ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}
+    ${ui.shareText ? shareTextModalHTML() : ""}`;
 
   updateRestBar();
   updateMinimizedBar();
@@ -945,7 +947,14 @@ function actionSheetHTML() {
   const row = (a, ic, label, danger) =>
     `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
   let title, rows;
-  if (kind === "reset") {
+  if (kind === "share") {
+    // Compartir UNA rutina: como texto (mensaje para pegar) o como archivo.
+    const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="routine-share" data-mode="${mode}" data-id="${id}">
+      ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
+    title = `Compartir "${routines.find((r) => r.id === id)?.name || "rutina"}"`;
+    rows = opt("text", "note", "Como texto", "Un mensaje para WhatsApp; el otro lo copia y lo pega en GOAT")
+      + opt("file", "download", "Como archivo", "Un .json para importar desde Ajustes");
+  } else if (kind === "reset") {
     // Borrado de datos personales: entrenamientos y 1RM. Rutinas, ejercicios
     // y grupos no se tocan. Cada opción confirma antes (reset-pick).
     const nSes = sessions.length, nRM = exercises.filter((e) => num(e.oneRM) > 0).length;
@@ -970,6 +979,7 @@ function actionSheetHTML() {
   } else {
     title = routines.find((r) => r.id === id)?.name || "Rutina";
     rows = row("routine-edit", "pencil", "Editar") + row("routine-dup", "copy", "Duplicar")
+      + `<button class="vt-modal-row" data-a="sheet-open" data-kind="share" data-id="${id}">${icon("share", 16)} Compartir</button>`
       + row("routine-move", "folder", "Mover a carpeta") + row("routine-del", "trash", "Eliminar", true);
   }
   return `
@@ -1010,12 +1020,12 @@ function pasteJsonModalHTML() {
     <div class="vt-modal-backdrop" data-a="paste-json-cancel">
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
-          <h2 class="vt-modal-title">Pegar JSON</h2>
+          <h2 class="vt-modal-title">Pegar para importar</h2>
           <button class="vt-btn-ghost" data-a="paste-json-cancel">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-form">
           <textarea class="vt-input vt-textarea" id="paste-json-text" rows="8"
-            placeholder="Pega acá el JSON de un respaldo completo o de rutinas/ejercicios" autocomplete="off"></textarea>
+            placeholder="Pega acá el mensaje de una rutina compartida, o el contenido de un respaldo" autocomplete="off"></textarea>
         </div>
         <div class="vt-modal-actions">
           <button class="vt-btn-primary" data-a="paste-json-import">Importar</button>
@@ -3219,45 +3229,142 @@ function buildExportData(kind) {
   return { ...base, routines, "routine-folders": routineFolders, sessions, "custom-exercises": exercises, "exercise-groups": exerciseGroups, settings };
 }
 
+// Entrega un JSON como archivo. Con `tryShare`, primero intenta la hoja de
+// compartir del sistema (WhatsApp, AirDrop, etc.); si el teléfono no acepta
+// compartir ese archivo, lo descarga. Devuelve false solo si el usuario cerró
+// la hoja de compartir (no es un error, pero tampoco se entregó nada).
+async function deliverJSONFile(data, name, title, tryShare) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  if (tryShare) {
+    const file = new File([blob], name, { type: "application/json" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title });
+        return true;
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") return false;
+    }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  return true;
+}
+
 async function exportJSON(kind = "full") {
   const def = EXPORT_KINDS.find((k) => k.id === kind) || EXPORT_KINDS[0];
   const name = `goat-${def.file}-${new Date().toISOString().slice(0, 10)}.json`;
+  let delivered;
   try {
-    const blob = new Blob([JSON.stringify(buildExportData(def.id), null, 2)], { type: "application/json" });
-    // Los parciales se comparten por la hoja del sistema (WhatsApp, AirDrop,
-    // etc.) cuando el teléfono lo permite; si no, se descargan igual que el
-    // respaldo completo.
-    let shared = false;
-    if (def.id !== "full") {
-      const file = new File([blob], name, { type: "application/json" });
-      try {
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: `GOAT · ${def.label}` });
-          shared = true;
-        }
-      } catch (err) {
-        if (err?.name === "AbortError") return; // cerró la hoja de compartir: no es un error
-      }
-    }
-    if (!shared) {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
+    // El respaldo completo siempre se descarga; los parciales intentan compartir.
+    delivered = await deliverJSONFile(buildExportData(def.id), name, `GOAT · ${def.label}`, def.id !== "full");
   } catch (err) {
     askAlert("No se pudo generar el archivo.");
     return;
   }
   // Solo el respaldo COMPLETO cuenta como "último respaldo" (alimenta el
   // recordatorio de Rutinas y el subtítulo de "Exportar datos" en Ajustes).
-  if (def.id === "full") {
+  if (delivered && def.id === "full") {
     settings.lastExportAt = new Date().toISOString();
     delete settings.backupSnoozeUntil;
     persistSettings();
   }
   render();
+}
+
+/* ------------------------------ Compartir una rutina ------------------------------ */
+
+// Una sola rutina lista para compartir: mismo formato que el export parcial
+// de rutinas (así se importa por el mismo camino), con los ejercicios y
+// grupos que usa y sin 1RM. La carpeta no viaja: es organización personal.
+function buildRoutineShare(routineId) {
+  const r = routines.find((x) => x.id === routineId);
+  if (!r) return null;
+  const { folderId, ...routine } = r;
+  return {
+    app: "volley-tracker", version: 1, kind: "routines", exportedAt: new Date().toISOString(),
+    routines: [routine],
+    ...exportableExercises(new Set(r.exercises.map((x) => x.exerciseId))),
+  };
+}
+
+const slug = (str) => String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") // sin tildes
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "rutina";
+
+// Como TEXTO: un mensaje con una cabecera legible + el JSON compacto. Existe
+// porque hay teléfonos que no dejan abrir/descargar un .json recibido por
+// WhatsApp: quien lo recibe copia el mensaje entero y lo pega en Ajustes →
+// Importar → Pegar (extractJSON ignora la cabecera).
+function routineShareText(data) {
+  const r = data.routines[0];
+  const names = r.exercises.map((x) => exName(x.exerciseId)).join(" · ");
+  return `Rutina GOAT: ${r.name}
+${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}: ${names}
+
+Para importarla: copia este mensaje completo y pégalo en GOAT → Ajustes → Importar datos → botón de pegar.
+
+${JSON.stringify(data)}`;
+}
+
+async function shareRoutine(routineId, mode) {
+  const data = buildRoutineShare(routineId);
+  if (!data) return;
+  const r = data.routines[0];
+  if (mode === "file") {
+    try { await deliverJSONFile(data, `goat-rutina-${slug(r.name)}.json`, `Rutina GOAT: ${r.name}`, true); }
+    catch (err) { askAlert("No se pudo generar el archivo."); }
+    return;
+  }
+  const text = routineShareText(data);
+  try {
+    if (navigator.share) { await navigator.share({ text }); return; }
+  } catch (err) {
+    if (err?.name === "AbortError") return; // cerró la hoja de compartir
+  }
+  // Sin hoja de compartir (o falló): se muestra el texto para copiarlo a mano.
+  ui.shareText = { title: r.name, text };
+  render();
+}
+
+// Saca el JSON de un texto pegado que puede traer algo antes o después (la
+// cabecera del mensaje de "compartir como texto", un saludo, etc.). Prueba
+// desde cada "{" hasta la última "}" y se queda con el primero que parsea.
+function extractJSON(text) {
+  const scan = (t) => {
+    try { return JSON.parse(t); } catch { /* sigue: puede venir con texto alrededor */ }
+    const end = t.lastIndexOf("}");
+    for (let start = t.indexOf("{"); start !== -1 && start < end; start = t.indexOf("{", start + 1)) {
+      try { return JSON.parse(t.slice(start, end + 1)); } catch { /* prueba con la siguiente llave */ }
+    }
+    return null;
+  };
+  const raw = String(text).trim();
+  // Segundo intento solo si el primero falla: algunos teclados cambian las
+  // comillas rectas por tipográficas al pegar o reenviar.
+  return scan(raw) ?? scan(raw.replace(/[\u201C\u201D]/g, '"'));
+}
+
+function shareTextModalHTML() {
+  const m = ui.shareText;
+  return `
+    <div class="vt-modal-backdrop" data-a="share-text-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title vt-modal-title-free">${esc(m.title)}</h2>
+          <button class="vt-btn-ghost" data-a="share-text-close" aria-label="Cerrar">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-form">
+          <textarea class="vt-input vt-textarea" id="share-text" rows="8" readonly>${esc(m.text)}</textarea>
+          <p class="vt-muted">Copia este texto y mándalo por el chat que quieras.</p>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-primary" data-a="share-text-copy">${m.copied ? "Copiado" : "Copiar"}</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 // Recordatorio de respaldo (banner arriba de Rutinas). Devuelve el texto a
@@ -3340,7 +3447,8 @@ function processImportedData(data) {
       for (const r of data.routines) {
         if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
         const i = routines.findIndex((x) => x.id === r.id);
-        if (i >= 0) routines[i] = r; else { routines.unshift(r); nRt++; }
+        if (i >= 0) routines[i] = { ...r, folderId: r.folderId ?? routines[i].folderId ?? null }; // conserva la carpeta propia
+        else { routines.unshift(r); nRt++; }
       }
       persistRoutines();
     }
@@ -4230,6 +4338,16 @@ document.addEventListener("click", (e) => {
 
     case "export": exportJSON(); break; // respaldo completo directo (banner de recordatorio)
     case "export-pick": exportJSON(el.dataset.kind); break;
+    case "routine-share": render(); shareRoutine(id, el.dataset.mode); break; // render() cierra la hoja
+    case "share-text-close": ui.shareText = null; render(); break;
+    case "share-text-copy": {
+      const ta = document.getElementById("share-text");
+      const done = () => { if (ui.shareText) { ui.shareText.copied = true; render(); } };
+      // Portapapeles moderno; si no está disponible, selecciona el texto para copiarlo a mano.
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(ui.shareText.text).then(done, () => { ta?.focus(); ta?.select(); });
+      else { ta?.focus(); ta?.select(); }
+      break;
+    }
     case "reset-pick": {
       if (el.dataset.kind === "sessions") {
         const n = sessions.length;
@@ -4262,9 +4380,8 @@ document.addEventListener("click", (e) => {
     case "paste-json-cancel": ui.pasteJsonModal = false; render(); break;
     case "paste-json-import": {
       const text = document.getElementById("paste-json-text").value;
-      let data;
-      try { data = JSON.parse(text); }
-      catch { askAlert("El texto pegado no es un JSON válido."); break; }
+      const data = extractJSON(text);
+      if (!data) { askAlert("El texto pegado no trae datos de GOAT. Copia el mensaje completo, desde el principio hasta el final."); break; }
       ui.pasteJsonModal = false;
       processImportedData(data);
       break;

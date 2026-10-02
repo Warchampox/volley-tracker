@@ -1224,3 +1224,16 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Verificado en el navegador: ambos borrados (y que Progreso,
   Ejercicios y Rutinas quedan bien con el historial vacío), importar
   entrenamientos con sí/no, archivo mixto, y restaurar desde respaldo.
+
+## 2026-10-02 cont. — Compartir una rutina (texto o archivo)
+- ⋯ de cada rutina → "Compartir" → hoja con "Como texto" y "Como
+  archivo". Texto: mensaje con cabecera + JSON compacto, por la hoja de
+  compartir del sistema; si no existe o falla, modal con el texto y
+  botón Copiar. Archivo: .json por compartir o descarga.
+- "Pegar para importar" ahora acepta el mensaje completo aunque traiga
+  texto antes o después (`extractJSON`), y tolera comillas tipográficas.
+  Reimportar una rutina que ya existe conserva la carpeta propia.
+- Verificado en el navegador con la API de compartir simulada: texto,
+  archivo, respaldo al modal, importar el mensaje con saludo incluido.
+  No probado: la hoja de compartir real, WhatsApp, ni el botón Copiar
+  (el portapapeles no está disponible en el panel de pruebas).
