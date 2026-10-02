@@ -1093,3 +1093,24 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Pendiente: probar tacto, gestos y teclado en teléfono real. Ámbar
   fuera de PR que sigue sin tocar: nota de ejercicio con contenido,
   checkbox de Ajustes, "Nueva carpeta"/"crear ejercicio" en modales.
+
+## 2026-10-02 — Rediseño visual, Fase 4: pestaña Ejercicios
+- `exerciseStats()` nueva (mejor marca, último uso y una marca por
+  sesión, calculada una vez por render); la usan la lista de
+  Ejercicios, "Recientes" y "Tus ejercicios" de Progreso. Filas nuevas
+  (`catalogRowHTML`): "Mejor 53 kg · hoy", mini curva con 3+ sesiones y
+  chevron; orden por último uso y después los sin registros A–Z;
+  contador de grupo "11 · 3 este mes"; fila deslizable "Recientes".
+- El detalle de ejercicio de la Fase 3 ahora se abre también desde
+  Ejercicios (se dibuja sobre la pestaña de origen) y ganó un ⋯ con
+  Editar / Eliminar; el lápiz, el basurero y los chips de tipo/1RM
+  salieron de la lista. Decisiones no pedidas: Recientes se oculta
+  mientras se busca; al volver del detalle se restaura el scroll de la
+  lista; un ejercicio con historial pero solo en 0 kg muestra la fecha
+  sin "Mejor"; el detalle de un ejercicio sin historial muestra un
+  texto en vez del gráfico vacío.
+- Verificado a 393 y 360px sin errores de consola: búsqueda (mantiene
+  el foco), colapso con memoria, crear/renombrar/recolorear grupo,
+  crear ejercicio con +, editar y eliminar desde el detalle, y los
+  selectores de sesión y de editor de rutina (sin cambios). sw.js v30.
+  Pendiente: probar en teléfono el deslizado de Recientes.

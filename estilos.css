@@ -881,6 +881,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Detalle de ejercicio. */
 .vt-detail-title { min-width: 0; }
+.vt-detail-empty { margin: 0; padding: var(--sp-6) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .vt-row-center { align-items: center; }
 .vt-row-input .vt-max-input { text-align: right; }
 .vt-row-input { display: inline-flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); }
@@ -1027,7 +1028,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-ex-row { padding: var(--sp-3) var(--sp-1); border-bottom: 1px solid var(--line); }
 .vt-ex-row:last-child { border-bottom: none; }
 .vt-ex-row-top { display: flex; align-items: center; gap: var(--sp-3); }
-.vt-ex-badges { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); flex-wrap: wrap; }
 .vt-ex-name { flex: 1; font-size: var(--fs-md); min-width: 0; }
 
 /* Catálogo de ejercicios estilo tabla (ref. Hevy, igual que .vt-block): sin
@@ -1040,6 +1040,47 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-ex-groups { display: flex; flex-direction: column; }
 .vt-group-block { border-left: 3px solid var(--line); padding: 2px var(--sp-1) var(--sp-1) var(--sp-4); margin-bottom: var(--sp-6); }
 .vt-group-block:last-child { margin-bottom: 0; }
+/* Contador del grupo: "11 · 3 este mes" (el segundo número, en --text, son
+   los ejercicios entrenados en los últimos 30 días; si es 0 no aparece). */
+.vt-group-count { margin-left: auto; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); color: var(--text-dim); }
+.vt-group-count b { color: var(--text); font-weight: 600; }
+
+/* Fila de ejercicio del catálogo: [nombre + mejor marca 1fr] [mini curva]
+   [chevron 16px]. Es un botón entero: tocarla abre el detalle. */
+.vt-cat-row {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.vt-cat-row:last-child { border-bottom: none; }
+.vt-cat-row:active { background: var(--surface); }
+.vt-cat-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vt-cat-name { font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-cat-sub { font-size: var(--fs-sm); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-cat-sub b { font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--text); }
+.vt-cat-row.is-empty .vt-cat-name { color: var(--text-dim); }
+.vt-cat-chev { display: inline-flex; color: var(--text-dim); }
+
+/* "Recientes": fila horizontal deslizable con snap, sin barra de scroll, que
+   sangra hasta el borde de la pantalla (margen negativo = padding lateral de
+   .vt-content, devuelto como padding propio para que el primero calce). */
+.vt-recents {
+  display: flex; gap: var(--sp-2);
+  margin: 0 calc(-1 * var(--sp-4)) var(--sp-6); padding: 0 var(--sp-4);
+  overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-left: var(--sp-4);
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.vt-recents::-webkit-scrollbar { display: none; }
+.vt-recent {
+  flex: 0 0 auto; min-width: 132px; max-width: 184px; scroll-snap-align: start;
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.vt-recent:active { background: var(--surface); }
+.vt-recent-name { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-recent-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; white-space: nowrap; }
+.vt-recent-date { font-size: var(--fs-xs); color: var(--text-dim); }
 .vt-group-title {
   font-family: 'IBM Plex Mono', monospace;
   font-size: var(--fs-xs); font-weight: 600;

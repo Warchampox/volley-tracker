@@ -143,7 +143,8 @@ const ui = {
   openHistory: null,
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
-  progressDetail: null,      // id del ejercicio cuyo detalle está abierto en Progreso, o null
+  progressDetail: null,      // id del ejercicio cuyo detalle está abierto (desde Ejercicios o Progreso), o null
+  detailReturnScroll: 0,     // scroll de la lista al abrir el detalle, para restaurarlo al volver
   progressMetric: null,      // métrica del gráfico del detalle (weight | reps | seconds | volume)
   progressRange: "2m",       // "1m" | "2m" | "6m" | "1a"
   featuredSheet: false,      // hoja "Tus ejercicios → Editar" (destacados)
@@ -160,7 +161,7 @@ const ui = {
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
-  actionSheet: null,      // null | {kind: "routine"|"folder", id} — hoja inferior del botón ⋯
+  actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise", id} — hoja inferior del botón ⋯
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
   exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
@@ -219,6 +220,7 @@ const PATHS = {
   share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>',
   chevDown: '<polyline points="6 9 12 15 18 9"/>',
   chevUp: '<polyline points="18 15 12 9 6 15"/>',
+  chevRight: '<polyline points="9 6 15 12 9 18"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
@@ -607,8 +609,14 @@ const NAV_ITEMS = [
 ];
 
 function render() {
+  exerciseStatsCache = null; // se recalcula una sola vez por render, la primera vez que alguien lo pida
+  if (ui.progressDetail && !exMap()[ui.progressDetail]) ui.progressDetail = null; // el ejercicio se eliminó
   let view = "";
-  if (ui.tab === "rutinas") {
+  // El detalle de ejercicio se abre desde Ejercicios o desde Progreso y se
+  // dibuja sobre la pestaña donde se abrió (la nav no cambia; "volver"
+  // regresa a esa misma pestaña).
+  if (ui.progressDetail && (ui.tab === "ejercicios" || ui.tab === "progreso")) view = exerciseDetailHTML();
+  else if (ui.tab === "rutinas") {
     if (ui.editingRoutine) view = editorHTML();
     else if (ui.activeSession && !ui.sessionMinimized) view = trainActiveHTML();
     else view = routinesHTML();
@@ -647,7 +655,7 @@ function render() {
   updateRestBar();
   updateMinimizedBar();
   updateOrganizePad();
-  if (ui.tab === "progreso") mountChart();
+  if (ui.tab === "progreso" || ui.progressDetail) mountChart();
   mountSortables();
   if (ui.activeSession) persistActiveSession();
 }
@@ -795,7 +803,7 @@ function routinesHTML() {
     ${body}`;
 }
 
-// Hoja inferior del botón ⋯ (rutina o carpeta): mismo estilo que los demás
+// Hoja inferior del botón ⋯ (rutina, carpeta o ejercicio): mismo estilo que los demás
 // modales. Cada fila dispara la acción de siempre (routine-edit, folder-del,
 // etc.); el click handler cierra la hoja antes de ejecutar cualquier acción.
 function actionSheetHTML() {
@@ -806,6 +814,9 @@ function actionSheetHTML() {
   if (kind === "folder") {
     title = routineFolders.find((f) => f.id === id)?.name || "Carpeta";
     rows = row("folder-edit", "pencil", "Renombrar") + row("folder-del", "trash", "Eliminar", true);
+  } else if (kind === "exercise") {
+    title = exName(id);
+    rows = row("ex-edit", "pencil", "Editar") + row("ex-del", "trash", "Eliminar", true);
   } else {
     title = routines.find((r) => r.id === id)?.name || "Rutina";
     rows = row("routine-edit", "pencil", "Editar") + row("routine-dup", "copy", "Duplicar")
@@ -1564,6 +1575,78 @@ function fmtMetric(v, metric, sign = false) {
   return `${pre}${fmtNum(a)} ${metric === "reps" ? "reps" : "kg"}`;
 }
 
+/* ----------------------- Marcas por ejercicio (exerciseStats) ----------------------- */
+
+// Fuente única para todo lo que muestra "la mejor marca" de un ejercicio:
+// la pestaña Ejercicios (filas y Recientes) y "Tus ejercicios" de Progreso.
+// Recorre las sesiones UNA vez por render (el resultado se guarda en
+// exerciseStatsCache, que render() invalida) y devuelve, por exerciseId:
+//   metric   → qué se mide: "weight" | "reps" | "seconds"
+//   best     → la mejor marca histórica (null si nunca hubo una válida)
+//   lastDate → fecha ISO del último uso
+//   points   → [{date, v}] mejor marca de cada sesión, en orden cronológico
+// La marca según el tipo:
+//   peso × reps   → peso máximo (0 kg NO cuenta como marca)
+//   peso corporal → lastre máximo si alguna vez usó; si no, reps máximas
+//   tiempo        → segundos máximos
+// Mismo criterio que los PRs: C/D/F no cuentan y en unilateral las reps son
+// las del lado más débil. Ejercicios borrados del catálogo quedan fuera.
+let exerciseStatsCache = null;
+function exerciseStats() {
+  if (exerciseStatsCache) return exerciseStatsCache;
+  const map = exMap();
+  const acc = {};
+  for (let i = sessions.length - 1; i >= 0; i--) { // `sessions` va de más nueva a más vieja
+    const s = sessions[i];
+    for (const e of s.exercises) {
+      const ex = map[e.exerciseId];
+      if (!ex || !e.sets.length) continue;
+      const a = (acc[e.exerciseId] ??= { lastDate: null, raw: [] });
+      // El mismo ejercicio dos veces en una sesión cuenta como un solo punto.
+      let pt = a.raw[a.raw.length - 1];
+      if (!pt || pt.sid !== s.id) { pt = { sid: s.id, date: s.date, w: 0, r: 0, sec: 0 }; a.raw.push(pt); }
+      a.lastDate = s.date;
+      for (const st of e.sets) {
+        if (getSetType(st)) continue;
+        pt.w = Math.max(pt.w, num(st.weight));
+        pt.r = Math.max(pt.r, ex.unilateral ? Math.min(repsL(st), repsR(st)) : num(st.reps));
+        pt.sec = Math.max(pt.sec, num(st.seconds));
+      }
+    }
+  }
+  const out = {};
+  for (const [id, a] of Object.entries(acc)) {
+    const type = map[id].type || "weight";
+    const metric = type === "time" ? "seconds"
+      : type === "bodyweight" ? (a.raw.some((p) => p.w > 0) ? "weight" : "reps")
+      : "weight";
+    const key = metric === "seconds" ? "sec" : metric === "reps" ? "r" : "w";
+    const points = a.raw.map((p) => ({ date: p.date, v: p[key] })).filter((p) => p.v > 0);
+    out[id] = { metric, best: points.length ? Math.max(...points.map((p) => p.v)) : null, lastDate: a.lastDate, points };
+  }
+  return (exerciseStatsCache = out);
+}
+
+// Una marca con su unidad: `53 kg`, `10 reps`, `1:00`; el lastre de un
+// ejercicio de peso corporal lleva el signo: `+10 kg`.
+function fmtMark(exId, v, metric) {
+  return `${metric === "weight" && exType(exId) === "bodyweight" ? "+" : ""}${fmtMetric(v, metric)}`;
+}
+
+// Fecha relativa corta: hoy / ayer / hace N días / hace N sem / hace N meses.
+// Cuenta días de calendario (medianoche local), no bloques de 24 h.
+function fmtRelDate(iso) {
+  const day = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const days = Math.max(0, Math.round((day(new Date()) - day(iso)) / 86400000));
+  if (days === 0) return "hoy";
+  if (days === 1) return "ayer";
+  if (days < 7) return `hace ${days} días`;
+  if (days < 30) return `hace ${Math.floor(days / 7)} sem`;
+  if (days < 365) { const m = Math.floor(days / 30); return `hace ${m} mes${m !== 1 ? "es" : ""}`; }
+  const y = Math.floor(days / 365);
+  return `hace ${y} año${y !== 1 ? "s" : ""}`;
+}
+
 /* ------------------------------ "Tus ejercicios" ------------------------------ */
 
 // Los destacados que eligió el usuario (hasta 5, los mismos del viejo panel
@@ -1582,11 +1665,12 @@ function featuredIds() {
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id);
 }
 
-// Mini curva SVG de 72×24 con la mejor marca por sesión dentro del rango.
-// La escala Y va del mínimo al máximo del propio ejercicio (no desde 0): acá
-// importa la forma de la tendencia, el valor exacto va al lado en texto.
-function sparklineHTML(values) {
-  const W = 72, H = 24, PAD = 3;
+// Mini curva SVG (72×24 por defecto; la pestaña Ejercicios la usa a 56×20)
+// con una marca por sesión. La escala Y va del mínimo al máximo del propio
+// ejercicio (no desde 0): acá importa la forma de la tendencia, el valor
+// exacto va al lado en texto.
+function sparklineHTML(values, W = 72, H = 24) {
+  const PAD = 3;
   if (!values.length) return `<svg class="vt-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg>`;
   const min = Math.min(...values), max = Math.max(...values);
   const x = (i) => values.length === 1 ? W - PAD : PAD + i * (W - 2 * PAD) / (values.length - 1);
@@ -1600,15 +1684,17 @@ function sparklineHTML(values) {
 }
 
 function exerciseRowHTML(exId) {
-  const metric = metricOptions(exId)[0].id; // peso / lastre / reps según el tipo
-  const data = progressData(exId, metric);
+  const st = exerciseStats()[exId];
+  const metric = st?.metric || "weight";
+  const cutoff = Date.now() - rangeToDays(ui.progressRange) * 86400000;
+  const data = (st?.points || []).filter((p) => new Date(p.date).getTime() >= cutoff);
   const words = RANGE_WORDS[ui.progressRange] || "2 meses";
   const current = data[data.length - 1];
   const delta = data.length > 1 ? current.v - data[0].v : 0;
   const sub = !current ? `sin registros en ${words}`
     : delta === 0 ? `sin cambios en ${words}`
     : `<b class="${delta > 0 ? "vt-sum-up" : ""}">${fmtMetric(delta, metric, true)}</b> en ${words}`;
-  const [val, unit] = current ? fmtMetric(current.v, metric).split(" ") : ["—", ""];
+  const [val, unit] = current ? fmtMark(exId, current.v, metric).split(" ") : ["—", ""];
   return `<button class="vt-exrow" data-a="prog-detail-open" data-id="${exId}">
     <span class="vt-exrow-text"><span class="vt-exrow-name">${esc(exName(exId))}</span><span class="vt-exrow-sub">${sub}</span></span>
     ${sparklineHTML(data.map((p) => p.v))}
@@ -1655,10 +1741,10 @@ function featuredSheetHTML() {
 
 /* ----------------------------- Detalle de ejercicio ----------------------------- */
 
-// Pantalla que se abre al tocar una fila de "Tus ejercicios": lo que antes
-// estaba suelto en Resumen (gráfico con toggle de métrica y soporte
-// unilateral, rango, 1RM editable y compartir PR). El ejercicio es siempre el
-// que se tocó — ya no parte con uno que nunca se hizo.
+// Pantalla que se abre al tocar un ejercicio — en "Tus ejercicios" de
+// Progreso o en la pestaña Ejercicios (filas y Recientes): gráfico con
+// toggle de métrica y soporte unilateral, rango, 1RM editable y compartir PR.
+// Editar y Eliminar el ejercicio viven en el ⋯ del encabezado.
 function exerciseDetailHTML() {
   const exId = ui.progressDetail;
   const ex = exMap()[exId];
@@ -1686,14 +1772,19 @@ function exerciseDetailHTML() {
   const strip = statStripHTML(cells.map((c) => { const [value, unit] = c.text.split(" "); return { label: c.label, value, unit }; }));
 
   const lastPR = computeAllPRs().find((p) => p.exerciseId === exId);
+  const hasHistory = !!exerciseStats()[exId];
+  const hasData = splitBySide
+    ? progressDataSide(exId, "repsL").length > 0
+    : progressData(exId, metric).length > 0;
   return `
     <header class="vt-header">
       <div class="vt-header-brand">
         <button class="vt-btn-icon" data-a="prog-detail-close" aria-label="Volver">${icon("back", 18)}</button>
         <div class="vt-detail-title"><p class="vt-eyebrow">${esc(ex.group || "Custom")}</p><h1 class="vt-header-title-sm">${esc(ex.name)}</h1></div>
       </div>
+      <button class="vt-more-btn" data-a="sheet-open" data-kind="exercise" data-id="${exId}" aria-label="Opciones del ejercicio">${icon("more", 20)}</button>
     </header>
-    ${strip}
+    ${!hasHistory ? `<p class="vt-muted vt-detail-empty">Sin registros todavía. Cuando lo entrenes, acá va a aparecer su gráfico.</p>` : `${strip}
     <section class="vt-section">
       <div class="vt-sec-head">
         <div class="vt-pills">
@@ -1701,8 +1792,10 @@ function exerciseDetailHTML() {
         </div>
         ${rangeChipsHTML()}
       </div>
-      <div class="vt-chart-flat"><canvas id="prog-canvas" height="220"></canvas></div>
-    </section>
+      ${hasData
+        ? `<div class="vt-chart-flat"><canvas id="prog-canvas" height="220"></canvas></div>`
+        : `<p class="vt-muted">Sin registros en ${RANGE_WORDS[ui.progressRange]}.</p>`}
+    </section>`}
     ${ex.type === "time" ? "" : `<section class="vt-section">
       <p class="vt-section-eyebrow">1RM estimado</p>
       <div class="vt-rows"><label class="vt-row vt-row-center">
@@ -1736,9 +1829,6 @@ function progressSectionToggleHTML() {
 }
 
 function progressHTML() {
-  if (ui.progressDetail && !exMap()[ui.progressDetail]) ui.progressDetail = null; // el ejercicio se eliminó
-  if (ui.progressDetail) return exerciseDetailHTML();
-
   const head = `<header class="vt-header">${tabHeaderHTML("Set 04 · Análisis", "Progreso")}</header>`;
   const toggle = progressSectionToggleHTML();
 
@@ -1886,7 +1976,43 @@ function settingsHTML() {
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
 
-// Lista de grupos + ejercicios, separada de exercisesManagerHTML para poder
+// Fila de ejercicio del catálogo: nombre + "Mejor 53 kg · hoy", mini curva
+// (solo con 3+ sesiones) y chevron. Tocarla abre el detalle del ejercicio;
+// Editar/Eliminar viven en el ⋯ de ese detalle, no en la lista.
+function catalogRowHTML(e, st) {
+  // El tipo solo se menciona cuando NO es el caso común (peso × reps).
+  const kind = [e.type === "time" ? "Tiempo" : e.type === "bodyweight" ? "Peso corporal" : "", e.unilateral ? "Unilateral" : ""].filter(Boolean);
+  const parts = [...kind];
+  if (!st) parts.push("Sin registros");
+  else {
+    if (st.best !== null) parts.push(`Mejor <b>${fmtMark(e.id, st.best, st.metric)}</b>`);
+    parts.push(fmtRelDate(st.lastDate));
+  }
+  const curve = st && st.points.length >= 3 ? sparklineHTML(st.points.slice(-10).map((p) => p.v), 56, 20) : "<span></span>";
+  return `<button class="vt-cat-row ${st ? "" : "is-empty"}" data-a="prog-detail-open" data-id="${e.id}">
+    <span class="vt-cat-text"><span class="vt-cat-name">${esc(e.name)}</span><span class="vt-cat-sub">${parts.join(" · ")}</span></span>
+    ${curve}
+    <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
+  </button>`;
+}
+
+// "Recientes": los últimos 6 ejercicios usados, en una fila deslizable.
+function recentExercisesHTML(stats) {
+  const recent = exercises.filter((e) => stats[e.id])
+    .sort((a, b) => stats[b.id].lastDate.localeCompare(stats[a.id].lastDate)).slice(0, 6);
+  if (!recent.length) return "";
+  return `<p class="vt-section-eyebrow">Recientes</p>
+    <div class="vt-recents">${recent.map((e) => {
+      const st = stats[e.id];
+      return `<button class="vt-recent" data-a="prog-detail-open" data-id="${e.id}">
+        <span class="vt-recent-name">${esc(e.name)}</span>
+        <span class="vt-recent-value">${st.best !== null ? fmtMark(e.id, st.best, st.metric) : "—"}</span>
+        <span class="vt-recent-date">${fmtRelDate(st.lastDate)}</span>
+      </button>`;
+    }).join("")}</div>`;
+}
+
+// Recientes + lista de grupos, separada de exercisesManagerHTML para poder
 // reconstruirla sola al tipear en el buscador (patrón de picker-q), sin
 // perder el foco del input de búsqueda.
 function exercisesListHTML() {
@@ -1895,40 +2021,41 @@ function exercisesListHTML() {
   const groups = Object.keys(byGroup);
   if (groups.length === 0) return emptyHTML("Sin ejercicios todavía", "Creemos el primero con el botón +.", "");
 
+  const stats = exerciseStats();
   const q = ui.exercisesQuery.trim().toLowerCase();
   const searching = q.length > 0;
   const openSaved = new Set(settings.openExerciseGroups || []);
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  // Primero los entrenados, del uso más reciente al más viejo; después los
+  // sin registros, por orden alfabético.
+  const order = (a, b) => {
+    const sa = stats[a.id], sb = stats[b.id];
+    if (sa && sb) return sb.lastDate.localeCompare(sa.lastDate);
+    if (sa || sb) return sa ? -1 : 1;
+    return a.name.localeCompare(b.name, "es");
+  };
 
   const groupsHTML = groups.map((g) => {
     const list = byGroup[g];
-    const matches = searching ? list.filter((e) => e.name.toLowerCase().includes(q)) : list;
+    const matches = (searching ? list.filter((e) => e.name.toLowerCase().includes(q)) : list).slice().sort(order);
     if (searching && matches.length === 0) return ""; // grupo sin coincidencias: se oculta mientras se busca
     // Mientras se busca, los grupos con coincidencias se auto-expanden
     // (ignorando el estado guardado); al vaciar el buscador vuelve a regir
     // settings.openExerciseGroups.
     const open = searching ? true : openSaved.has(g);
+    const thisMonth = list.filter((e) => stats[e.id] && stats[e.id].lastDate >= monthAgo).length;
     return `<div class="vt-group-block" style="border-left-color:${groupColor(g) || "var(--line)"}">
       <button type="button" class="vt-folder-toggle" data-a="exgroup-toggle" data-name="${esc(g)}" style="width:100%">
         ${icon(open ? "chevUp" : "chevDown", 16)}
         <span class="vt-group-title" style="margin:0">${esc(g)}</span>
-        <span class="vt-muted-sm" style="margin-left:auto">${list.length} ejercicio${list.length !== 1 ? "s" : ""}</span>
+        <span class="vt-group-count">${list.length}${thisMonth ? ` · <b>${thisMonth} este mes</b>` : ""}</span>
       </button>
-      ${open ? matches.map((e) => `
-        <div class="vt-ex-row">
-          <div class="vt-ex-row-top">
-            <span class="vt-ex-name">${esc(e.name)}</span>
-            <button class="vt-btn-ghost" data-a="ex-edit" data-id="${e.id}" aria-label="Editar">${icon("pencil", 15)}</button>
-            <button class="vt-btn-ghost vt-danger" data-a="ex-del" data-id="${e.id}" aria-label="Eliminar">${icon("trash", 15)}</button>
-          </div>
-          <div class="vt-ex-badges">
-            ${num(e.oneRM) > 0 ? `<span class="vt-badge">1RM ${fmtNum(e.oneRM)} kg</span>` : ""}
-            <span class="vt-badge">${TYPES[e.type]?.label || e.type}</span>
-          </div>
-        </div>`).join("") : ""}
+      ${open ? matches.map((e) => catalogRowHTML(e, stats[e.id])).join("") : ""}
     </div>`;
   }).join("");
 
-  return `<div class="vt-ex-groups">${groupsHTML}</div>`;
+  // Mientras se busca, Recientes se oculta: los resultados quedan pegados al buscador.
+  return `${searching ? "" : recentExercisesHTML(stats)}<div class="vt-ex-groups">${groupsHTML}</div>`;
 }
 
 function exercisesManagerHTML() {
@@ -3451,8 +3578,16 @@ document.addEventListener("click", (e) => {
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
-    case "prog-detail-open": ui.progressDetail = id; ui.progressMetric = null; window.scrollTo(0, 0); render(); break;
-    case "prog-detail-close": ui.progressDetail = null; render(); break;
+    case "prog-detail-open":
+      ui.detailReturnScroll = window.scrollY; // para volver a la misma altura de la lista
+      ui.progressDetail = id; ui.progressMetric = null;
+      render(); window.scrollTo(0, 0);
+      break;
+    case "prog-detail-close":
+      ui.progressDetail = null;
+      render(); window.scrollTo(0, ui.detailReturnScroll || 0);
+      ui.detailReturnScroll = 0;
+      break;
     case "featured-sheet-open": ui.featuredSheet = true; render(); break;
     case "featured-sheet-close": ui.featuredSheet = false; render(); break;
     case "prog-range": ui.progressRange = el.dataset.range; render(); break;
@@ -3610,6 +3745,7 @@ function pickExercise(id) {
     }
   } else if (ui.picker === "detail") {
     // "Ver todos" en Progreso: abre el detalle del ejercicio elegido.
+    ui.detailReturnScroll = window.scrollY;
     ui.progressDetail = id;
     ui.progressMetric = null;
     window.scrollTo(0, 0);

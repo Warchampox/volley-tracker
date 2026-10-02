@@ -70,6 +70,20 @@ Patrones (reutilizar, no inventar variantes):
   verticales, sin cajas; los labels no se parten en dos líneas.
 - `repartoHTML()`: barras de reparto por grupo en BLANCO (no con el
   color del grupo: esa paleta repite ámbar y verde, reservados).
+- `exerciseStats()`: fuente única de "la mejor marca" por ejercicio
+  (mejor marca, último uso y una marca por sesión). La usan la pestaña
+  Ejercicios, sus Recientes y "Tus ejercicios" de Progreso — no
+  recalcular marcas por otro lado. Recorre las sesiones una vez por
+  render. Marca = peso máx (0 kg no cuenta) / lastre máx o reps máx en
+  peso corporal / segundos máx en tiempo.
+- Fila de ejercicio del catálogo (`catalogRowHTML`): nombre + "Mejor
+  53 kg · hoy" (`fmtMark` + `fmtRelDate`), mini curva (`sparklineHTML`,
+  solo con 3+ sesiones) y chevron. El tipo se menciona solo si no es
+  peso × reps. La fila entera abre el detalle del ejercicio; Editar y
+  Eliminar viven en el ⋯ del detalle, nunca como íconos en la lista.
+- Detalle de ejercicio (`exerciseDetailHTML`, `ui.progressDetail`): un
+  solo componente, se abre desde Ejercicios o desde Progreso y se
+  dibuja sobre la pestaña donde se abrió.
 - Selectores chicos como píldoras (`.vt-pills`), pestañas internas
   subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
   acciones secundarias, borde sólido (`.vt-btn-solid`) para acciones
