@@ -1145,3 +1145,15 @@ Entradas nuevas al final. No reescribir lo anterior.
 - "Tus ejercicios": el valor grande es el récord histórico y el
   subtítulo agrega "· última 45 kg" si la última sesión quedó debajo.
   Ejercicios: "Sin marca · ayer" cuando hay uso pero ninguna marca.
+
+## 2026-10-02 cont. — Mejoras, Fase 3 de 5: Historial
+- Fin del descanso: bocina de marcador sintetizada (un toque largo) en
+  vez de los 3 pitidos, a pedido de Martín; sin cuenta regresiva.
+- Historial rehecho: filtros como píldoras (Todo/1M/3M/1A), sesiones
+  agrupadas por mes ("OCTUBRE 2026 · 3 SESIONES · 7,3 t") y fila de
+  sesión con el patrón de la fila de rutina + chevron y trofeo con la
+  cantidad de récords (`sessionPRs()`, cacheado por render).
+- Detalle de sesión nuevo (`sessionDetailHTML`, `ui.sessionDetail`):
+  franja de stats, "Lo que hiciste" con notas (`doneListHTML`, ahora
+  compartido con el resumen), botón Repetir y ⋯ con Eliminar. Se
+  fueron el acordeón del historial y `.vt-metric-toggle`.

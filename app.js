@@ -160,7 +160,7 @@ const ui = {
   sessionMinimized: false, // sesión activa pero minimizada a la barra flotante
   picker: null,           // null | "editor" | "session" | "featured" | "replace"
   pickerQuery: "",
-  openHistory: null,
+  sessionDetail: null,    // id de la sesión cuyo detalle está abierto (Historial), o null
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
   progressDetail: null,      // id del ejercicio cuyo detalle está abierto (desde Ejercicios o Progreso), o null
@@ -181,7 +181,7 @@ const ui = {
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
-  actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise", id} — hoja inferior del botón ⋯
+  actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise"|"session", id} — hoja inferior del botón ⋯
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
   exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
@@ -243,7 +243,6 @@ const PATHS = {
   chevDown: '<polyline points="6 9 12 15 18 9"/>',
   chevUp: '<polyline points="18 15 12 9 6 15"/>',
   chevRight: '<polyline points="9 6 15 12 9 18"/>',
-  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
   back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
@@ -709,12 +708,15 @@ const NAV_ITEMS = [
 
 function render() {
   exerciseStatsCache = null; // se recalcula una sola vez por render, la primera vez que alguien lo pida
+  sessionPRCache = null;
+  if (ui.sessionDetail && !sessions.some((x) => x.id === ui.sessionDetail)) ui.sessionDetail = null; // la sesión se eliminó
   if (ui.progressDetail && !exMap()[ui.progressDetail]) ui.progressDetail = null; // el ejercicio se eliminó
   let view = "";
   // El detalle de ejercicio se abre desde Ejercicios o desde Progreso y se
   // dibuja sobre la pestaña donde se abrió (la nav no cambia; "volver"
   // regresa a esa misma pestaña).
   if (ui.progressDetail && (ui.tab === "ejercicios" || ui.tab === "progreso")) view = exerciseDetailHTML();
+  else if (ui.sessionDetail && ui.tab === "progreso") view = sessionDetailHTML();
   else if (ui.tab === "rutinas") {
     if (ui.editingRoutine) view = editorHTML();
     else if (ui.activeSession && !ui.sessionMinimized) view = trainActiveHTML();
@@ -909,7 +911,7 @@ function routinesHTML() {
   return banner + html;
 }
 
-// Hoja inferior del botón ⋯ (rutina, carpeta o ejercicio): mismo estilo que los demás
+// Hoja inferior del botón ⋯ (rutina, carpeta, ejercicio o sesión): mismo estilo que los demás
 // modales. Cada fila dispara la acción de siempre (routine-edit, folder-del,
 // etc.); el click handler cierra la hoja antes de ejecutar cualquier acción.
 function actionSheetHTML() {
@@ -920,6 +922,9 @@ function actionSheetHTML() {
   if (kind === "folder") {
     title = routineFolders.find((f) => f.id === id)?.name || "Carpeta";
     rows = row("folder-edit", "pencil", "Renombrar") + row("folder-del", "trash", "Eliminar", true);
+  } else if (kind === "session") {
+    title = sessions.find((x) => x.id === id)?.routineName || "Sesión";
+    rows = row("hist-del", "trash", "Eliminar", true);
   } else if (kind === "exercise") {
     title = exName(id);
     rows = row("ex-edit", "pencil", "Editar") + row("ex-del", "trash", "Eliminar", true);
@@ -1365,10 +1370,7 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
 
 // Fusionado dentro de Progreso (sub-vista "historial", ver progressHTML) —
 // sin su propio <header> de pestaña, ese ya lo pone Progreso arriba.
-const HISTORY_RANGE_CHIPS = [
-  { id: "todo", label: "TODO" }, { id: "1m", label: "ÚLTIMO MES" },
-  { id: "3m", label: "ÚLTIMOS 3 MESES" }, { id: "1a", label: "ÚLTIMO AÑO" },
-];
+const HISTORY_RANGE_CHIPS = [{ id: "todo", label: "Todo" }, { id: "1m", label: "1M" }, { id: "3m", label: "3M" }, { id: "1a", label: "1A" }];
 const HISTORY_RANGE_DAYS = { "1m": 30, "3m": 90, "1a": 365 };
 
 // Buscador + rango son AND, no se reemplazan entre sí.
@@ -1383,57 +1385,126 @@ function filteredSessions() {
   });
 }
 
-function sessionRowHTML(s) {
-  const open = ui.openHistory === s.id;
-  const volume = sessionVolume(s, false);
-  return `<div class="vt-block">
-    <div style="display:flex;align-items:center;gap:var(--sp-2)">
-      <button class="vt-full-btn" data-a="hist-toggle" data-id="${s.id}">
-        <div>
-          <h3>${esc(s.routineName)}</h3>
-          <p class="vt-muted">${icon("calendar", 12)} ${fmtDate(s.date)} · ${Math.round(volume).toLocaleString("es-CL")} kg vol.${s.durationSec ? ` · ${fmtDurationMin(s.durationSec)}` : ""}</p>
-        </div>
-        ${icon(open ? "chevUp" : "chevDown", 18)}
-      </button>
-      <button class="vt-btn-ghost" data-a="session-repeat" data-id="${s.id}" aria-label="Repetir esta sesión">${icon("repeat", 16)}</button>
-    </div>
-    ${open ? `<div class="vt-session-detail">
-      ${s.exercises.map((e) => {
-        const t = exType(e.exerciseId);
-        const uni = exUnilateral(e.exerciseId);
-        const notes = e.sets.filter((st) => st.note).map((st) => esc(st.note));
-        return `<div class="vt-detail-row">
-            <span style="color:${groupColor(exGroup(e.exerciseId))}">${esc(exName(e.exerciseId))}</span>
-            <span class="vt-mono vt-muted-sm">${e.sets.map((st) => fmtSet(t, st, uni)).join(", ")}</span>
-          </div>
-          ${e.note ? `<div class="vt-coach-note">${esc(e.note)}</div>` : ""}
-          ${e.sessionNote ? `<div class="vt-note-line">— ${esc(e.sessionNote)}</div>` : ""}
-          ${notes.length ? `<div class="vt-note-line">— ${notes.join(" · ")}</div>` : ""}`;
-      }).join("")}
-      <button class="vt-btn-ghost vt-danger vt-small" data-a="hist-del" data-id="${s.id}">${icon("trash", 14)} Eliminar sesión</button>
-    </div>` : ""}
-  </div>`;
+// Ejercicios con récord por sesión: {sessionId: Set(exerciseId)}. Sale de
+// computeAllPRs (un récord por ejercicio, igual que el resumen de sesión).
+// Se calcula una vez por render (render() invalida el caché).
+let sessionPRCache = null;
+function sessionPRs() {
+  if (sessionPRCache) return sessionPRCache;
+  const out = {};
+  computeAllPRs().forEach((p) => { (out[p.sessionId] ??= new Set()).add(p.exerciseId); });
+  return (sessionPRCache = out);
 }
 
-// Se llama al tipear/tocar un chip — actualiza solo la lista filtrada, sin
-// perder el foco del buscador (mismo patrón que exercises-q/leagues-q).
+// Peso total en formato corto: "3.636 kg", o "7,3 t" desde 1.000 kg cuando
+// `tons` está activo (encabezados de mes, franjas de stats).
+function fmtVolume(v, tons = false) {
+  return tons && v >= 1000
+    ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })} t`
+    : `${Math.round(v).toLocaleString("es-CL")} kg`;
+}
+
+// Fila de sesión del historial: mismo patrón que la fila de rutina (nombre en
+// Barlow + línea de datos), con chevron. Tocarla abre el detalle de la sesión.
+function sessionRowHTML(s) {
+  const nPR = sessionPRs()[s.id]?.size || 0;
+  const meta = [fmtDateShort(s.date), s.durationSec ? fmtDurationMin(s.durationSec) : "", fmtVolume(sessionVolume(s, false))].filter(Boolean).join(" · ");
+  return `<button class="vt-hist-row" data-a="session-detail-open" data-id="${s.id}">
+    <span class="vt-hist-text">
+      <span class="vt-routine-name">${esc(s.routineName)}</span>
+      <span class="vt-routine-meta">${meta}${nPR ? ` · <span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span> ${nPR}` : ""}</span>
+    </span>
+    <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
+  </button>`;
+}
+
+// Se llama al tipear/tocar un filtro — actualiza solo la lista filtrada, sin
+// perder el foco del buscador (mismo patrón que exercises-q). Agrupada por
+// mes: "OCTUBRE 2026 · 3 SESIONES · 7,3 t".
 function historyFilteredListHTML() {
   const filtered = filteredSessions();
   if (!filtered.length) return emptyHTML("Nada por acá", "Prueba con otro nombre o ajusta el rango de fecha.", "");
-  return `<div class="vt-list">${filtered.map(sessionRowHTML).join("")}</div>`;
+  const months = [];
+  filtered.forEach((s) => {
+    const d = new Date(s.date);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    let m = months[months.length - 1];
+    if (!m || m.key !== key) months.push(m = { key, label: `${d.toLocaleDateString("es-CL", { month: "long" })} ${d.getFullYear()}`, list: [] });
+    m.list.push(s);
+  });
+  return months.map((m, i) => {
+    const vol = m.list.reduce((a, s) => a + sessionVolume(s, false), 0);
+    const n = m.list.length;
+    return `<section class="vt-section ${i === 0 ? "vt-section-first" : ""}">
+      <p class="vt-section-eyebrow">${m.label} · ${n} sesi${n !== 1 ? "ones" : "ón"} · <span class="vt-keepcase">${fmtVolume(vol, true)}</span></p>
+      <div class="vt-routine-list">${m.list.map(sessionRowHTML).join("")}</div>
+    </section>`;
+  }).join("");
 }
 
 function historyListHTML() {
   if (sessions.length === 0)
     return emptyHTML("Todavía no hay historial", "Cuando termines un entrenamiento, va a aparecer acá.", "");
   return `
-    <div class="vt-search" style="margin-bottom:var(--sp-4)">${icon("search", 16)}
+    <div class="vt-search">${icon("search", 16)}
       <input placeholder="Buscar por nombre…" value="${esc(ui.historyQuery)}" data-i="history-q" autocomplete="off">
     </div>
-    <div class="vt-metric-toggle vt-metric-toggle-scroll" style="margin-bottom:var(--sp-4)">
+    <div class="vt-hist-filters"><div class="vt-pills">
       ${HISTORY_RANGE_CHIPS.map((c) => `<button class="${ui.historyRange === c.id ? "is-active" : ""}" data-a="history-range" data-range="${c.id}">${c.label}</button>`).join("")}
-    </div>
+    </div></div>
     <div id="history-filtered-list">${historyFilteredListHTML()}</div>`;
+}
+
+/* ------------------------------- Detalle de sesión ------------------------------- */
+
+// "Lo que hiciste": una fila por ejercicio con sus series en formato compacto
+// (fmtDoneSets) y un trofeo si tuvo récord. La usan el resumen de fin de
+// sesión y el detalle de sesión del historial; este último pasa
+// withNotes=true para mostrar también las notas (del entrenador, de la
+// sesión y de series puntuales).
+function doneListHTML(list, prIds, withNotes = false) {
+  return `<div class="vt-rows">${list.map((e) => {
+    const setNotes = withNotes ? e.sets.filter((st) => st.note).map((st) => esc(st.note)) : [];
+    const notes = !withNotes ? "" : `
+      ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
+      ${e.sessionNote ? `<p class="vt-note-line">— ${esc(e.sessionNote)}</p>` : ""}
+      ${setNotes.length ? `<p class="vt-note-line">— ${setNotes.join(" · ")}</p>` : ""}`;
+    return `<div class="vt-row-wrap">
+      <div class="vt-row">
+        <span class="vt-row-name">${esc(exName(e.exerciseId))}${prIds.has(e.exerciseId) ? `<span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span>` : ""}</span>
+        <span class="vt-row-value">${esc(fmtDoneSets(e))}</span>
+      </div>${notes}
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// Pantalla completa que se abre al tocar una sesión del historial. Mismo
+// encabezado que el detalle de ejercicio (volver + eyebrow + título + ⋯).
+function sessionDetailHTML() {
+  const s = sessions.find((x) => x.id === ui.sessionDetail);
+  const dur = s.durationSec ? durationParts(s.durationSec) : { value: "—", unit: "" };
+  const [volValue, volUnit] = fmtVolume(sessionVolume(s, false), true).split(" ");
+  const done = s.exercises.filter((e) => e.sets.length);
+  return `
+    <header class="vt-header">
+      <div class="vt-header-brand">
+        <button class="vt-btn-icon" data-a="session-detail-close" aria-label="Volver">${icon("back", 18)}</button>
+        <div class="vt-detail-title"><p class="vt-eyebrow">${fmtDate(s.date)}</p><h1 class="vt-header-title-sm">${esc(s.routineName)}</h1></div>
+      </div>
+      <button class="vt-more-btn" data-a="sheet-open" data-kind="session" data-id="${s.id}" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
+    </header>
+    ${statStripHTML([
+      { label: "Duración", value: dur.value, unit: dur.unit },
+      { label: "Volumen", value: volValue, unit: volUnit },
+      { label: "Series", value: done.reduce((a, e) => a + e.sets.length, 0) },
+    ])}
+    <section class="vt-section">
+      <p class="vt-section-eyebrow">Lo que hiciste</p>
+      ${doneListHTML(done, sessionPRs()[s.id] || new Set(), true)}
+    </section>
+    <div class="vt-sum-actions">
+      <button class="vt-btn-primary vt-full vt-flex" data-a="session-repeat" data-id="${s.id}">${icon("repeat", 16)} Repetir</button>
+    </div>`;
 }
 
 /* --------------------------------- Vista Progreso -------------------------------- */
@@ -1589,16 +1660,16 @@ function computeAllPRs() {
         if (getSetType(st)) return;
         if (type === "time") {
           const v = num(st.seconds);
-          if (v > 0 && v > prior.maxS) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "seconds", value: v });
+          if (v > 0 && v > prior.maxS) hits.push({ date: s.date, sessionId: s.id, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "seconds", value: v });
         } else if (type === "bodyweight") {
           if (num(st.weight) > 0) {
-            if (num(st.weight) > prior.maxW) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
+            if (num(st.weight) > prior.maxW) hits.push({ date: s.date, sessionId: s.id, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
           } else {
             const r = uni ? Math.min(repsL(st), repsR(st)) : num(st.reps);
-            if (!prior.anyLastre && r > 0 && r > prior.maxR) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "reps", value: r });
+            if (!prior.anyLastre && r > 0 && r > prior.maxR) hits.push({ date: s.date, sessionId: s.id, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "reps", value: r });
           }
         } else {
-          if (num(st.weight) > 0 && num(st.weight) > prior.maxW) hits.push({ date: s.date, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
+          if (num(st.weight) > 0 && num(st.weight) > prior.maxW) hits.push({ date: s.date, sessionId: s.id, exerciseId: exId, exerciseName: map[exId]?.name || "(ejercicio eliminado)", type, metric: "weight", value: num(st.weight) });
         }
         prior.maxW = Math.max(prior.maxW, num(st.weight));
         prior.maxR = Math.max(prior.maxR, uni ? Math.min(repsL(st), repsR(st)) : num(st.reps));
@@ -2767,11 +2838,7 @@ function sessionSummaryHTML() {
       <span class="vt-record-value">${esc(fmtRecordValue(hit))}</span>
     </div>`).join("")}</div>`, "vt-eyebrow-pr");
 
-  const doneSection = section("Lo que hiciste", `<div class="vt-rows">${done.map((e) => `
-    <div class="vt-row">
-      <span class="vt-row-name">${esc(exName(e.exerciseId))}${prIds.has(e.exerciseId) ? `<span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span>` : ""}</span>
-      <span class="vt-row-value">${esc(fmtDoneSets(e))}</span>
-    </div>`).join("")}</div>`);
+  const doneSection = section("Lo que hiciste", doneListHTML(done, prIds));
 
   const routineSection = !sum.routineDiff ? "" : section("Cambios en tu rutina", `<div class="vt-rows">
       ${sum.routineDiff.added.map((x) => `<div class="vt-row"><span class="vt-row-name vt-diff-added">+ ${esc(x.name)}</span></div>`).join("")}
@@ -3224,6 +3291,7 @@ document.addEventListener("click", (e) => {
       ui.exerciseEditDraft = null;
       ui.selectedExercises.clear();
       ui.progressDetail = null;
+      ui.sessionDetail = null;
       ui.tab = el.dataset.tab;
       render();
       break;
@@ -3714,7 +3782,16 @@ document.addEventListener("click", (e) => {
     }
 
     /* Historial */
-    case "hist-toggle": ui.openHistory = ui.openHistory === id ? null : id; render(); break;
+    case "session-detail-open":
+      ui.detailReturnScroll = window.scrollY;
+      ui.sessionDetail = id;
+      render(); window.scrollTo(0, 0);
+      break;
+    case "session-detail-close":
+      ui.sessionDetail = null;
+      render(); window.scrollTo(0, ui.detailReturnScroll || 0);
+      ui.detailReturnScroll = 0;
+      break;
     case "hist-del":
       askConfirm("¿Eliminar esta sesión del historial?", () => {
         sessions = sessions.filter((s) => s.id !== id);
@@ -3732,6 +3809,7 @@ document.addEventListener("click", (e) => {
           ui.openExNotes.clear();
           ui.openTypeSelector = null;
           ui.collapsedExercises.clear();
+          ui.sessionDetail = null;
           ui.tab = "rutinas";
           render();
         };
