@@ -83,7 +83,27 @@ const load = (k, fb) => {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }
   catch { return fb; }
 };
-const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+// Si localStorage falla (cuota llena, modo privado, almacenamiento borrado
+// por el sistema) la app sigue andando en memoria, pero avisa UNA vez por
+// sesión de uso para que se exporte un respaldo antes de cerrar. El aviso
+// se difiere hasta que la app terminó de arrancar (save() también corre
+// durante la carga, antes de que existan `ui` y render()).
+let appReady = false;
+let storagePersisted = false; // navigator.storage.persisted(), se resuelve después del primer render
+let saveFailed = false, saveFailNotified = false;
+const save = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); }
+  catch (err) {
+    console.warn("No se pudo guardar", k, err);
+    saveFailed = true;
+    notifySaveFailure();
+  }
+};
+function notifySaveFailure() {
+  if (!appReady || !saveFailed || saveFailNotified) return;
+  saveFailNotified = true;
+  askAlert("No se pudo guardar en este dispositivo. Exporta un respaldo ahora.", { label: "Exportar", action: "export-from-alert" });
+}
 
 let routines = load("routines", []);
 let sessions = load("sessions", []);
@@ -180,8 +200,10 @@ function askConfirm(message, onYes, danger = false, onNo = null) {
 
 // Reemplaza alert() nativo por un modal propio (mismo lenguaje visual que
 // askConfirm), con un solo botón — para avisos que no piden una decisión.
-function askAlert(message) {
-  ui.infoDialog = { message };
+// `extra` opcional = {label, action}: agrega un botón primario que dispara
+// esa acción (data-a) además de cerrar; "Entendido" pasa a ser secundario.
+function askAlert(message, extra = null) {
+  ui.infoDialog = { message, extra };
   render();
 }
 
@@ -492,7 +514,7 @@ function fmtSet(type, s, unilateral) {
 
 /* -------------------------- Cronómetro de descanso ------------------------------- */
 
-let rest = null; // { ends, total, timer }
+let rest = null; // { ends, total, timer, lastLeft }
 let audioCtx = null;
 
 function startRest(seconds) {
@@ -501,7 +523,7 @@ function startRest(seconds) {
   // propio (>0), simplemente no arranca descanso automático.
   const secs = Math.round(num(seconds));
   if (secs <= 0) return;
-  rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250) };
+  rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250), lastLeft: secs };
   updateRestBar();
 }
 
@@ -510,19 +532,41 @@ function stopRest() {
   updateRestBar();
 }
 
+// Botones −15 s / +15 s de la barra: mueven el final del descanso. Nunca
+// baja de 0 (si queda menos de 15 s, termina ya). `total` se estira si el
+// restante lo supera, para que la línea de progreso no pase del 100%.
+function adjustRest(deltaSec) {
+  if (!rest) return;
+  rest.ends = Math.max(Date.now(), rest.ends + deltaSec * 1000);
+  const left = Math.ceil((rest.ends - Date.now()) / 1000);
+  rest.total = Math.max(rest.total, left);
+  rest.lastLeft = left; // un ajuste manual no dispara los pitidos de cuenta regresiva
+  tickRest();
+}
+
 function tickRest() {
   if (!rest) return;
   if (Date.now() >= rest.ends) {
     clearInterval(rest.timer);
     rest = null;
     beep();
-    if (settings.vibrate && navigator.vibrate) navigator.vibrate([250, 100, 250]);
+    if (settings.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
     updateRestBar();
     return;
+  }
+  // Aviso corto y suave al entrar a los últimos 3, 2 y 1 segundos.
+  const left = Math.ceil((rest.ends - Date.now()) / 1000);
+  if (left !== rest.lastLeft) {
+    if (left <= 3 && left >= 1 && left < rest.lastLeft) beepTick();
+    rest.lastLeft = left;
   }
   updateRestBar();
 }
 
+// La barra se arma UNA vez por descanso y los ticks (cada 250 ms) solo
+// actualizan el texto del tiempo y la línea de progreso — si se reescribiera
+// el HTML en cada tick, un toque sobre −15/+15/× podía caer justo entre dos
+// reescrituras y perderse.
 function updateRestBar() {
   const el = document.getElementById("restbar");
   if (!el) return;
@@ -532,12 +576,19 @@ function updateRestBar() {
   const pct = Math.max(0, Math.min(100, (leftMs / (rest.total * 1000)) * 100));
   el.className = "";
   el.style.setProperty("--rest-pct", pct + "%");
-  el.innerHTML = `
-    <div class="vt-rest-info">
-      <div class="vt-rest-label">Descanso</div>
-      <div class="vt-rest-time">${fmtClock(left)}</div>
-    </div>
-    <button class="vt-rest-cancel" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 20)}</button>`;
+  let time = el.querySelector(".vt-rest-time");
+  if (!time) {
+    el.innerHTML = `
+      <button class="vt-rest-btn" data-a="rest-adjust" data-delta="-15" aria-label="Quitar 15 segundos">−15 s</button>
+      <div class="vt-rest-info">
+        <div class="vt-rest-label">Descanso</div>
+        <div class="vt-rest-time"></div>
+      </div>
+      <button class="vt-rest-btn" data-a="rest-adjust" data-delta="15" aria-label="Agregar 15 segundos">+15 s</button>
+      <button class="vt-rest-btn vt-rest-cancel" data-a="rest-cancel" aria-label="Cancelar descanso">${icon("x", 20)}</button>`;
+    time = el.querySelector(".vt-rest-time");
+  }
+  time.textContent = fmtClock(left);
 }
 
 // Barra flotante de sesión minimizada — mismo nivel visual que #restbar
@@ -573,23 +624,41 @@ function updateOrganizePad() {
   document.documentElement.style.setProperty("--organize-pad", h + "px");
 }
 
-function beep() {
+// Un pitido: oscilador → ganancia con ataque/caída cortos → compresor (para
+// que el pico alto no sature el parlante) → salida.
+function tone(at, dur, freq, peak, type) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  const comp = audioCtx.createDynamicsCompressor();
+  o.type = type;
+  o.frequency.value = freq;
+  o.connect(g); g.connect(comp); comp.connect(audioCtx.destination);
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.015);
+  g.gain.setValueAtTime(peak, at + dur - 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+
+function withAudio(fn) {
   if (!settings.sound) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
-    const t = audioCtx.currentTime;
-    [0, 0.28, 0.56].forEach((off) => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.connect(g); g.connect(audioCtx.destination);
-      o.frequency.value = 880;
-      g.gain.setValueAtTime(0.0001, t + off);
-      g.gain.exponentialRampToValueAtTime(0.35, t + off + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.22);
-      o.start(t + off); o.stop(t + off + 0.25);
-    });
+    fn(audioCtx.currentTime);
   } catch (e) { /* sin audio disponible */ }
+}
+
+// Fin del descanso: 3 pitidos de 0,3 s. Onda cuadrada a ~1200 Hz (donde más
+// rinden los parlantes de teléfono) con ganancia alta — la senoidal de 880 Hz
+// a 0,35 de antes casi no se oía en un gimnasio.
+function beep() {
+  withAudio((t) => [0, 0.42, 0.84].forEach((off) => tone(t + off, 0.3, 1200, 0.9, "square")));
+}
+
+// Cuenta regresiva (3, 2, 1): corto y bastante más suave que el final.
+function beepTick() {
+  withAudio((t) => tone(t, 0.09, 900, 0.25, "square"));
 }
 
 /* --------------------------------- Render raíz ---------------------------------- */
@@ -791,7 +860,7 @@ function routinesHTML() {
         `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`)
     : looseHTML + foldersHTML;
 
-  return `
+  const html = `
     <header class="vt-header">
       ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
       <div style="display:flex;gap:var(--sp-2)">
@@ -801,6 +870,13 @@ function routinesHTML() {
     </header>
     <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-free-btn" data-a="train-free">${icon("plus", 18)} Sesión libre</button>
     ${body}`;
+  const reminder = backupReminderText();
+  const banner = !reminder ? "" : `<div class="vt-banner">
+      <span>${reminder}</span>
+      <button class="vt-banner-action" data-a="export">Exportar</button>
+      <button class="vt-banner-close" data-a="backup-snooze" aria-label="Recordar más tarde">${icon("x", 16)}</button>
+    </div>`;
+  return banner + html;
 }
 
 // Hoja inferior del botón ⋯ (rutina, carpeta o ejercicio): mismo estilo que los demás
@@ -1949,29 +2025,30 @@ function settingsHTML() {
       ${tabHeaderHTML("Set 05 · Configuración", "Ajustes")}
     </header>
     <p class="vt-section-eyebrow">General</p>
-    <div class="vt-settings-row">
+    <label class="vt-settings-row">
       <div class="vt-settings-label">Sonido<small>Pitido al terminar el descanso</small></div>
       <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound" autocomplete="off">
-    </div>
-    <div class="vt-settings-row">
+    </label>
+    <label class="vt-settings-row">
       <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
       <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
-    </div>
+    </label>
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
-      <div class="vt-settings-label">Exportar datos<small>Descarga un respaldo JSON de todo</small></div>
-      <button class="vt-btn-icon" data-a="export">${icon("download", 16)}</button>
+      <div class="vt-settings-label">Exportar datos<small>Último respaldo: ${settings.lastExportAt ? fmtRelDate(settings.lastExportAt) : "nunca"}</small></div>
+      <button class="vt-btn-icon" data-a="export" aria-label="Exportar datos">${icon("download", 16)}</button>
     </div>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
       <div style="display:flex;gap:var(--sp-2)">
-        <label class="vt-btn-icon" style="cursor:pointer">${icon("upload", 16)}
+        <label class="vt-btn-icon" style="cursor:pointer" aria-label="Importar archivo">${icon("upload", 16)}
           <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
         </label>
         <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
       </div>
     </div>
-    <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>`;
+    <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
+    <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -2230,7 +2307,10 @@ function infoDialogHTML() {
           <p style="margin:0;white-space:pre-line">${esc(d.message)}</p>
         </div>
         <div class="vt-modal-actions">
-          <button class="vt-btn-primary vt-full" data-a="info-dialog-close">Entendido</button>
+          ${d.extra
+            ? `<button class="vt-btn-ghost" data-a="info-dialog-close">Ahora no</button>
+               <button class="vt-btn-primary" data-a="${d.extra.action}">${esc(d.extra.label)}</button>`
+            : `<button class="vt-btn-primary vt-full" data-a="info-dialog-close">Entendido</button>`}
         </div>
       </div>
     </div>`;
@@ -2843,14 +2923,40 @@ function exportJSON() {
     "routine-folders": routineFolders,
     sessions,
     "custom-exercises": exercises,
+    "exercise-groups": exerciseGroups,
     settings,
   };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `volley-tracker-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `volley-tracker-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    askAlert("No se pudo generar el respaldo.");
+    return;
+  }
+  // Fecha del último respaldo: alimenta el recordatorio de Rutinas y el
+  // subtítulo de "Exportar datos" en Ajustes.
+  settings.lastExportAt = new Date().toISOString();
+  delete settings.backupSnoozeUntil;
+  persistSettings();
+  render();
+}
+
+// Recordatorio de respaldo (banner arriba de Rutinas). Devuelve el texto a
+// mostrar, o null si no corresponde:
+//   - último respaldo de hace más de 14 días Y hay sesiones nuevas desde entonces;
+//   - nunca se exportó y ya hay 3 sesiones o más.
+// Cerrar el banner lo pospone 7 días (settings.backupSnoozeUntil).
+function backupReminderText() {
+  if (settings.backupSnoozeUntil && new Date(settings.backupSnoozeUntil).getTime() > Date.now()) return null;
+  const last = settings.lastExportAt;
+  if (!last) return sessions.length >= 3 ? "Todavía no has respaldado tus datos" : null;
+  const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+  if (days <= 14 || !sessions.some((x) => x.date > last)) return null;
+  return `Hace ${days} días que no respaldas tus datos`;
 }
 
 // Separado de importJSON(file) para poder reutilizarlo desde "Pegar JSON"
@@ -2866,6 +2972,7 @@ function processImportedData(data) {
         if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
         sessions = data.sessions; persistSessions();
         if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
+        if (Array.isArray(data["exercise-groups"]) && data["exercise-groups"].length) { exerciseGroups = data["exercise-groups"]; persistGroups(); }
         if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
         askAlert("Respaldo restaurado ✔");
       }, true);
@@ -3469,6 +3576,7 @@ document.addEventListener("click", (e) => {
       break;
     case "session-restore": ui.sessionMinimized = false; render(); break;
     case "rest-cancel": stopRest(); break;
+    case "rest-adjust": adjustRest(num(el.dataset.delta)); break;
 
     /* Resumen de sesión */
     case "summary-apply-1rm": {
@@ -3722,6 +3830,16 @@ document.addEventListener("click", (e) => {
     }
 
     case "export": exportJSON(); break;
+    case "export-from-alert": // botón del aviso "no se pudo guardar": exporta y deja a la vista la sección Datos
+      ui.infoDialog = null;
+      ui.tab = "ajustes";
+      exportJSON();
+      break;
+    case "backup-snooze":
+      settings.backupSnoozeUntil = new Date(Date.now() + 7 * 86400000).toISOString();
+      persistSettings();
+      render();
+      break;
     case "paste-json-open": ui.pasteJsonModal = true; render(); break;
     case "paste-json-cancel": ui.pasteJsonModal = false; render(); break;
     case "paste-json-import": {
@@ -3964,6 +4082,19 @@ function showRecoveredToast() {
 }
 
 render();
+appReady = true;
+notifySaveFailure(); // por si save() ya falló durante la carga
+
+// Pide al navegador que no borre los datos de la app por falta de espacio
+// (sin esto, localStorage es "best effort" y el sistema puede limpiarlo). El
+// resultado se muestra en Ajustes ("Almacenamiento protegido: sí / no").
+(async () => {
+  try {
+    if (navigator.storage?.persist) storagePersisted = await navigator.storage.persist();
+    else if (navigator.storage?.persisted) storagePersisted = await navigator.storage.persisted();
+  } catch { /* API no disponible: queda en "no" */ }
+  if (ui.tab === "ajustes") render();
+})();
 
 /* ------------------------- Service worker y actualizaciones ------------------------- */
 // Permite abrir la app sin conexión (los datos ya viven en localStorage).

@@ -1114,3 +1114,21 @@ Entradas nuevas al final. No reescribir lo anterior.
   crear ejercicio con +, editar y eliminar desde el detalle, y los
   selectores de sesión y de editor de rutina (sin cambios). sw.js v30.
   Pendiente: probar en teléfono el deslizado de Recientes.
+
+## 2026-10-02 cont. — Mejoras, Fase 1 de 5: robustez y Ajustes
+- Pitido de descanso: onda cuadrada 1200 Hz, ganancia 0,9 con
+  compresor, 3 pitidos de 0,3 s + aviso corto a los 3-2-1 s; vibración
+  final [400,150,400,150,400]. Barra de descanso con −15 s / +15 s
+  (`adjustRest`), y ahora se arma una vez por descanso en vez de
+  reescribirse cada 250 ms (un toque podía perderse).
+- Datos: `navigator.storage.persist()` al cargar; `save()` con
+  try/catch y aviso único con botón Exportar; `settings.lastExportAt` +
+  banner de recordatorio en Rutinas (pospone 7 días con
+  `settings.backupSnoozeUntil`). Decisión no pedida: el respaldo ahora
+  incluye también `exercise-groups` (antes los grupos y sus colores no
+  viajaban). No existe exportar "copiando el texto": solo por archivo.
+- Ajustes: interruptores (`.vt-switch`), nombres en formato normal,
+  "Último respaldo" y "Almacenamiento protegido". Áreas táctiles de
+  44×44 con ::before en ⋯, íconos, check, RPE, píldoras y botones de
+  texto. Pendiente: oír el pitido y probar los interruptores en el
+  teléfono.
