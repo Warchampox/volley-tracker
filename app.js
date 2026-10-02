@@ -945,7 +945,16 @@ function actionSheetHTML() {
   const row = (a, ic, label, danger) =>
     `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
   let title, rows;
-  if (kind === "export") {
+  if (kind === "reset") {
+    // Borrado de datos personales: entrenamientos y 1RM. Rutinas, ejercicios
+    // y grupos no se tocan. Cada opción confirma antes (reset-pick).
+    const nSes = sessions.length, nRM = exercises.filter((e) => num(e.oneRM) > 0).length;
+    const opt = (k, label, n, sub) => `<button class="vt-modal-row vt-modal-row-danger" data-a="reset-pick" data-kind="${k}" ${n ? "" : "disabled"}>
+      ${icon("trash", 16)}<span class="vt-modal-row-text">${label}<small>${n ? sub : "No hay nada que borrar"}</small></span></button>`;
+    title = "Borrar datos personales";
+    rows = opt("sessions", "Entrenamientos", nSes, `Las ${nSes} sesiones del historial, con sus récords y gráficos`)
+      + opt("onerm", "1RM", nRM, `El 1RM guardado de ${nRM} ejercicio${nRM !== 1 ? "s" : ""}`);
+  } else if (kind === "export") {
     title = "Exportar";
     rows = EXPORT_KINDS.map((k) => `<button class="vt-modal-row" data-a="export-pick" data-kind="${k.id}">
       ${icon(k.ic, 16)}<span class="vt-modal-row-text">${k.label}<small>${k.sub}</small></span></button>`).join("");
@@ -2302,6 +2311,10 @@ function settingsHTML() {
         <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
       </div>
     </div>
+    <div class="vt-settings-row">
+      <div class="vt-settings-label">Borrar datos personales<small>Entrenamientos o 1RM; no toca rutinas ni ejercicios</small></div>
+      <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 16)}</button>
+    </div>
     <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
     <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>`;
 }
@@ -3181,7 +3194,7 @@ async function shareImage(kind, data, filename, shareTitle) {
 const EXPORT_KINDS = [
   { id: "full", ic: "download", label: "Todo", sub: "Respaldo completo, para restaurar en otro teléfono", file: "respaldo" },
   { id: "routines", ic: "clipboard", label: "Rutinas", sub: "Para compartir: incluye sus ejercicios, sin tus 1RM", file: "rutinas" },
-  { id: "sessions", ic: "trend", label: "Entrenamientos", sub: "Tu historial de sesiones", file: "entrenamientos" },
+  { id: "sessions", ic: "trend", label: "Entrenamientos", sub: "Tu historial de sesiones (datos personales)", file: "entrenamientos" },
   { id: "exercises", ic: "barbell", label: "Ejercicios", sub: "El catálogo y sus grupos, sin tus 1RM", file: "ejercicios" },
 ];
 
@@ -3272,7 +3285,7 @@ function processImportedData(data) {
   const isFull = Array.isArray(data.sessions) && (!data.kind || data.kind === "full");
 
   if (isFull) {
-    askConfirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
+    askConfirm("Este archivo es un respaldo completo: trae también entrenamientos y 1RM. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
       if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
       if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
       sessions = data.sessions; persistSessions();
@@ -3287,56 +3300,72 @@ function processImportedData(data) {
   // Archivo parcial (rutinas, entrenamientos y/o ejercicios): se AGREGA a lo
   // que ya hay, nunca borra. Lo que ya existe con el mismo id se actualiza,
   // salvo las sesiones, que no se tocan.
-  if (!Array.isArray(data.routines) && !Array.isArray(inExercises) && !Array.isArray(data.sessions)) {
+  // Datos personales: recibir rutinas y ejercicios de otra persona es lo
+  // normal, recibir sus marcas no. Por eso un parcial NUNCA trae 1RM (se
+  // descarta aunque el archivo lo tenga) y los entrenamientos solo entran si
+  // se confirma que son propios. Lo único que restaura datos personales sin
+  // filtro es el respaldo completo.
+  const hasSessions = Array.isArray(data.sessions) && data.sessions.length > 0;
+  if (!Array.isArray(data.routines) && !Array.isArray(inExercises) && !hasSessions) {
     askAlert("El archivo no tiene rutinas, entrenamientos, ejercicios ni un respaldo reconocible.");
     return;
   }
-  let nEx = 0, nRt = 0, nSes = 0;
-  if (Array.isArray(inGroups)) {
-    // Solo grupos que no existen (por nombre): no pisa los colores propios.
-    for (const g of inGroups)
-      if (g?.name && !exerciseGroups.some((x) => x.name === g.name)) exerciseGroups.push({ name: g.name, color: g.color || GROUP_PALETTE[0] });
-    persistGroups();
-  }
-  if (Array.isArray(inExercises)) {
-    for (const e of inExercises) {
-      if (!e.id || !e.name) continue;
-      const i = exercises.findIndex((x) => x.id === e.id);
-      if (i >= 0) exercises[i] = { ...exercises[i], ...e };
-      else { exercises.push({ group: "Custom", type: "weight", ...e }); nEx++; }
+  const apply = (withSessions) => {
+    let nEx = 0, nRt = 0, nSes = 0;
+    if (Array.isArray(inGroups)) {
+      // Solo grupos que no existen (por nombre): no pisa los colores propios.
+      for (const g of inGroups)
+        if (g?.name && !exerciseGroups.some((x) => x.name === g.name)) exerciseGroups.push({ name: g.name, color: g.color || GROUP_PALETTE[0] });
+      persistGroups();
     }
-    persistExercises();
-  }
-  if (Array.isArray(inFolders)) {
-    for (const f of inFolders) {
-      if (!f.id || !f.name) continue;
-      const i = routineFolders.findIndex((x) => x.id === f.id);
-      if (i >= 0) routineFolders[i] = f; else routineFolders.push(f);
+    if (Array.isArray(inExercises)) {
+      for (const raw of inExercises) {
+        if (!raw.id || !raw.name) continue;
+        const { oneRM, ...e } = raw; // el 1RM es personal: nunca se importa desde un parcial
+        const i = exercises.findIndex((x) => x.id === e.id);
+        if (i >= 0) exercises[i] = { ...exercises[i], ...e };
+        else { exercises.push({ group: "Custom", type: "weight", ...e }); nEx++; }
+      }
+      persistExercises();
     }
-    persistFolders();
-  }
-  if (Array.isArray(data.routines)) {
-    for (const r of data.routines) {
-      if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
-      const i = routines.findIndex((x) => x.id === r.id);
-      if (i >= 0) routines[i] = r; else { routines.unshift(r); nRt++; }
+    if (Array.isArray(inFolders)) {
+      for (const f of inFolders) {
+        if (!f.id || !f.name) continue;
+        const i = routineFolders.findIndex((x) => x.id === f.id);
+        if (i >= 0) routineFolders[i] = f; else routineFolders.push(f);
+      }
+      persistFolders();
     }
-    persistRoutines();
-  }
-  if (Array.isArray(data.sessions)) {
-    const have = new Set(sessions.map((x) => x.id));
-    for (const ses of data.sessions) {
-      if (!ses.id || !ses.date || !Array.isArray(ses.exercises) || have.has(ses.id)) continue;
-      sessions.push(ses); nSes++;
+    if (Array.isArray(data.routines)) {
+      for (const r of data.routines) {
+        if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
+        const i = routines.findIndex((x) => x.id === r.id);
+        if (i >= 0) routines[i] = r; else { routines.unshift(r); nRt++; }
+      }
+      persistRoutines();
     }
-    sessions.sort((a, b) => b.date.localeCompare(a.date)); // siempre de más nueva a más vieja
-    persistSessions();
-  }
-  const parts = [];
-  if (Array.isArray(data.routines)) parts.push(`${nRt} rutina(s)`);
-  if (Array.isArray(data.sessions)) parts.push(`${nSes} entrenamiento(s)`);
-  if (Array.isArray(inExercises)) parts.push(`${nEx} ejercicio(s)`);
-  askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.`);
+    if (withSessions) {
+      const have = new Set(sessions.map((x) => x.id));
+      for (const ses of data.sessions) {
+        if (!ses.id || !ses.date || !Array.isArray(ses.exercises) || have.has(ses.id)) continue;
+        sessions.push(ses); nSes++;
+      }
+      sessions.sort((a, b) => b.date.localeCompare(a.date)); // siempre de más nueva a más vieja
+      persistSessions();
+    }
+    const parts = [];
+    if (Array.isArray(data.routines)) parts.push(`${nRt} rutina(s)`);
+    if (withSessions) parts.push(`${nSes} entrenamiento(s)`);
+    if (Array.isArray(inExercises)) parts.push(`${nEx} ejercicio(s)`);
+    askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.`);
+  };
+  if (!hasSessions) { apply(false); return; }
+  const n = data.sessions.length;
+  askConfirm(`Este archivo trae ${n} entrenamiento${n !== 1 ? "s" : ""}. Son datos personales: agrégalos solo si son tuyos (por ejemplo, para recuperarlos). ¿Agregarlos a tu historial?`,
+    () => apply(true), false,
+    // "No": si además trae rutinas se importan igual, sin los entrenamientos;
+    // si era solo historial, no se importa nada.
+    () => { if (Array.isArray(data.routines)) apply(false); else render(); });
 }
 
 function importJSON(file) {
@@ -4201,6 +4230,24 @@ document.addEventListener("click", (e) => {
 
     case "export": exportJSON(); break; // respaldo completo directo (banner de recordatorio)
     case "export-pick": exportJSON(el.dataset.kind); break;
+    case "reset-pick": {
+      if (el.dataset.kind === "sessions") {
+        const n = sessions.length;
+        askConfirm(`¿Borrar los ${n} entrenamientos del historial? Se van también los récords, gráficos y marcas que salen de ellos. Rutinas y ejercicios no se tocan. No se puede deshacer: si son tuyos, exporta un respaldo antes.`, () => {
+          sessions = [];
+          persistSessions();
+          ui.sessionDetail = null; ui.progressDetail = null;
+          askAlert("Historial de entrenamientos borrado.");
+        }, true);
+      } else {
+        askConfirm("¿Borrar el 1RM guardado de todos los ejercicios? Las rutinas en modo %1RM van a pedir que lo definas de nuevo. No se puede deshacer.", () => {
+          exercises.forEach((e) => { delete e.oneRM; });
+          persistExercises();
+          askAlert("1RM borrados.");
+        }, true);
+      }
+      break;
+    }
     case "export-from-alert": // botón del aviso "no se pudo guardar": exporta y deja a la vista la sección Datos
       ui.infoDialog = null;
       ui.tab = "ajustes";

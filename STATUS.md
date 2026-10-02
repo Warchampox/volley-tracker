@@ -1211,3 +1211,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   fusionar sesiones, reimportar sin duplicar, respaldo completo. No
   probado: la hoja de compartir del sistema (solo existe en teléfono).
   sw.js v31 → v32.
+
+## 2026-10-02 cont. — Datos personales: borrar y no recibir por error
+- Ajustes → "Borrar datos personales": hoja con Entrenamientos (todo
+  el historial) y 1RM (de todos los ejercicios), cada uno con
+  `askConfirm`; no toca rutinas, ejercicios ni grupos.
+- Importar un archivo parcial ya no trae datos personales por
+  accidente: el 1RM se descarta siempre, y si el archivo trae
+  entrenamientos pregunta antes ("agrégalos solo si son tuyos"); con
+  "no" importa igual las rutinas si las hay. El respaldo completo
+  sigue restaurando todo, y su confirmación ahora lo dice.
+- Verificado en el navegador: ambos borrados (y que Progreso,
+  Ejercicios y Rutinas quedan bien con el historial vacío), importar
+  entrenamientos con sí/no, archivo mixto, y restaurar desde respaldo.

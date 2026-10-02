@@ -47,6 +47,12 @@
   archivos parciales se AGREGAN sin borrar nada (las sesiones se
   fusionan por id). Los parciales no llevan `oneRM` (dato personal:
   pisaría el de quien recibe) ni cuentan como "último respaldo".
+- Datos personales = entrenamientos (`sessions`, con su RPE) y 1RM.
+  Solo el respaldo completo los restaura sin filtro. Un archivo
+  parcial NUNCA importa 1RM (se descarta aunque venga) y los
+  entrenamientos entran solo tras confirmar que son propios. Ajustes
+  tiene "Borrar datos personales" (entrenamientos o 1RM, cada uno con
+  confirmación; no toca rutinas, ejercicios ni grupos).
 - `save()` nunca lanza: si localStorage falla avisa una vez y la app
   sigue en memoria. Al cargar se pide `navigator.storage.persist()`.
 
