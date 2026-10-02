@@ -156,6 +156,8 @@ const groupColor = (name) => exerciseGroups.find((g) => g.name === name)?.color;
 const ui = {
   tab: "rutinas",
   editingRoutine: null,   // copia de la rutina en edición, o null
+  editorSnapshot: "",     // foto del estado al abrir el editor (para detectar cambios sin guardar)
+  editorOpenNotes: new Set(), // índices de ejercicio con la nota desplegada en el editor
   activeSession: null,    // sesión en curso, o null
   sessionMinimized: false, // sesión activa pero minimizada a la barra flotante
   picker: null,           // null | "editor" | "session" | "featured" | "replace"
@@ -405,6 +407,7 @@ let nextDraftOrd = -1;
 // saber más tarde qué se eliminó de verdad, sin importar cuánto se reordenó/
 // agrupó/reemplazó mientras tanto (ver exercise-editmode-save).
 function enterOrganizeMode(preselectIdx) {
+  ui.editorOpenNotes.clear(); // van por índice de ejercicio, que cambia al reordenar o borrar
   const source = ui.editingRoutine ? ui.editingRoutine.exercises : ui.activeSession.exercises;
   ui.exerciseEditDraft = source.map((it, i) => ({ ...deepClone(it), __ord: i }));
   ui.exerciseEditMode = true;
@@ -992,6 +995,43 @@ function moveRoutineHTML() {
 
 /* -------------------------------- Editor de rutina ------------------------------- */
 
+// Abre el editor sobre una copia de la rutina y guarda una foto del estado
+// inicial, para saber al salir si hay cambios sin guardar (editorIsDirty).
+function openEditor(routine) {
+  ui.editingRoutine = routine;
+  ui.editorSnapshot = editorState();
+  ui.editorOpenNotes = new Set();
+}
+const editorState = () => JSON.stringify([ui.editingRoutine.name, ui.editingRoutine.exercises]);
+const editorIsDirty = () => !!ui.editingRoutine && editorState() !== ui.editorSnapshot;
+
+// Sale del editor (flecha atrás o cambio de pestaña): si hay cambios sin
+// guardar pregunta antes de descartarlos; si no, sigue directo.
+function leaveEditor(next) {
+  const go = () => {
+    ui.editingRoutine = null;
+    ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
+    next();
+  };
+  if (editorIsDirty()) askConfirm("Tienes cambios sin guardar en esta rutina. ¿Descartarlos?", go, true);
+  else go();
+}
+
+// Columnas de objetivos del editor según el tipo — mismo lenguaje que la fila
+// de serie (encabezado en mayúscula + valores sin caja). La columna de carga
+// cambia de campo en modo %1RM. Unilateral usa las de su tipo.
+function targetColumns(type, isPct) {
+  const load = type === "time" ? { cap: "+kg", field: "targetWeight", step: 2.5 }
+    : isPct ? { cap: "%1RM", field: "targetPercent", step: 5, def: 70, toggle: true }
+    : { cap: type === "bodyweight" ? "+kg" : "kg", field: "targetWeight", step: 2.5, toggle: true };
+  return [
+    { cap: "Series", field: "targetSets", step: 1 },
+    type === "time" ? { cap: "Tiempo", field: "targetSeconds", clock: true, def: 30 } : { cap: "Reps", field: "targetReps", step: 1 },
+    load,
+    { cap: "Desc.", field: "restSeconds", step: 15 },
+  ];
+}
+
 function editorHTML() {
   const r = ui.editingRoutine;
   const map = exMap();
@@ -1002,12 +1042,15 @@ function editorHTML() {
   const ssLabels = computeSupersetLabels(list);
   return `
     <header class="vt-header">
-      <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 20)}</button>
-      <h1 class="vt-header-title">${r.isNew ? "Nueva rutina" : "Editar rutina"}</h1>
-      <div style="width:40px"></div>
+      <div class="vt-header-brand vt-grow">
+        <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 18)}</button>
+        <div class="vt-detail-title vt-grow">
+          <p class="vt-eyebrow">${r.isNew ? "Nueva rutina" : "Editar rutina"}</p>
+          <input type="text" class="vt-session-name-input" placeholder="Nombre de la rutina"
+            value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
+        </div>
+      </div>
     </header>
-    <input class="vt-input vt-input-title" placeholder="Nombre de la rutina (ej: Fuerza semana 1)"
-      value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
     ${organizeToggleHTML()}
     <div class="vt-list" id="editor-exercise-list">
       ${list.map((it, idx) => {
@@ -1015,60 +1058,53 @@ function editorHTML() {
         const lbl = ssLabels[idx];
         if (editMode) return exerciseOrganizeRowHTML(idx, ex, lbl);
         const t = ex?.type || "weight";
-        const isPct = it.loadMode === "percent";
+        const isPct = t !== "time" && it.loadMode === "percent";
         const oneRM = num(map[it.exerciseId]?.oneRM);
-        let fields = `
-          ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
-          ${numFieldHTML("Reps", "targetReps", idx, it.targetReps, 1)}`;
-        if (t === "weight" || t === "bodyweight") {
-          fields += isPct
-            ? numFieldHTML("% 1RM", "targetPercent", idx, it.targetPercent ?? 70, 5)
-            : numFieldHTML(t === "weight" ? "Kg" : "Lastre kg", "targetWeight", idx, it.targetWeight, 2.5);
-        } else {
-          fields = `
-          ${numFieldHTML("Series", "targetSets", idx, it.targetSets, 1)}
-          ${numFieldHTML("Segundos", "targetSeconds", idx, it.targetSeconds ?? 30, 5, true)}
-          ${numFieldHTML("Kg", "targetWeight", idx, it.targetWeight, 2.5)}`;
-        }
-        fields += numFieldHTML("Descanso s", "restSeconds", idx, it.restSeconds, 15);
-        let loadmode = "";
-        if (t !== "time") {
-          const calc = !isPct ? "" : (oneRM > 0
-            ? `= ${fmtNum(pctKg(oneRM, it.targetPercent ?? 70))} kg (1RM ${fmtNum(oneRM)} kg)`
-            : "Define el 1RM de este ejercicio en Ajustes → Ejercicios");
-          loadmode = `<div class="vt-loadmode">
-            <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg">KG</button>
-            <button class="${isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="percent">%1RM</button>
-            <span class="vt-muted-sm" id="pct-calc-${idx}" style="${oneRM > 0 ? "" : "color:var(--red)"}">${calc}</span>
-          </div>`;
-        }
+        const cols = targetColumns(t, isPct);
+        // El encabezado de la columna de carga ES el selector KG / %1RM (la
+        // opción activa nombra la columna). En tiempo no hay modo %.
+        const caps = cols.map((c) => !c.toggle ? `<span class="vt-cap vt-col-val">${c.cap}</span>`
+          : `<span class="vt-col-val vt-pills vt-cap-toggle">
+              <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg">${t === "bodyweight" ? "+kg" : "kg"}</button>
+              <button class="${isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="percent">%1RM</button>
+            </span>`).join("");
+        const fields = cols.map((c) => {
+          const v = it[c.field] ?? c.def ?? 0;
+          const attrs = c.clock
+            ? `type="text" inputmode="numeric" value="${fmtClockInput(num(v))}"`
+            : `type="number" inputmode="decimal" value="${num(v)}" step="${c.step}"`;
+          return `<input class="vt-input vt-mono vt-set-input vt-col-val" ${attrs}
+            data-i="editor-target" data-field="${c.field}" data-idx="${idx}" aria-label="${c.cap}"
+            autocomplete="off" autocorrect="off" spellcheck="false" name="f_${c.field}_${idx}">`;
+        }).join("");
+        const calc = !isPct ? "" : `<p class="vt-muted-sm vt-target-calc ${oneRM > 0 ? "" : "is-missing"}" id="pct-calc-${idx}">${oneRM > 0
+          ? `= ${fmtNum(pctKg(oneRM, it.targetPercent ?? 70))} kg (1RM ${fmtNum(oneRM)} kg)`
+          : "Falta el 1RM: defínelo en el detalle del ejercicio (pestaña Ejercicios)"}</p>`;
+        const note = ui.editorOpenNotes.has(idx)
+          ? `<textarea class="vt-note-input" rows="2" placeholder="Nota (ej: profunda, subir altura)"
+              data-i="editor-note" data-idx="${idx}" autocomplete="off">${esc(it.note || "")}</textarea>`
+          : it.note
+            ? `<button class="vt-note-link has-note" data-a="editor-note-open" data-idx="${idx}">${esc(it.note)}</button>`
+            : `<button class="vt-note-link" data-a="editor-note-open" data-idx="${idx}">+ Nota</button>`;
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
               <h3>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
             </div>
-            <div class="vt-target-row">${fields}</div>
-            ${loadmode}
-            <input type="text" class="vt-input" style="margin-top:var(--sp-3)" placeholder="Nota (ej: profunda, subir altura)"
-              value="${esc(it.note || "")}" data-i="editor-note" data-idx="${idx}" autocomplete="off">
+            <div class="vt-sets vt-targets">
+              <div class="vt-set-caps">${caps}</div>
+              <div class="vt-set-row">${fields}</div>
+            </div>
+            ${calc}
+            ${note}
           </div>
         </div>`;
       }).join("")}
     </div>
-    <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
+    <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
     ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full" data-a="editor-save">Guardar rutina</button>
     </div>`}`;
-}
-
-function numFieldHTML(label, field, idx, value, step, isClock = false) {
-  const valueAttrs = isClock
-    ? `type="text" inputmode="numeric" value="${fmtClockInput(num(value))}"`
-    : `type="number" inputmode="decimal" value="${num(value)}" step="${step}"`;
-  return `<label class="vt-numfield"><span>${label}</span>
-    <input class="vt-input vt-mono" ${valueAttrs}
-      data-i="editor-target" data-field="${field}" data-idx="${idx}"
-      autocomplete="off" autocorrect="off" spellcheck="false" name="f_${field}_${idx}"></label>`;
 }
 
 /* --------------------------------- Vista Entrenar -------------------------------- */
@@ -3271,18 +3307,23 @@ document.addEventListener("click", (e) => {
   switch (a) {
     case "sheet-open": ui.actionSheet = { kind: el.dataset.kind, id }; render(); break;
     case "sheet-close": render(); break;
-    case "tab":
-      stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
-      ui.editingRoutine = null;
-      ui.manageGroups = false;
-      ui.exerciseEditMode = false;
-      ui.exerciseEditDraft = null;
-      ui.selectedExercises.clear();
-      ui.progressDetail = null;
-      ui.sessionDetail = null;
-      ui.tab = el.dataset.tab;
-      render();
+    case "tab": {
+      const go = () => {
+        stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
+        ui.editingRoutine = null;
+        ui.manageGroups = false;
+        ui.exerciseEditMode = false;
+        ui.exerciseEditDraft = null;
+        ui.selectedExercises.clear();
+        ui.progressDetail = null;
+        ui.sessionDetail = null;
+        ui.tab = el.dataset.tab;
+        render();
+      };
+      // Salir del editor por la nav también avisa si hay cambios sin guardar.
+      if (ui.editingRoutine) leaveEditor(go); else go();
       break;
+    }
 
     /* Modal de confirmación propio */
     case "confirm-yes": {
@@ -3305,12 +3346,12 @@ document.addEventListener("click", (e) => {
     /* Rutinas */
     case "routine-new":
       ui.tab = "rutinas";
-      ui.editingRoutine = { id: uid("rt"), name: "", exercises: [], isNew: true };
+      openEditor({ id: uid("rt"), name: "", exercises: [], isNew: true });
       render();
       break;
     case "routine-edit": {
       const r = routines.find((x) => x.id === id);
-      if (r) ui.editingRoutine = { ...r, exercises: r.exercises.map((x) => ({ ...x })), isNew: false };
+      if (r) openEditor({ ...r, exercises: r.exercises.map((x) => ({ ...x })), isNew: false });
       render();
       break;
     }
@@ -3419,11 +3460,14 @@ document.addEventListener("click", (e) => {
     }
 
     /* Editor de rutina */
-    case "editor-cancel":
-      ui.editingRoutine = null;
-      ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
+    case "editor-cancel": leaveEditor(render); break;
+    case "editor-note-open": {
+      const idx = +el.dataset.idx;
+      ui.editorOpenNotes.add(idx);
       render();
+      document.querySelector(`textarea[data-i="editor-note"][data-idx="${idx}"]`)?.focus();
       break;
+    }
     case "editor-loadmode": {
       const it = ui.editingRoutine.exercises[+el.dataset.idx];
       it.loadMode = el.dataset.mode;
@@ -3439,7 +3483,7 @@ document.addEventListener("click", (e) => {
       const mapEx = exMap();
       const sinRM = r.exercises.find((it) => it.loadMode === "percent" && !(num(mapEx[it.exerciseId]?.oneRM) > 0));
       if (sinRM) {
-        askAlert(`"${mapEx[sinRM.exerciseId]?.name || "Un ejercicio"}" está en modo %1RM pero no tiene 1RM definido. Configúralo en Ajustes → Ejercicios.`);
+        askAlert(`"${mapEx[sinRM.exerciseId]?.name || "Un ejercicio"}" está en modo %1RM pero no tiene 1RM definido. Defínelo en el detalle del ejercicio (pestaña Ejercicios).`);
         break;
       }
       r.exercises.forEach((it) => { if (it.loadMode === "percent") delete it.targetWeight; });
@@ -4161,7 +4205,7 @@ document.addEventListener("change", (e) => {
 // Tocar un input de VALOR selecciona su contenido completo (para reemplazarlo
 // de un tiro, sin borrar a mano). Nunca en campos de texto libre (nombre de
 // rutina/ejercicio, notas) — ahí molestaría. focusin (no focus) porque sí burbujea.
-const SELECT_ON_FOCUS = ".vt-set-input, .vt-rpe-input, .vt-rest-mini input, .vt-numfield input, #exm-onerm, .vt-max-input";
+const SELECT_ON_FOCUS = ".vt-set-input, .vt-rpe-input, .vt-rest-mini input, #exm-onerm, .vt-max-input";
 document.addEventListener("focusin", (e) => {
   if (e.target.matches && e.target.matches(SELECT_ON_FOCUS)) e.target.select();
 });

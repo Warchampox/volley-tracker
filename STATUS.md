@@ -1157,3 +1157,18 @@ Entradas nuevas al final. No reescribir lo anterior.
   franja de stats, "Lo que hiciste" con notas (`doneListHTML`, ahora
   compartido con el resumen), botón Repetir y ⋯ con Eliminar. Se
   fueron el acordeón del historial y `.vt-metric-toggle`.
+
+## 2026-10-02 cont. — Mejoras, Fase 4 de 5: editor de rutina
+- Editor rehecho con el lenguaje de la sesión en vivo: encabezado con
+  flecha + eyebrow y nombre sin caja; objetivos como fila de tabla
+  (`targetColumns`, mismas clases que la fila de serie); el encabezado
+  de la columna de carga es el selector KG / %1RM; nota del entrenador
+  como link "+ Nota" que despliega un textarea sin caja
+  (`ui.editorOpenNotes`); "Agregar ejercicio" con borde sólido.
+- Cambios sin guardar: `openEditor` guarda una foto del estado y
+  `leaveEditor` pide confirmación al salir. Decisión no pedida: el
+  mismo aviso aparece al cambiar de pestaña desde el editor (antes se
+  perdían los cambios en silencio).
+- Verificado: Organizar + superseries, selector de ejercicios, %1RM con
+  cálculo en vivo, rutina nueva, unilateral, 393 y 360px. A 360px el
+  selector KG/%1RM sobresale 3-7px de su columna (no se corta).

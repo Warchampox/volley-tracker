@@ -436,12 +436,8 @@ button, svg {
   width: 100%;
 }
 .vt-input:focus { outline: none; border-color: var(--blue); }
-.vt-input-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); margin-bottom: var(--sp-4); }
 .vt-mono { font-family: 'IBM Plex Mono', monospace; }
 select.vt-input { appearance: none; -webkit-appearance: none; }
-
-.vt-target-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); }
-.vt-numfield { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--text-dim); flex: 1; }
 
 /* ------------------------- Fila de serie (tabla) -------------------------
    Orden: [nº] [valor] [×] [valor] [RPE] [✓]. Los valores son columnas
@@ -641,14 +637,30 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Nota de entrenador por ejercicio (instrucción, sin comillas) */
 .vt-coach-note { color: var(--text-dim); font-size: var(--fs-sm); font-style: italic; margin: var(--sp-2) 0 2px; }
 
-/* Toggle mini KG / %1RM en el editor de rutina */
-.vt-loadmode { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
-.vt-loadmode button {
-  background: var(--surface); border: 1px solid var(--line); color: var(--text-dim);
-  font-family: inherit; font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-full);
-  cursor: pointer; text-transform: uppercase; letter-spacing: var(--track);
+/* ------------------------- Editor de rutina -------------------------
+   Objetivos como una fila de tabla, con las mismas clases que la fila de
+   serie (.vt-set-caps / .vt-set-row / .vt-set-input / .vt-col-val): 4
+   columnas iguales. El encabezado de la columna de carga es el selector
+   KG / %1RM (.vt-pills). */
+.vt-grow { flex: 1; min-width: 0; }
+.vt-cap-toggle { justify-content: center; }
+.vt-cap-toggle button { padding: 2px var(--sp-1); }
+.vt-target-calc { margin: var(--sp-2) 0 0; }
+.vt-target-calc.is-missing { color: var(--red); }
+/* Nota del entrenador: link "+ Nota" en gris; con nota, el texto mismo es el
+   botón para editarla. El textarea no lleva caja, solo un borde inferior. */
+.vt-note-link {
+  display: block; width: 100%; margin-top: var(--sp-2); padding: var(--sp-2) 0;
+  background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+  font-family: inherit; font-size: var(--fs-sm); text-align: left;
 }
-.vt-loadmode button.is-active { border-color: var(--blue); color: var(--blue); }
+.vt-note-link.has-note { font-style: italic; }
+.vt-note-input {
+  display: block; width: 100%; margin-top: var(--sp-2); padding: var(--sp-2) 0;
+  background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+  color: var(--text); font-family: inherit; font-size: var(--fs-sm); resize: none;
+}
+.vt-note-input:focus { outline: none; border-bottom-color: var(--blue); }
 
 .vt-sticky-footer {
   position: sticky;
