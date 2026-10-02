@@ -646,20 +646,26 @@ function updateOrganizePad() {
   document.documentElement.style.setProperty("--organize-pad", h + "px");
 }
 
-// Un pitido: oscilador → ganancia con ataque/caída cortos → compresor (para
-// que el pico alto no sature el parlante) → salida.
-function tone(at, dur, freq, peak, type) {
-  const o = audioCtx.createOscillator();
+// Un tono: uno o varios osciladores sumados → ganancia con ataque/caída
+// cortos → compresor (para que el pico alto no sature el parlante) → salida.
+// `voices` = [[frecuencia, tipo de onda], ...]; el pico se reparte entre ellas.
+function tone(at, dur, voices, peak) {
   const g = audioCtx.createGain();
   const comp = audioCtx.createDynamicsCompressor();
-  o.type = type;
-  o.frequency.value = freq;
-  o.connect(g); g.connect(comp); comp.connect(audioCtx.destination);
+  g.connect(comp); comp.connect(audioCtx.destination);
   g.gain.setValueAtTime(0.0001, at);
   g.gain.exponentialRampToValueAtTime(peak, at + 0.015);
-  g.gain.setValueAtTime(peak, at + dur - 0.04);
+  g.gain.setValueAtTime(peak, at + dur - 0.06);
   g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  o.start(at); o.stop(at + dur + 0.02);
+  voices.forEach(([freq, type]) => {
+    const o = audioCtx.createOscillator();
+    const v = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    v.gain.value = 1 / voices.length;
+    o.connect(v); v.connect(g);
+    o.start(at); o.stop(at + dur + 0.02);
+  });
 }
 
 function withAudio(fn) {
@@ -671,16 +677,18 @@ function withAudio(fn) {
   } catch (e) { /* sin audio disponible */ }
 }
 
-// Fin del descanso: 3 pitidos de 0,3 s. Onda cuadrada a ~1200 Hz (donde más
-// rinden los parlantes de teléfono) con ganancia alta — la senoidal de 880 Hz
-// a 0,35 de antes casi no se oía en un gimnasio.
+// Fin del descanso: bocina de marcador de voleibol (la del fin de un tiempo
+// muerto o un cambio), sintetizada — sin archivo de audio. Es un solo toque
+// largo y áspero: dos dientes de sierra graves a un intervalo disonante (lo
+// que le da el "zumbido" de bocina) más una cuadrada una octava arriba, que
+// es la parte que de verdad suena en el parlante chico de un teléfono.
 function beep() {
-  withAudio((t) => [0, 0.42, 0.84].forEach((off) => tone(t + off, 0.3, 1200, 0.9, "square")));
+  withAudio((t) => tone(t, 1.1, [[247, "sawtooth"], [311, "sawtooth"], [494, "square"], [622, "square"]], 0.95));
 }
 
-// Cuenta regresiva (3, 2, 1): corto y bastante más suave que el final.
+// Cuenta regresiva (3, 2, 1): pitido corto y bastante más suave que la bocina.
 function beepTick() {
-  withAudio((t) => tone(t, 0.09, 900, 0.25, "square"));
+  withAudio((t) => tone(t, 0.09, [[900, "square"]], 0.25));
 }
 
 /* --------------------------------- Render raíz ---------------------------------- */
