@@ -945,7 +945,11 @@ function actionSheetHTML() {
   const row = (a, ic, label, danger) =>
     `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
   let title, rows;
-  if (kind === "folder") {
+  if (kind === "export") {
+    title = "Exportar";
+    rows = EXPORT_KINDS.map((k) => `<button class="vt-modal-row" data-a="export-pick" data-kind="${k.id}">
+      ${icon(k.ic, 16)}<span class="vt-modal-row-text">${k.label}<small>${k.sub}</small></span></button>`).join("");
+  } else if (kind === "folder") {
     title = routineFolders.find((f) => f.id === id)?.name || "Carpeta";
     rows = row("folder-edit", "pencil", "Renombrar") + row("folder-del", "trash", "Eliminar", true);
   } else if (kind === "session") {
@@ -2287,10 +2291,10 @@ function settingsHTML() {
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Exportar datos<small>Último respaldo: ${settings.lastExportAt ? fmtRelDate(settings.lastExportAt) : "nunca"}</small></div>
-      <button class="vt-btn-icon" data-a="export" aria-label="Exportar datos">${icon("download", 16)}</button>
+      <button class="vt-btn-icon" data-a="sheet-open" data-kind="export" aria-label="Exportar datos">${icon("download", 16)}</button>
     </div>
     <div class="vt-settings-row">
-      <div class="vt-settings-label">Importar datos<small>Respaldo completo o rutinas nuevas</small></div>
+      <div class="vt-settings-label">Importar datos<small>Respaldo completo, o rutinas / entrenamientos / ejercicios</small></div>
       <div style="display:flex;gap:var(--sp-2)">
         <label class="vt-btn-icon" style="cursor:pointer" aria-label="Importar archivo">${icon("upload", 16)}
           <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
@@ -3170,34 +3174,76 @@ async function shareImage(kind, data, filename, shareTitle) {
 
 /* --------------------------------- Export / Import -------------------------------- */
 
-function exportJSON() {
-  const data = {
-    app: "volley-tracker",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    routines,
-    "routine-folders": routineFolders,
-    sessions,
-    "custom-exercises": exercises,
-    "exercise-groups": exerciseGroups,
-    settings,
-  };
+// Qué se puede exportar. "full" es el respaldo completo (lo único que al
+// importarse REEMPLAZA los datos); los otros tres son archivos parciales,
+// pensados para compartir o mover una parte: al importarse se AGREGAN a lo
+// que ya hay, sin borrar nada.
+const EXPORT_KINDS = [
+  { id: "full", ic: "download", label: "Todo", sub: "Respaldo completo, para restaurar en otro teléfono", file: "respaldo" },
+  { id: "routines", ic: "clipboard", label: "Rutinas", sub: "Para compartir: incluye sus ejercicios, sin tus 1RM", file: "rutinas" },
+  { id: "sessions", ic: "trend", label: "Entrenamientos", sub: "Tu historial de sesiones", file: "entrenamientos" },
+  { id: "exercises", ic: "barbell", label: "Ejercicios", sub: "El catálogo y sus grupos, sin tus 1RM", file: "ejercicios" },
+];
+
+// Ejercicios del catálogo con esos ids, sin el 1RM (dato personal: al
+// importarlo, pisaría el 1RM de quien recibe el archivo) + los grupos que usan.
+function exportableExercises(ids) {
+  const list = exercises.filter((e) => !ids || ids.has(e.id)).map(({ oneRM, ...rest }) => rest);
+  const used = new Set(list.map((e) => e.group));
+  return { "custom-exercises": list, "exercise-groups": exerciseGroups.filter((g) => used.has(g.name)) };
+}
+
+function buildExportData(kind) {
+  const base = { app: "volley-tracker", version: 1, kind, exportedAt: new Date().toISOString() };
+  if (kind === "routines") {
+    const folderIds = new Set(routines.map((r) => r.folderId).filter(Boolean));
+    return { ...base, routines, "routine-folders": routineFolders.filter((f) => folderIds.has(f.id)),
+      ...exportableExercises(new Set(routines.flatMap((r) => r.exercises.map((x) => x.exerciseId)))) };
+  }
+  if (kind === "sessions")
+    return { ...base, sessions, ...exportableExercises(new Set(sessions.flatMap((x) => x.exercises.map((e) => e.exerciseId)))) };
+  if (kind === "exercises") return { ...base, ...exportableExercises(null) };
+  return { ...base, routines, "routine-folders": routineFolders, sessions, "custom-exercises": exercises, "exercise-groups": exerciseGroups, settings };
+}
+
+async function exportJSON(kind = "full") {
+  const def = EXPORT_KINDS.find((k) => k.id === kind) || EXPORT_KINDS[0];
+  const name = `goat-${def.file}-${new Date().toISOString().slice(0, 10)}.json`;
   try {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `volley-tracker-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const blob = new Blob([JSON.stringify(buildExportData(def.id), null, 2)], { type: "application/json" });
+    // Los parciales se comparten por la hoja del sistema (WhatsApp, AirDrop,
+    // etc.) cuando el teléfono lo permite; si no, se descargan igual que el
+    // respaldo completo.
+    let shared = false;
+    if (def.id !== "full") {
+      const file = new File([blob], name, { type: "application/json" });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: `GOAT · ${def.label}` });
+          shared = true;
+        }
+      } catch (err) {
+        if (err?.name === "AbortError") return; // cerró la hoja de compartir: no es un error
+      }
+    }
+    if (!shared) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
   } catch (err) {
-    askAlert("No se pudo generar el respaldo.");
+    askAlert("No se pudo generar el archivo.");
     return;
   }
-  // Fecha del último respaldo: alimenta el recordatorio de Rutinas y el
-  // subtítulo de "Exportar datos" en Ajustes.
-  settings.lastExportAt = new Date().toISOString();
-  delete settings.backupSnoozeUntil;
-  persistSettings();
+  // Solo el respaldo COMPLETO cuenta como "último respaldo" (alimenta el
+  // recordatorio de Rutinas y el subtítulo de "Exportar datos" en Ajustes).
+  if (def.id === "full") {
+    settings.lastExportAt = new Date().toISOString();
+    delete settings.backupSnoozeUntil;
+    persistSettings();
+  }
   render();
 }
 
@@ -3218,55 +3264,79 @@ function backupReminderText() {
 // Separado de importJSON(file) para poder reutilizarlo desde "Pegar JSON"
 // (que ya tiene el objeto parseado, sin pasar por FileReader).
 function processImportedData(data) {
-    const inExercises = data["custom-exercises"] || data.exercises || null;
-    const inFolders = data["routine-folders"] || data.routineFolders || null;
+  const inExercises = data["custom-exercises"] || data.exercises || null;
+  const inFolders = data["routine-folders"] || data.routineFolders || null;
+  const inGroups = data["exercise-groups"];
+  // Respaldo completo = trae sesiones y NO viene marcado como parcial (los
+  // archivos de antes de que existiera `kind` son todos completos).
+  const isFull = Array.isArray(data.sessions) && (!data.kind || data.kind === "full");
 
-    if (Array.isArray(data.sessions)) {
-      // Respaldo completo: reemplaza todo.
-      askConfirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
-        if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
-        if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
-        sessions = data.sessions; persistSessions();
-        if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
-        if (Array.isArray(data["exercise-groups"]) && data["exercise-groups"].length) { exerciseGroups = data["exercise-groups"]; persistGroups(); }
-        if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
-        askAlert("Respaldo restaurado ✔");
-      }, true);
-      return;
+  if (isFull) {
+    askConfirm("Este archivo es un respaldo completo. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
+      if (Array.isArray(data.routines)) { routines = data.routines; persistRoutines(); }
+      if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
+      sessions = data.sessions; persistSessions();
+      if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
+      if (Array.isArray(inGroups) && inGroups.length) { exerciseGroups = inGroups; persistGroups(); }
+      if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
+      askAlert("Respaldo restaurado ✔");
+    }, true);
+    return;
+  }
+
+  // Archivo parcial (rutinas, entrenamientos y/o ejercicios): se AGREGA a lo
+  // que ya hay, nunca borra. Lo que ya existe con el mismo id se actualiza,
+  // salvo las sesiones, que no se tocan.
+  if (!Array.isArray(data.routines) && !Array.isArray(inExercises) && !Array.isArray(data.sessions)) {
+    askAlert("El archivo no tiene rutinas, entrenamientos, ejercicios ni un respaldo reconocible.");
+    return;
+  }
+  let nEx = 0, nRt = 0, nSes = 0;
+  if (Array.isArray(inGroups)) {
+    // Solo grupos que no existen (por nombre): no pisa los colores propios.
+    for (const g of inGroups)
+      if (g?.name && !exerciseGroups.some((x) => x.name === g.name)) exerciseGroups.push({ name: g.name, color: g.color || GROUP_PALETTE[0] });
+    persistGroups();
+  }
+  if (Array.isArray(inExercises)) {
+    for (const e of inExercises) {
+      if (!e.id || !e.name) continue;
+      const i = exercises.findIndex((x) => x.id === e.id);
+      if (i >= 0) exercises[i] = { ...exercises[i], ...e };
+      else { exercises.push({ group: "Custom", type: "weight", ...e }); nEx++; }
     }
-    if (Array.isArray(data.routines) || Array.isArray(inExercises)) {
-      // Solo rutinas y/o ejercicios nuevos: se agregan sin borrar nada.
-      let nEx = 0, nRt = 0;
-      if (Array.isArray(inExercises)) {
-        for (const e of inExercises) {
-          if (!e.id || !e.name) continue;
-          const i = exercises.findIndex((x) => x.id === e.id);
-          if (i >= 0) exercises[i] = { ...exercises[i], ...e };
-          else { exercises.push({ group: "Custom", type: "weight", ...e }); nEx++; }
-        }
-        persistExercises();
-      }
-      if (Array.isArray(inFolders)) {
-        for (const f of inFolders) {
-          if (!f.id || !f.name) continue;
-          const i = routineFolders.findIndex((x) => x.id === f.id);
-          if (i >= 0) routineFolders[i] = f; else routineFolders.push(f);
-        }
-        persistFolders();
-      }
-      if (Array.isArray(data.routines)) {
-        for (const r of data.routines) {
-          if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
-          const i = routines.findIndex((x) => x.id === r.id);
-          if (i >= 0) routines[i] = r; else { routines.unshift(r); nRt++; }
-        }
-        persistRoutines();
-      }
-      askAlert(`Importado ✔  ${nRt} rutina(s) y ${nEx} ejercicio(s) nuevos.`);
-    } else {
-      askAlert("El archivo no tiene rutinas, ejercicios ni un respaldo reconocible.");
+    persistExercises();
+  }
+  if (Array.isArray(inFolders)) {
+    for (const f of inFolders) {
+      if (!f.id || !f.name) continue;
+      const i = routineFolders.findIndex((x) => x.id === f.id);
+      if (i >= 0) routineFolders[i] = f; else routineFolders.push(f);
     }
-    render();
+    persistFolders();
+  }
+  if (Array.isArray(data.routines)) {
+    for (const r of data.routines) {
+      if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
+      const i = routines.findIndex((x) => x.id === r.id);
+      if (i >= 0) routines[i] = r; else { routines.unshift(r); nRt++; }
+    }
+    persistRoutines();
+  }
+  if (Array.isArray(data.sessions)) {
+    const have = new Set(sessions.map((x) => x.id));
+    for (const ses of data.sessions) {
+      if (!ses.id || !ses.date || !Array.isArray(ses.exercises) || have.has(ses.id)) continue;
+      sessions.push(ses); nSes++;
+    }
+    sessions.sort((a, b) => b.date.localeCompare(a.date)); // siempre de más nueva a más vieja
+    persistSessions();
+  }
+  const parts = [];
+  if (Array.isArray(data.routines)) parts.push(`${nRt} rutina(s)`);
+  if (Array.isArray(data.sessions)) parts.push(`${nSes} entrenamiento(s)`);
+  if (Array.isArray(inExercises)) parts.push(`${nEx} ejercicio(s)`);
+  askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.`);
 }
 
 function importJSON(file) {
@@ -4129,7 +4199,8 @@ document.addEventListener("click", (e) => {
       break;
     }
 
-    case "export": exportJSON(); break;
+    case "export": exportJSON(); break; // respaldo completo directo (banner de recordatorio)
+    case "export-pick": exportJSON(el.dataset.kind); break;
     case "export-from-alert": // botón del aviso "no se pudo guardar": exporta y deja a la vista la sección Datos
       ui.infoDialog = null;
       ui.tab = "ajustes";

@@ -41,6 +41,12 @@
   nunca exportado con 3+ sesiones) y el subtítulo de Ajustes.
   `settings.backupSnoozeUntil` lo pospone 7 días.
 - El respaldo incluye `exercise-groups` desde 2026-10-02.
+- Exportación diferenciada (`EXPORT_KINDS`, campo `kind` en el JSON):
+  `full` (respaldo), `routines`, `sessions`, `exercises`. Regla de
+  importación: SOLO el respaldo completo reemplaza los datos; los
+  archivos parciales se AGREGAN sin borrar nada (las sesiones se
+  fusionan por id). Los parciales no llevan `oneRM` (dato personal:
+  pisaría el de quien recibe) ni cuentan como "último respaldo".
 - `save()` nunca lanza: si localStorage falla avisa una vez y la app
   sigue en memoria. Al cargar se pide `navigator.storage.persist()`.
 

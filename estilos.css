@@ -729,6 +729,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-modal-row:hover { background: var(--surface-2); }
 .vt-modal-row-danger { color: var(--red); }
+/* Fila de hoja con título + explicación debajo (menú de exportar). */
+.vt-modal-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vt-modal-row-text small { font-size: var(--fs-sm); color: var(--text-dim); }
 .vt-modal-row-action { color: var(--blue); }
 /* Fila que no es un botón entero (trae su propio botón de quitar a la derecha). */
 .vt-modal-row-static { cursor: default; padding-top: var(--sp-1); padding-bottom: var(--sp-1); }

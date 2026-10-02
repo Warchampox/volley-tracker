@@ -1195,3 +1195,19 @@ Entradas nuevas al final. No reescribir lo anterior.
   libre, unilateral en editor y en el conteo de saltos. Sin errores de
   consola. Pendiente en teléfono: volumen de la bocina, interruptores,
   deslizar/tocar con el dedo.
+
+## 2026-10-02 cont. — Exportación diferenciada
+- El botón de exportar en Ajustes abre una hoja con 4 opciones: Todo
+  (respaldo), Rutinas, Entrenamientos y Ejercicios (`EXPORT_KINDS`,
+  `buildExportData`, campo `kind` en el archivo). Rutinas y
+  Entrenamientos incluyen los ejercicios y grupos que usan; los
+  parciales van sin 1RM. Los parciales intentan la hoja de compartir
+  del sistema y, si no se puede, se descargan.
+- Importar: solo el respaldo completo reemplaza; los parciales se
+  agregan (sesiones fusionadas por id, grupos nuevos por nombre).
+  Archivos viejos sin `kind` siguen funcionando igual.
+- Verificado en el navegador: los 4 archivos, importar rutinas en un
+  estado "de amigo" (no pisa su 1RM, crea ejercicio y grupo faltantes),
+  fusionar sesiones, reimportar sin duplicar, respaldo completo. No
+  probado: la hoja de compartir del sistema (solo existe en teléfono).
+  sw.js v31 → v32.
