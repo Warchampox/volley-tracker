@@ -1132,3 +1132,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   44×44 con ::before en ⋯, íconos, check, RPE, píldoras y botones de
   texto. Pendiente: oír el pitido y probar los interruptores en el
   teléfono.
+
+## 2026-10-02 cont. — Mejoras, Fase 2 de 5: detalles de datos
+- Detalle de ejercicio (peso × reps): línea "Estimado: 67,5 kg de
+  53 × 8" + "Usar" (`bestEpley`, `oneRMHintHTML`), visible sin 1RM
+  guardado o si difiere más de 5%. Decisión: el estimado se redondea a
+  2,5 kg, igual que la sugerencia del resumen de sesión (`epley1RM`
+  compartido).
+- Gráfico de peso máx. del detalle: el eje Y parte en el mínimo del
+  rango × 0,85 redondeado a múltiplo de 5; volumen, reps y tiempo
+  siguen desde 0.
+- "Tus ejercicios": el valor grande es el récord histórico y el
+  subtítulo agrega "· última 45 kg" si la última sesión quedó debajo.
+  Ejercicios: "Sin marca · ayer" cuando hay uso pero ninguna marca.

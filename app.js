@@ -338,6 +338,28 @@ function prFlags(type, sets, prior, unilateral) {
   });
 }
 
+// 1RM estimado (Epley), redondeado al disco de 2,5 kg más cercano. Solo es
+// confiable entre 1 y 12 reps con peso — fuera de eso devuelve 0.
+const epley1RM = (w, r) => (w > 0 && r >= 1 && r <= 12) ? Math.round(w * (1 + r / 30) / 2.5) * 2.5 : 0;
+
+// Mejor estimación de 1RM en todo el historial de un ejercicio, con la serie
+// de la que sale: {est, weight, reps} o null. Mismo criterio que los PRs
+// (C/D/F no cuentan; en unilateral, las reps del lado más débil).
+function bestEpley(exId) {
+  const uni = exUnilateral(exId);
+  let best = null;
+  for (const s of sessions)
+    for (const e of s.exercises)
+      if (e.exerciseId === exId)
+        for (const st of e.sets) {
+          if (getSetType(st)) continue;
+          const w = num(st.weight), r = uni ? Math.min(repsL(st), repsR(st)) : num(st.reps);
+          const est = epley1RM(w, r);
+          if (est > 0 && (!best || est > best.est)) best = { est, weight: w, reps: r };
+        }
+  return best;
+}
+
 // Superseries: por índice devuelve null (suelto) o {letter, pos, isLast}.
 // Un grupo parte donde linkPrev es false y se extiende mientras el siguiente tenga linkPrev.
 // Solo los grupos de 2+ ejercicios llevan etiqueta (A1, A2..., B1...).
@@ -1770,9 +1792,13 @@ function exerciseRowHTML(exId) {
   const sub = !current ? `sin registros en ${words}`
     : delta === 0 ? `sin cambios en ${words}`
     : `<b class="${delta > 0 ? "vt-sum-up" : ""}">${fmtMetric(delta, metric, true)}</b> en ${words}`;
-  const [val, unit] = current ? fmtMark(exId, current.v, metric).split(" ") : ["—", ""];
+  // El valor grande es el RÉCORD histórico (coincide con "Récords
+  // recientes"); si la última sesión quedó por debajo, el subtítulo lo dice.
+  const lastPt = st?.points[st.points.length - 1];
+  const belowRecord = st && st.best !== null && lastPt && lastPt.v < st.best ? ` · última ${fmtMark(exId, lastPt.v, metric)}` : "";
+  const [val, unit] = st && st.best !== null ? fmtMark(exId, st.best, metric).split(" ") : ["—", ""];
   return `<button class="vt-exrow" data-a="prog-detail-open" data-id="${exId}">
-    <span class="vt-exrow-text"><span class="vt-exrow-name">${esc(exName(exId))}</span><span class="vt-exrow-sub">${sub}</span></span>
+    <span class="vt-exrow-text"><span class="vt-exrow-name">${esc(exName(exId))}</span><span class="vt-exrow-sub">${sub}${belowRecord}</span></span>
     ${sparklineHTML(data.map((p) => p.v))}
     <span class="vt-exrow-value">${val}${unit ? `<small>${unit}</small>` : ""}</span>
   </button>`;
@@ -1816,6 +1842,21 @@ function featuredSheetHTML() {
 }
 
 /* ----------------------------- Detalle de ejercicio ----------------------------- */
+
+// Línea bajo el 1RM (solo peso × reps): "Estimado: 67,5 kg de 53 × 8" + botón
+// "Usar". Aparece si no hay 1RM guardado, o si el guardado difiere más de un
+// 5% del estimado (hacia cualquier lado).
+function oneRMHintHTML(ex) {
+  if ((ex.type || "weight") !== "weight") return "";
+  const b = bestEpley(ex.id);
+  if (!b) return "";
+  const saved = num(ex.oneRM);
+  if (saved > 0 && Math.abs(b.est - saved) / saved <= 0.05) return "";
+  return `<div class="vt-hint-row">
+    <span>Estimado: <b>${fmtNum(b.est)} kg</b> <span class="vt-hint-dim">de ${fmtNum(b.weight)} × ${b.reps}</span></span>
+    <button class="vt-text-btn" data-a="onerm-use" data-id="${ex.id}" data-value="${b.est}">Usar</button>
+  </div>`;
+}
 
 // Pantalla que se abre al tocar un ejercicio — en "Tus ejercicios" de
 // Progreso o en la pestaña Ejercicios (filas y Recientes): gráfico con
@@ -1873,13 +1914,14 @@ function exerciseDetailHTML() {
         : `<p class="vt-muted">Sin registros en ${RANGE_WORDS[ui.progressRange]}.</p>`}
     </section>`}
     ${ex.type === "time" ? "" : `<section class="vt-section">
-      <p class="vt-section-eyebrow">1RM estimado</p>
+      <p class="vt-section-eyebrow">1RM</p>
       <div class="vt-rows"><label class="vt-row vt-row-center">
         <span class="vt-row-name">Tu máximo a una repetición</span>
         <span class="vt-row-input"><input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
           value="${num(ex.oneRM) > 0 ? num(ex.oneRM) : ""}" data-i="featured-rm" data-id="${exId}"
           autocomplete="off" autocorrect="off" spellcheck="false" name="f_maxrm_${exId}"> kg</span>
       </label></div>
+      ${oneRMHintHTML(ex)}
     </section>`}
     ${!lastPR ? "" : `<section class="vt-section">
       <p class="vt-section-eyebrow vt-eyebrow-pr">Último récord</p>
@@ -1948,12 +1990,14 @@ function progressHTML() {
 // detalle): ticks mono 10px, sin grilla en X, grilla Y tenue, sin bordes de
 // eje ni leyenda. El eje Y SIEMPRE parte en 0 — con un solo punto Chart.js
 // centraba el eje en el dato y mostraba valores negativos (−1,0 a 1,0).
-function chartScales(yFormat) {
+// yMin > 0 solo lo usa el gráfico de peso máx. del detalle de ejercicio: ahí
+// partir en 0 aplastaba la curva contra el techo.
+function chartScales(yFormat, yMin = 0) {
   const tick = { color: "#8FA0AC", font: { family: "'IBM Plex Mono', monospace", size: 10 } };
   return {
     x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8 } },
     y: {
-      beginAtZero: true, min: 0, grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
+      beginAtZero: yMin === 0, min: yMin, grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
       grid: { color: "#1B1B1F" }, border: { display: false },
       ticks: { ...tick, maxTicksLimit: 4, callback: yFormat },
     },
@@ -1994,7 +2038,7 @@ function mountChart() {
   const line = (label, data, color) => ({ label, data: data.map((p) => p.v), borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 3, cubicInterpolationMode: "monotone" }); // monotone: la curva no se pasa de los puntos (ni baja de 0)
   const yFormat = (v) => metric === "seconds" ? fmtClockInput(v) : fmtNum(v);
   const splitBySide = exUnilateral(exId) && metric === "reps";
-  let labels, datasets;
+  let labels, datasets, yMin = 0;
   if (splitBySide) {
     const dataL = progressDataSide(exId, "repsL"), dataR = progressDataSide(exId, "repsR");
     labels = (dataL.length >= dataR.length ? dataL : dataR).map((p) => p.date);
@@ -2003,6 +2047,11 @@ function mountChart() {
     const data = progressData(exId, metric);
     labels = data.map((p) => p.date);
     datasets = [line("", data, "#3B6FE0")];
+    // Peso máx.: el eje parte un 15% bajo el valor más bajo del rango,
+    // redondeado hacia abajo a múltiplo de 5 (nunca negativo). El resto de
+    // las métricas (volumen, reps, tiempo) sigue partiendo en 0.
+    if (metric === "weight" && data.length)
+      yMin = Math.max(0, Math.floor(Math.min(...data.map((p) => p.v)) * 0.85 / 5) * 5);
   }
   chart = new Chart(canvas, {
     type: "line",
@@ -2012,7 +2061,7 @@ function mountChart() {
         legend: { display: splitBySide, labels: { color: "#8FA0AC", boxWidth: 10, boxHeight: 10, font: { family: "'IBM Plex Mono', monospace", size: 10 } } },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label ? c.dataset.label + ": " : ""}${yFormat(c.parsed.y)}` } },
       },
-      scales: chartScales(yFormat),
+      scales: chartScales(yFormat, yMin),
     },
   });
 }
@@ -2062,7 +2111,7 @@ function catalogRowHTML(e, st) {
   const parts = [...kind];
   if (!st) parts.push("Sin registros");
   else {
-    if (st.best !== null) parts.push(`Mejor <b>${fmtMark(e.id, st.best, st.metric)}</b>`);
+    parts.push(st.best !== null ? `Mejor <b>${fmtMark(e.id, st.best, st.metric)}</b>` : "Sin marca");
     parts.push(fmtRelDate(st.lastDate));
   }
   const curve = st && st.points.length >= 3 ? sparklineHTML(st.points.slice(-10).map((p) => p.v), 56, 20) : "<span></span>";
@@ -2498,7 +2547,7 @@ function finishSession() {
         for (const x of e.sets) {
           if (!x.done || getSetType(x)) continue;
           const w = num(x.weight), r = uni ? Math.min(repsL(x), repsR(x)) : num(x.reps);
-          if (w > 0 && r >= 1 && r <= 12) best = Math.max(best, Math.round(w * (1 + r / 30) / 2.5) * 2.5);
+          best = Math.max(best, epley1RM(w, r));
         }
         if (best > num(map[e.exerciseId]?.oneRM)) hit.suggestedOneRM = best;
       }
@@ -3686,6 +3735,11 @@ document.addEventListener("click", (e) => {
 
     /* Progreso */
     case "prog-metric": ui.progressMetric = el.dataset.m; render(); break;
+    case "onerm-use": {
+      const ex = exercises.find((x) => x.id === id);
+      if (ex) { ex.oneRM = num(el.dataset.value); persistExercises(); render(); }
+      break;
+    }
     case "prog-detail-open":
       ui.detailReturnScroll = window.scrollY; // para volver a la misma altura de la lista
       ui.progressDetail = id; ui.progressMetric = null;
