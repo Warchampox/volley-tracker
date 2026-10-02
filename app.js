@@ -535,7 +535,7 @@ function fmtSet(type, s, unilateral) {
 
 /* -------------------------- Cronómetro de descanso ------------------------------- */
 
-let rest = null; // { ends, total, timer, lastLeft }
+let rest = null; // { ends, total, timer }
 let audioCtx = null;
 
 function startRest(seconds) {
@@ -544,7 +544,7 @@ function startRest(seconds) {
   // propio (>0), simplemente no arranca descanso automático.
   const secs = Math.round(num(seconds));
   if (secs <= 0) return;
-  rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250), lastLeft: secs };
+  rest = { ends: Date.now() + secs * 1000, total: secs, timer: setInterval(tickRest, 250) };
   updateRestBar();
 }
 
@@ -561,7 +561,6 @@ function adjustRest(deltaSec) {
   rest.ends = Math.max(Date.now(), rest.ends + deltaSec * 1000);
   const left = Math.ceil((rest.ends - Date.now()) / 1000);
   rest.total = Math.max(rest.total, left);
-  rest.lastLeft = left; // un ajuste manual no dispara los pitidos de cuenta regresiva
   tickRest();
 }
 
@@ -574,12 +573,6 @@ function tickRest() {
     if (settings.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
     updateRestBar();
     return;
-  }
-  // Aviso corto y suave al entrar a los últimos 3, 2 y 1 segundos.
-  const left = Math.ceil((rest.ends - Date.now()) / 1000);
-  if (left !== rest.lastLeft) {
-    if (left <= 3 && left >= 1 && left < rest.lastLeft) beepTick();
-    rest.lastLeft = left;
   }
   updateRestBar();
 }
@@ -683,11 +676,6 @@ function withAudio(fn) {
 // es la parte que de verdad suena en el parlante chico de un teléfono.
 function beep() {
   withAudio((t) => tone(t, 1.1, [[247, "sawtooth"], [311, "sawtooth"], [494, "square"], [622, "square"]], 0.95));
-}
-
-// Cuenta regresiva (3, 2, 1): pitido corto y bastante más suave que la bocina.
-function beepTick() {
-  withAudio((t) => tone(t, 0.09, [[900, "square"]], 0.25));
 }
 
 /* --------------------------------- Render raíz ---------------------------------- */
