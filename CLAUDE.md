@@ -22,6 +22,28 @@
   etc.) ya quedó validado — ver STATUS.md de esas fechas antes de
   repartir desde cero.
 
+## Datos (campos opcionales, todos viajan tal cual en el export/import)
+- `exercise.countsJumps` (boolean): si las reps del ejercicio cuentan
+  como saltos. Sin definir = `true` solo para el grupo "Pliometría"
+  (helper `countsJumps(ex)`); se guarda explícito solo cuando difiere
+  de ese valor por defecto. Tipo tiempo nunca cuenta.
+- Saltos en gimnasio (`sessionJumps`): suma de reps de todas las
+  series guardadas (calentamiento incluido; en unilateral izq + der)
+  de los ejercicios que cuentan. Mide SOLO sesiones de pesas — la
+  interfaz tiene que decir siempre que no incluye cancha. Sin alertas
+  ni umbrales.
+- `session.rpe` (entero 1–10, opcional): RPE de la sesión, se pregunta
+  en el resumen y se puede cambiar en el detalle de sesión. Carga =
+  `rpe × minutos` en "UA" (`sessionLoad`); solo cuentan las sesiones
+  que respondieron.
+- `settings.lastExportAt` (ISO): último respaldo exportado; alimenta
+  el banner de recordatorio en Rutinas (14 días + sesiones nuevas, o
+  nunca exportado con 3+ sesiones) y el subtítulo de Ajustes.
+  `settings.backupSnoozeUntil` lo pospone 7 días.
+- El respaldo incluye `exercise-groups` desde 2026-10-02.
+- `save()` nunca lanza: si localStorage falla avisa una vez y la app
+  sigue en memoria. Al cargar se pide `navigator.storage.persist()`.
+
 ## Diseño visual (decidido, no reabrir sin pedido explícito)
 - Estilo tabla (ref. Hevy): sin tarjetas encajonadas, divisores finos,
   radio de esquina solo en elementos táctiles, acento vertical por
@@ -84,6 +106,26 @@ Patrones (reutilizar, no inventar variantes):
 - Detalle de ejercicio (`exerciseDetailHTML`, `ui.progressDetail`): un
   solo componente, se abre desde Ejercicios o desde Progreso y se
   dibuja sobre la pestaña donde se abrió.
+- Detalle de sesión (`sessionDetailHTML`, `ui.sessionDetail`): mismo
+  encabezado que el detalle de ejercicio (volver + eyebrow + título +
+  ⋯), franja de stats, "Lo que hiciste" con notas (`doneListHTML`,
+  compartido con el resumen), carga/RPE, saltos y botón Repetir.
+- Fila de historial (`sessionRowHTML`): nombre en Barlow + "fecha ·
+  duración · volumen" + trofeo con la cantidad de récords + chevron;
+  sesiones agrupadas por mes con el total del mes en el label.
+- Selector compacto de filtros = `.vt-pills` (rango de Progreso,
+  métrica del detalle, rango del Historial, KG/%1RM del editor).
+  Nunca chips con scroll horizontal.
+- Interruptor (`.vt-switch`): checkbox con pista 44×26 y perilla
+  blanca, azul encendido. En Ajustes y en el modal de ejercicio.
+- Editor de rutina: mismo bloque que la sesión en vivo; objetivos como
+  fila de tabla (`targetColumns`, clases de la fila de serie); nota
+  como link "+ Nota"; `leaveEditor` avisa si hay cambios sin guardar.
+- Áreas táctiles: todo control chico lleva un `::before` de 44×44
+  (lista al final de estilos.css); al crear un control nuevo de menos
+  de 44px, agregarlo ahí.
+- Fin del descanso: bocina de marcador sintetizada (`beep()`), un solo
+  toque, sin cuenta regresiva. La barra tiene −15 s / +15 s.
 - Selectores chicos como píldoras (`.vt-pills`), pestañas internas
   subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
   acciones secundarias, borde sólido (`.vt-btn-solid`) para acciones

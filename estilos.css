@@ -743,7 +743,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-modal-form { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-modal-form label { font-size: var(--fs-xs); color: var(--text-dim); display: flex; flex-direction: column; gap: var(--sp-1); }
 .vt-textarea { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); resize: vertical; min-height: 160px; }
-.vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-modal-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-modal-form label.vt-modal-toggle-row { flex-direction: row; cursor: pointer; }
+.vt-modal-toggle-row small { display: block; font-size: var(--fs-xs); margin-top: 2px; }
 .vt-modal-actions { display: flex; gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-4); }
 .vt-modal-actions .vt-btn-primary { flex: 1; }
 .vt-modal-actions .vt-btn-ghost { flex: 1; justify-content: center; }
@@ -876,6 +878,28 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: var(--text-dim); cursor: pointer; white-space: nowrap;
 }
 .vt-pills button.is-active { background: var(--surface-2); color: var(--text); }
+
+/* Saltos en gimnasio y carga de sesión. */
+.vt-jumps-line { margin: var(--sp-3) 0 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-jumps-line b, .vt-load-line b { color: var(--text); font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+.vt-load-line { margin: 0; font-size: var(--fs-md); color: var(--text-dim); }
+/* Número grande de una sección + comparación al lado, en gris. */
+.vt-big-stat { margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-2xl); font-weight: 600; }
+.vt-big-stat small { margin-left: var(--sp-2); font-family: 'IBM Plex Sans', sans-serif; font-size: var(--fs-sm); font-weight: 400; color: var(--text-dim); }
+/* Pie de sección: qué mide (y qué no) el dato de arriba. */
+.vt-footnote { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-dim); }
+/* RPE de sesión: 10 botones (1–10) en una fila, pegados entre sí (bordes
+   compartidos) para que quepan a 360px con al menos 32×44 cada uno. */
+.vt-rpe-scale { display: grid; grid-template-columns: repeat(10, minmax(32px, 1fr)); }
+.vt-rpe-scale button {
+  min-height: 44px; padding: 0; margin-left: -1px;
+  background: transparent; border: 1px solid var(--line); border-radius: 0;
+  color: var(--text-dim); cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-md); font-weight: 600;
+}
+.vt-rpe-scale button:first-child { margin-left: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.vt-rpe-scale button:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.vt-rpe-scale button.is-active { position: relative; background: var(--blue); border-color: var(--blue); color: #FFFFFF; }
 
 /* Gráfico sin caja alrededor. */
 .vt-chart-flat { margin-top: var(--sp-2); }

@@ -163,6 +163,7 @@ const ui = {
   picker: null,           // null | "editor" | "session" | "featured" | "replace"
   pickerQuery: "",
   sessionDetail: null,    // id de la sesión cuyo detalle está abierto (Historial), o null
+  sessionRpeEdit: false,  // en el detalle de sesión: mostrando los botones 1–10 para poner/cambiar el RPE
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
   progressDetail: null,      // id del ejercicio cuyo detalle está abierto (desde Ejercicios o Progreso), o null
@@ -337,6 +338,39 @@ function prFlags(type, sets, prior, unilateral) {
     if (num(st.weight) > 0) run.anyLastre = true;
     return hit;
   });
+}
+
+/* ------------------------ Saltos en gimnasio y carga de sesión ------------------------ */
+
+// ¿Las reps de este ejercicio cuentan como saltos? Campo opcional del
+// catálogo (`countsJumps`); si no está definido, cuentan los del grupo
+// "Pliometría" y nada más. Los de tipo tiempo nunca cuentan.
+const countsJumps = (ex) => !!ex && ex.type !== "time" && (ex.countsJumps ?? ex.group === "Pliometría");
+
+// Saltos de una sesión guardada: suma de las reps de TODAS sus series (las
+// guardadas son las completadas, calentamiento incluido) en los ejercicios
+// que cuentan; en unilateral, izquierda + derecha. OJO: esto mide solo lo
+// registrado en sesiones de pesas — los saltos en cancha no se miden.
+function sessionJumps(session, map = exMap()) {
+  return session.exercises.reduce((acc, e) => {
+    const ex = map[e.exerciseId];
+    if (!countsJumps(ex)) return acc;
+    return acc + e.sets.reduce((a, st) => a + (ex.unilateral ? repsL(st) + repsR(st) : num(st.reps)), 0);
+  }, 0);
+}
+
+// Carga de una sesión = RPE de sesión (1–10, `session.rpe`, opcional) ×
+// minutos de duración, en "UA" (unidades arbitrarias). null si no tiene RPE.
+const sessionMinutes = (session) => Math.max(1, Math.round(num(session.durationSec) / 60));
+const sessionLoad = (session) => session.rpe ? session.rpe * sessionMinutes(session) : null;
+
+// Línea "48 saltos en gimnasio" (resumen de sesión y detalle de sesión).
+const jumpsLineHTML = (n) => n > 0 ? `<p class="vt-jumps-line"><b>${fmtNum(n)}</b> salto${n !== 1 ? "s" : ""} en gimnasio</p>` : "";
+
+// Fila de 10 botones (1–10) para el RPE de la sesión. Tocar el elegido lo quita.
+function rpeButtonsHTML(sessionId, current) {
+  return `<div class="vt-rpe-scale">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
+    `<button class="${current === n ? "is-active" : ""}" data-a="session-rpe" data-id="${sessionId}" data-value="${n}" aria-label="RPE ${n}">${n}</button>`).join("")}</div>`;
 }
 
 // 1RM estimado (Epley), redondeado al disco de 2,5 kg más cercano. Solo es
@@ -684,7 +718,8 @@ function beep() {
 /* --------------------------------- Render raíz ---------------------------------- */
 
 const $app = document.getElementById("app");
-let chart = null;
+let chart = null;       // gráfico principal: volumen (Resumen) o línea del detalle de ejercicio
+let extraCharts = [];   // gráficos adicionales del Resumen (saltos, carga)
 
 // "rutinas" fusiona lo que antes eran dos pestañas separadas (Rutinas +
 // Entrenar): muestra la sesión activa cuando hay una y no está minimizada,
@@ -1522,9 +1557,19 @@ function sessionDetailHTML() {
       { label: "Volumen", value: volValue, unit: volUnit },
       { label: "Series", value: done.reduce((a, e) => a + e.sets.length, 0) },
     ])}
+    ${jumpsLineHTML(sessionJumps(s))}
     <section class="vt-section">
       <p class="vt-section-eyebrow">Lo que hiciste</p>
       ${doneListHTML(done, sessionPRs()[s.id] || new Set(), true)}
+    </section>
+    <section class="vt-section">
+      <div class="vt-sec-head">
+        <p class="vt-section-eyebrow">Carga</p>
+        ${s.rpe && !ui.sessionRpeEdit ? `<button class="vt-text-btn" data-a="session-rpe-edit">Cambiar</button>` : ""}
+      </div>
+      ${ui.sessionRpeEdit ? rpeButtonsHTML(s.id, s.rpe || null)
+        : s.rpe ? `<p class="vt-load-line">RPE <b>${s.rpe}</b> · <b>${fmtNum(sessionLoad(s))}</b> UA</p>`
+        : `<button class="vt-text-btn" data-a="session-rpe-edit">Agregar RPE</button>`}
     </section>
     <div class="vt-sum-actions">
       <button class="vt-btn-primary vt-full vt-flex" data-a="session-repeat" data-id="${s.id}">${icon("repeat", 16)} Repetir</button>
@@ -2084,9 +2129,48 @@ function progressHTML() {
         ? `<div class="vt-chart-flat"><canvas id="prog-canvas" height="200"></canvas></div>`
         : `<p class="vt-muted">Sin sesiones en ${RANGE_WORDS[ui.progressRange]}.</p>`}
     </section>
+    ${jumpsSectionHTML()}
+    ${loadSectionHTML()}
     ${reparto.length ? `<section class="vt-section"><p class="vt-section-eyebrow">Reparto</p>${repartoHTML(reparto)}</section>` : ""}
     ${recentRecordsHTML()}
     ${yourExercisesHTML()}`;
+}
+
+// "Saltos en gimnasio": solo aparece si algún ejercicio que cuenta como
+// saltos tiene historial. Sin alertas ni umbrales — solo el dato.
+function jumpsSectionHTML() {
+  const map = exMap();
+  if (!sessions.some((s) => s.exercises.some((e) => e.sets.length && countsJumps(map[e.exerciseId])))) return "";
+  const thisWeek = weekKey(new Date());
+  const prev = new Date(); prev.setDate(prev.getDate() - 7);
+  const lastWeek = weekKey(prev);
+  const sum = (key) => sessions.filter((s) => weekKey(new Date(s.date)) === key).reduce((a, s) => a + sessionJumps(s, map), 0);
+  return `<section class="vt-section">
+    <div class="vt-sec-head">
+      <p class="vt-section-eyebrow">Saltos en gimnasio</p>
+      ${rangeChipsHTML()}
+    </div>
+    <p class="vt-big-stat">${fmtNum(sum(thisWeek))}<small>esta semana · vs ${fmtNum(sum(lastWeek))} la semana pasada</small></p>
+    ${computeBuckets(ui.progressRange).length ? `<div class="vt-chart-flat"><canvas id="jumps-canvas" height="160"></canvas></div>` : ""}
+    <p class="vt-footnote">Solo saltos registrados en tus sesiones de pesas. No incluye cancha.</p>
+  </section>`;
+}
+
+// "Carga semanal": RPE de sesión × minutos, sumando solo las sesiones que
+// tienen RPE. Aparece cuando al menos una sesión respondió la pregunta.
+function loadSectionHTML() {
+  if (!sessions.some((s) => s.rpe)) return "";
+  const monthly = bucketGranularity(ui.progressRange) === "month";
+  const buckets = computeBuckets(ui.progressRange);
+  const missing = buckets.reduce((a, b) => a + b.sessions.filter((s) => !s.rpe).length, 0);
+  return `<section class="vt-section">
+    <div class="vt-sec-head">
+      <p class="vt-section-eyebrow">Carga ${monthly ? "mensual" : "semanal"}</p>
+      ${rangeChipsHTML()}
+    </div>
+    ${buckets.length ? `<div class="vt-chart-flat"><canvas id="load-canvas" height="160"></canvas></div>` : ""}
+    <p class="vt-footnote">RPE de sesión × minutos. Solo sesiones donde respondiste la pregunta.${missing ? ` ${missing} sesi${missing !== 1 ? "ones" : "ón"} sin RPE.` : ""}</p>
+  </section>`;
 }
 
 // Estilo común de ejes para los dos gráficos (barras de volumen y línea del
@@ -2107,34 +2191,49 @@ function chartScales(yFormat, yMin = 0) {
   };
 }
 
+// Gráfico de barras por período (volumen, saltos, carga): el período actual
+// en azul, el resto apagado. Devuelve la instancia, o null si no hay canvas.
+function mountBars(canvasId, buckets, values, yFormat, tooltipFormat) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: buckets.map((b) => b.label),
+      datasets: [{ data: values, backgroundColor: buckets.map((b) => b.isCurrent ? "#3B6FE0" : "#2A2A2F"), borderRadius: 4 }],
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => tooltipFormat(c.parsed.y) } } },
+      scales: chartScales(yFormat),
+    },
+  });
+}
+
 function mountChart() {
-  const canvas = document.getElementById("prog-canvas");
-  if (!canvas || typeof Chart === "undefined") return;
+  if (typeof Chart === "undefined") return;
   if (chart) { chart.destroy(); chart = null; }
+  extraCharts.forEach((c) => c.destroy());
+  extraCharts = [];
 
   if (!ui.progressDetail) {
-    // Volumen por período: el actual en azul, el resto apagado.
+    // Resumen de Progreso: volumen (gráfico principal) + saltos y carga si corresponden.
     const buckets = computeBuckets(ui.progressRange);
-    const values = buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + sessionVolume(s, false), 0)));
-    const inTons = Math.max(0, ...values) >= 1000;
-    chart = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels: buckets.map((b) => b.label),
-        datasets: [{
-          data: values,
-          backgroundColor: buckets.map((b) => b.isCurrent ? "#3B6FE0" : "#2A2A2F"),
-          borderRadius: 4,
-        }],
-      },
-      options: {
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${fmtNum(c.parsed.y)} kg` } } },
-        scales: chartScales((v) => inTons ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })}t` : fmtNum(v)),
-      },
-    });
+    const sumBy = (fn) => buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + fn(s), 0)));
+    const volume = sumBy((s) => sessionVolume(s, false));
+    const inTons = Math.max(0, ...volume) >= 1000;
+    chart = mountBars("prog-canvas", buckets, volume,
+      (v) => inTons ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })}t` : fmtNum(v),
+      (v) => `${fmtNum(v)} kg`);
+    const map = exMap();
+    [
+      mountBars("jumps-canvas", buckets, sumBy((s) => sessionJumps(s, map)), fmtNum, (v) => `${fmtNum(v)} saltos`),
+      mountBars("load-canvas", buckets, sumBy((s) => sessionLoad(s) || 0), fmtNum, (v) => `${fmtNum(v)} UA`),
+    ].forEach((c) => { if (c) extraCharts.push(c); });
     return;
   }
 
+  const canvas = document.getElementById("prog-canvas");
+  if (!canvas) return;
   // Detalle de ejercicio. Azul para la serie principal; ámbar no se usa acá
   // (reservado para PR) — en unilateral el segundo lado va en blanco.
   const exId = ui.progressDetail, metric = ui.progressMetric;
@@ -2360,7 +2459,7 @@ function exerciseModalHTML() {
             <input type="text" class="vt-input" id="exm-name" value="${esc(m.name)}" placeholder="Ej: Curl femoral" autocomplete="off">
           </label>
           <label>Grupo muscular
-            <select class="vt-input" id="exm-group">
+            <select class="vt-input" id="exm-group" data-c="exm-group">
               ${groupNames().map((g) => `<option value="${g}" ${m.group === g ? "selected" : ""}>${g}</option>`).join("")}
             </select>
           </label>
@@ -2377,6 +2476,10 @@ function exerciseModalHTML() {
             <span>Ejercicio unilateral</span>
             <input type="checkbox" class="vt-switch" id="exm-unilateral" ${m.unilateral ? "checked" : ""} autocomplete="off">
           </div>
+          <label class="vt-modal-toggle-row" id="exm-jumps-row" style="${m.type === "time" ? "display:none" : ""}">
+            <span>Cuenta como saltos<small>Sus reps suman al conteo de saltos en gimnasio</small></span>
+            <input type="checkbox" class="vt-switch" id="exm-jumps" data-c="exm-jumps" ${countsJumps(m) ? "checked" : ""} autocomplete="off">
+          </label>
         </div>
         <div class="vt-modal-actions">
           <button class="vt-btn-primary" data-a="ex-modal-save">Guardar</button>
@@ -2698,7 +2801,10 @@ function finishSession() {
       routineName: cleaned.routineName,
       date: cleaned.date,
       durationSec: cleaned.durationSec,
+      sessionId: cleaned.id,
       volume: sessionVolume(cleaned, false),
+      jumps: sessionJumps(cleaned),
+      rpe: null, // RPE de sesión (1–10), opcional: se elige en el resumen y se guarda en la sesión
       setsCount: done,
       sessionNumber: sessions.length, // total de sesiones guardadas, contando esta
       prevVolume: prevSame ? sessionVolume(prevSame, false) : null, // null = primera vez con esta rutina
@@ -2894,12 +3000,14 @@ function sessionSummaryHTML() {
           { label: "Series", value: sum.setsCount },
           { label: "Ejercicios", value: done.length },
         ])}
+        ${jumpsLineHTML(sum.jumps)}
         ${section("Esta semana", weekDotsHTML())}
         ${recordsSection}
         ${doneSection}
         ${section("Reparto", repartoHTML(groupSetCounts(done)))}
         ${routineSection}
         ${saveAsRoutineSection}
+        ${section("¿Qué tan dura fue?", rpeButtonsHTML(sum.sessionId, sum.rpe))}
         <div class="vt-sum-actions">
           <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="summary-share">${icon("share", 16)} Compartir</button>
           <button class="vt-btn-primary vt-full" data-a="summary-close">Listo</button>
@@ -3814,8 +3922,24 @@ document.addEventListener("click", (e) => {
     }
 
     /* Historial */
+    case "session-rpe-edit": ui.sessionRpeEdit = true; render(); break;
+    case "session-rpe": {
+      // RPE de la sesión (resumen de fin de sesión o detalle del historial).
+      // Tocar el número ya elegido lo quita: la pregunta es opcional.
+      const ses = sessions.find((x) => x.id === id);
+      if (ses) {
+        const v = Math.round(num(el.dataset.value));
+        if (ses.rpe === v) delete ses.rpe; else ses.rpe = v;
+        persistSessions();
+        if (ui.sessionSummary?.sessionId === id) ui.sessionSummary.rpe = ses.rpe ?? null;
+        ui.sessionRpeEdit = false;
+        render();
+      }
+      break;
+    }
     case "session-detail-open":
       ui.detailReturnScroll = window.scrollY;
+      ui.sessionRpeEdit = false;
       ui.sessionDetail = id;
       render(); window.scrollTo(0, 0);
       break;
@@ -3926,14 +4050,18 @@ document.addEventListener("click", (e) => {
       const oneRM = type !== "time" && ormVal > 0 ? ormVal : undefined;
       const uniVal = document.getElementById("exm-unilateral")?.checked;
       const unilateral = type !== "time" && uniVal ? true : undefined;
+      // countsJumps solo se guarda cuando difiere del valor por defecto de su
+      // grupo; si coincide queda sin definir y sigue al grupo.
+      const jumpsVal = !!document.getElementById("exm-jumps")?.checked;
+      const countsJumpsVal = type !== "time" && jumpsVal !== (group === "Pliometría") ? jumpsVal : undefined;
       const m = ui.exerciseModal;
       let exId = m.id;
       if (m.id) {
         const i = exercises.findIndex((x) => x.id === m.id);
-        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral };
+        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal };
       } else {
         exId = uid("cex");
-        exercises.push({ id: exId, name, group, type, oneRM, unilateral });
+        exercises.push({ id: exId, name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal });
       }
       persistExercises();
       ui.exerciseModal = null;
@@ -4193,6 +4321,16 @@ document.addEventListener("change", (e) => {
       if (lbl) lbl.style.display = el.value === "time" ? "none" : "";
       const uniRow = document.getElementById("exm-uni-row");
       if (uniRow) uniRow.style.display = el.value === "time" ? "none" : "";
+      const jumpsRow = document.getElementById("exm-jumps-row");
+      if (jumpsRow) jumpsRow.style.display = el.value === "time" ? "none" : "";
+      break;
+    }
+    // "Cuenta como saltos" sigue al valor por defecto del grupo (Pliometría =
+    // sí) mientras el usuario no lo haya tocado a mano en este modal.
+    case "exm-jumps": el.dataset.touched = "1"; break;
+    case "exm-group": {
+      const sw = document.getElementById("exm-jumps");
+      if (sw && !sw.dataset.touched && ui.exerciseModal?.countsJumps === undefined) sw.checked = el.value === "Pliometría";
       break;
     }
     case "import-file":

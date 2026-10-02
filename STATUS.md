@@ -1172,3 +1172,26 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Verificado: Organizar + superseries, selector de ejercicios, %1RM con
   cálculo en vivo, rutina nueva, unilateral, 393 y 360px. A 360px el
   selector KG/%1RM sobresale 3-7px de su columna (no se corta).
+
+## 2026-10-02 cont. — Mejoras, Fase 5 de 5: saltos y carga (cierre)
+- Saltos en gimnasio: `exercise.countsJumps` (por defecto solo
+  Pliometría), interruptor "Cuenta como saltos" en el modal de
+  ejercicio, `sessionJumps()`; línea "48 saltos en gimnasio" en el
+  resumen y en el detalle de sesión; sección en Progreso con número de
+  la semana, comparación y barras. Siempre con el pie "no incluye
+  cancha".
+- Carga de sesión: pregunta "¿Qué tan dura fue?" (1–10) en el resumen
+  → `session.rpe`; `sessionLoad` = RPE × minutos (UA); sección "Carga
+  semanal" en Progreso (solo sesiones con RPE, el pie cuenta las que
+  no tienen) y "RPE 7 · 406 UA" editable en el detalle de sesión.
+- Progreso ahora monta varios gráficos (`mountBars`, `extraCharts`).
+  Decisiones: los gráficos de saltos y carga usan los mismos períodos
+  que el de volumen (mensual en 1A); la sección Carga aparece recién
+  cuando alguna sesión tiene RPE; tocar el RPE elegido lo quita.
+- CLAUDE.md: sección "Datos" + patrones nuevos. sw.js v30 → v31.
+- Regresiones verificadas en el navegador: ±15 s, exportar e importar
+  (archivo y pegando), repetir desde el detalle, editor con
+  superseries y %1RM, Organizar en el editor, rutina nueva, sesión
+  libre, unilateral en editor y en el conteo de saltos. Sin errores de
+  consola. Pendiente en teléfono: volumen de la bocina, interruptores,
+  deslizar/tocar con el dedo.
