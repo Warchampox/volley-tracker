@@ -145,6 +145,8 @@ button, svg {
   white-space: nowrap;
   text-align: right;
 }
+/* Lado derecho del encabezado de sesión: tiempo, volumen, ⋯ y minimizar. */
+.vt-live-right { display: flex; align-items: center; gap: var(--sp-4); flex-shrink: 0; }
 .vt-scoreboard small { display: block; font-size: var(--fs-xs); color: var(--text-dim); font-weight: 500; letter-spacing: var(--track); text-transform: uppercase; }
 
 .vt-btn-icon, .vt-btn-ghost {
@@ -161,8 +163,22 @@ button, svg {
   font-size: var(--fs-sm);
   gap: var(--sp-1);
 }
-.vt-btn-icon { background: var(--surface); border: 1px solid var(--line); transition: filter 100ms ease; }
-.vt-btn-icon:active { filter: brightness(0.85); }
+/* Ícono-acción: SIN recuadro. Área táctil de 44×44, ícono de 24px en --text;
+   el fondo aparece solo al presionar. Forma propia la llevan únicamente los
+   controles con estado o principales (check de serie, ▶ de Iniciar, botones
+   primarios, selectores con opción activa). */
+.vt-btn-icon {
+  width: 44px; height: 44px; flex-shrink: 0; padding: 0;
+  border-radius: var(--r-full);
+  transition: background-color 100ms ease;
+}
+.vt-btn-icon:active { background: var(--surface-2); }
+/* Grupo de íconos a la derecha de un encabezado o fila: sin separación extra
+   (cada uno ya mide 44px) y con el último ícono alineado al borde del contenido. */
+.vt-head-actions { display: flex; align-items: center; flex-shrink: 0; margin-right: calc(-1 * var(--sp-2)); }
+.vt-settings-row > .vt-btn-icon { margin-right: calc(-1 * var(--sp-2)); }
+/* "Volver": el ícono (no su área de 44px) es el que calza con el borde izquierdo. */
+.vt-header-brand > .vt-btn-icon { margin: 0 calc(-1 * var(--sp-1)) 0 calc(-1 * var(--sp-2)); }
 .vt-btn-ghost { color: var(--text-dim); padding: var(--sp-2); text-transform: uppercase; letter-spacing: var(--track); }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red) !important; }
@@ -212,7 +228,13 @@ button, svg {
 .vt-flex { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }
-.vt-small { padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); width: auto; margin-top: var(--sp-3); }
+/* "+ Agregar serie": botón de texto, sin caja. */
+.vt-add-set {
+  display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0;
+  background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+  font-family: inherit; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: var(--track);
+}
+.vt-add-set:active { color: var(--text); }
 
 .vt-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-list:has(.vt-block) { gap: 0; }
@@ -599,24 +621,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-type-picker-opt.is-failed { color: var(--red); border-color: var(--red); }
 
 .vt-timer-btn {
-  width: var(--col-timer); height: var(--col-timer); flex-shrink: 0;
-  border-radius: 50%;
-  border: 1.5px solid var(--line);
-  background: var(--surface-2);
-  color: var(--text-dim);
+  width: var(--col-timer); height: var(--col-timer); flex-shrink: 0; padding: 0;
+  border: none; background: transparent;
+  color: var(--blue); /* solo el ícono, sin círculo: es una acción, no un estado */
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: filter 100ms ease, transform 100ms ease;
+  transition: transform 100ms ease;
 }
-@keyframes vt-timer-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 111, 224, 0.45); }
-  50% { box-shadow: 0 0 0 7px rgba(59, 111, 224, 0); }
-}
-.vt-timer-btn.is-running {
-  color: var(--blue); border-color: var(--blue); background: rgba(47, 111, 237, 0.15);
-  animation: vt-timer-pulse 1.6s ease-in-out infinite;
-}
-.vt-timer-btn:active { filter: brightness(0.85); transform: scale(0.96); }
+.vt-timer-btn:active { transform: scale(0.9); }
 /* El input de tiempo cambia a azul mientras esa serie se está cronometrando
    (vuelve a blanco al detenerse — ver clase is-running en setRowHTML). */
 .vt-set-input-clock.is-running { color: var(--blue); }
@@ -669,8 +681,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   margin-top: var(--sp-3);
   z-index: 20;
 }
-.vt-footer-split { display: flex; gap: var(--sp-3); }
-.vt-footer-split .vt-btn-primary { flex: 1; }
 
 .vt-nav {
   display: flex;
@@ -910,6 +920,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-rpe-scale button:first-child { margin-left: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); }
 .vt-rpe-scale button:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
 .vt-rpe-scale button.is-active { position: relative; background: var(--blue); border-color: var(--blue); color: #FFFFFF; }
+
+/* Selector de rango ÚNICO de Progreso (gobierna volumen, saltos, carga,
+   reparto y las mini curvas): se queda pegado arriba al hacer scroll. */
+.vt-range-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  margin: var(--sp-6) calc(-1 * var(--sp-4)) 0; padding: var(--sp-2) var(--sp-4);
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.vt-range-bar .vt-section-eyebrow { margin: 0; }
+.vt-range-bar + .vt-section { margin-top: var(--sp-4); }
 
 /* Gráfico sin caja alrededor. */
 .vt-chart-flat { margin-top: var(--sp-2); }
@@ -1210,12 +1231,12 @@ input[type="file"] { display: none; }
    centrado les da un área de toque de al menos 44×44. Si dos áreas vecinas se
    solapan, gana la del elemento que viene después en el HTML. */
 .vt-more-btn, .vt-btn-ghost, .vt-btn-icon, .vt-check, .vt-rpe-btn, .vt-settype-btn,
-.vt-timer-btn, .vt-select-circle, .vt-drag-handle, .vt-pills button, .vt-text-btn, .vt-tabs button {
+.vt-timer-btn, .vt-select-circle, .vt-drag-handle, .vt-pills button, .vt-text-btn, .vt-tabs button, .vt-add-set {
   position: relative;
 }
 .vt-more-btn::before, .vt-btn-ghost::before, .vt-btn-icon::before, .vt-check::before, .vt-rpe-btn::before,
 .vt-settype-btn::before, .vt-timer-btn::before, .vt-select-circle::before, .vt-drag-handle::before,
-.vt-pills button::before, .vt-text-btn::before, .vt-tabs button::before {
+.vt-pills button::before, .vt-text-btn::before, .vt-tabs button::before, .vt-add-set::before {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: max(100%, 44px); height: max(100%, 44px);
   transform: translate(-50%, -50%);

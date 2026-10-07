@@ -185,7 +185,7 @@ const ui = {
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
-  actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise"|"session", id} — hoja inferior del botón ⋯
+  actionSheet: null,      // null | {kind: "routine"|"folder"|"exercise"|"session"|"live"|"editor"|"share"|"export"|"reset", id} — hoja inferior del botón ⋯
   shareText: null,        // null | {title, text, copied} — texto de una rutina para copiar a mano
   pasteJsonModal: false,  // modal de "Pegar JSON"
   exerciseEditMode: false,     // modo "Organizar ejercicios" (editor de rutina o sesión activa)
@@ -453,15 +453,6 @@ function enterOrganizeMode(preselectIdx) {
     setTimeout(() => { justEnteredOrganizeIdx = null; }, 300);
   }
   render();
-}
-
-// Botón de entrada — solo existe fuera del modo; adentro se sale por la barra
-// inferior (Cancelar / Guardar cambios), nunca por un botón suelto arriba.
-function organizeToggleHTML() {
-  if (ui.exerciseEditMode) return "";
-  return `<div style="display:flex;justify-content:flex-end;margin-bottom:var(--sp-3)">
-    <button class="vt-btn-icon" data-a="exercise-editmode-toggle">Organizar</button>
-  </div>`;
 }
 
 // Fila compacta que reemplaza el bloque completo mientras se organiza:
@@ -925,9 +916,9 @@ function routinesHTML() {
   const html = `
     <header class="vt-header">
       ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
-      <div style="display:flex;gap:var(--sp-2)">
-        <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 20)}</button>
-        <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 22)}</button>
+      <div class="vt-head-actions">
+        <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 24)}</button>
+        <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 24)}</button>
       </div>
     </header>
     <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-free-btn" data-a="train-free">${icon("plus", 18)} Sesión libre</button>
@@ -949,7 +940,13 @@ function actionSheetHTML() {
   const row = (a, ic, label, danger) =>
     `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
   let title, rows;
-  if (kind === "share") {
+  if (kind === "live" || kind === "editor") {
+    // ⋯ del encabezado de la sesión en vivo / del editor de rutina. Organizar
+    // también se abre manteniendo presionado el nombre de un ejercicio.
+    title = kind === "live" ? (ui.activeSession?.routineName || "Sesión") : (ui.editingRoutine?.name || "Rutina");
+    rows = `<button class="vt-modal-row" data-a="exercise-editmode-toggle">${icon("grip", 16)} Organizar ejercicios</button>`
+      + (kind === "live" ? `<button class="vt-modal-row vt-modal-row-danger" data-a="session-discard">${icon("trash", 16)} Descartar sesión</button>` : "");
+  } else if (kind === "share") {
     // Compartir UNA rutina: como texto (mensaje para pegar) o como archivo.
     const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="routine-share" data-mode="${mode}" data-id="${id}">
       ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
@@ -1103,15 +1100,15 @@ function editorHTML() {
   return `
     <header class="vt-header">
       <div class="vt-header-brand vt-grow">
-        <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 18)}</button>
+        <button class="vt-btn-icon" data-a="editor-cancel" aria-label="Volver">${icon("back", 24)}</button>
         <div class="vt-detail-title vt-grow">
           <p class="vt-eyebrow">${r.isNew ? "Nueva rutina" : "Editar rutina"}</p>
           <input type="text" class="vt-session-name-input" placeholder="Nombre de la rutina"
             value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
         </div>
       </div>
+      ${editMode ? "" : `<button class="vt-more-btn" data-a="sheet-open" data-kind="editor" aria-label="Opciones de la rutina">${icon("more", 20)}</button>`}
     </header>
-    ${organizeToggleHTML()}
     <div class="vt-list" id="editor-exercise-list">
       ${list.map((it, idx) => {
         const ex = map[it.exerciseId];
@@ -1195,15 +1192,15 @@ function trainActiveHTML() {
           ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div></div>
-      <div style="display:flex;align-items:center;gap:var(--sp-4)">
-        <div style="display:flex;gap:var(--sp-6)">
-          <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
-          <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+      <div class="vt-live-right">
+        <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
+        <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+        <div class="vt-head-actions">
+          <button class="vt-more-btn" data-a="sheet-open" data-kind="live" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
+          <button class="vt-more-btn" data-a="session-minimize" aria-label="Minimizar sesión">${icon("chevDown", 20)}</button>
         </div>
-        <button class="vt-btn-ghost" data-a="session-minimize" aria-label="Minimizar sesión">${icon("chevDown", 20)}</button>
       </div>
     </header>
-    ${organizeToggleHTML()}
     <div class="vt-list" id="session-exercise-list">
       ${list.map((e, exIdx) => {
         const ex = map[e.exerciseId];
@@ -1259,15 +1256,14 @@ function trainActiveHTML() {
                 }).join("");
               })()}
             </div>
-            <button class="vt-btn-outline vt-small" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
+            <button class="vt-add-set" data-a="set-add" data-ex="${exIdx}">${icon("plus", 14)} Agregar serie</button>
           </div>
         </div>`;
       }).join("")}
     </div>
-    <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
-    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer vt-footer-split">
-      <button class="vt-btn-ghost vt-danger" data-a="session-discard">Descartar</button>
-      <button class="vt-btn-primary vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
+    <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
+    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer">
+      <button class="vt-btn-primary vt-full vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
     </div>`}`;
 }
 
@@ -1426,7 +1422,7 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   const fields = setColumns(type, unilateral).map((c) => {
     if (c.x) return `<span class="vt-x vt-col-x">×</span>`;
     if (c.timer) return `<button class="vt-timer-btn vt-col-timer ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
-        aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 13)}</button>`;
+        aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 22)}</button>`;
     if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds")}>`;
     const value = c.f === "repsL" ? repsL(st) : c.f === "repsR" ? repsR(st) : num(st[c.f]);
     return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-mono vt-set-input vt-col-val" value="${value}" ${attrs(c.f)}>`;
@@ -1573,7 +1569,7 @@ function sessionDetailHTML() {
   return `
     <header class="vt-header">
       <div class="vt-header-brand">
-        <button class="vt-btn-icon" data-a="session-detail-close" aria-label="Volver">${icon("back", 18)}</button>
+        <button class="vt-btn-icon" data-a="session-detail-close" aria-label="Volver">${icon("back", 24)}</button>
         <div class="vt-detail-title"><p class="vt-eyebrow">${fmtDate(s.date)}</p><h1 class="vt-header-title-sm">${esc(s.routineName)}</h1></div>
       </div>
       <button class="vt-more-btn" data-a="sheet-open" data-kind="session" data-id="${s.id}" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
@@ -2070,7 +2066,7 @@ function exerciseDetailHTML() {
   return `
     <header class="vt-header">
       <div class="vt-header-brand">
-        <button class="vt-btn-icon" data-a="prog-detail-close" aria-label="Volver">${icon("back", 18)}</button>
+        <button class="vt-btn-icon" data-a="prog-detail-close" aria-label="Volver">${icon("back", 24)}</button>
         <div class="vt-detail-title"><p class="vt-eyebrow">${esc(ex.group || "Custom")}</p><h1 class="vt-header-title-sm">${esc(ex.name)}</h1></div>
       </div>
       <button class="vt-more-btn" data-a="sheet-open" data-kind="exercise" data-id="${exId}" aria-label="Opciones del ejercicio">${icon("more", 20)}</button>
@@ -2146,11 +2142,12 @@ function progressHTML() {
       { label: "Volumen", value: vol.value, unit: vol.unit },
       { label: "Racha", value: ws.streak, unit: "sem" },
     ])}</div>
+    <div class="vt-range-bar">
+      <p class="vt-section-eyebrow">Rango</p>
+      ${rangeChipsHTML()}
+    </div>
     <section class="vt-section">
-      <div class="vt-sec-head">
-        <p class="vt-section-eyebrow">Volumen ${monthly ? "mensual" : "semanal"}</p>
-        ${rangeChipsHTML()}
-      </div>
+      <p class="vt-section-eyebrow">Volumen ${monthly ? "mensual" : "semanal"}</p>
       ${computeBuckets(ui.progressRange).length
         ? `<div class="vt-chart-flat"><canvas id="prog-canvas" height="200"></canvas></div>`
         : `<p class="vt-muted">Sin sesiones en ${RANGE_WORDS[ui.progressRange]}.</p>`}
@@ -2173,10 +2170,7 @@ function jumpsSectionHTML() {
   const sumBetween = (from, to) => sessions.filter((s) => { const t = new Date(s.date).getTime(); return t >= from && t <= to; })
     .reduce((a, s) => a + sessionJumps(s, map), 0);
   return `<section class="vt-section">
-    <div class="vt-sec-head">
-      <p class="vt-section-eyebrow">Saltos en gimnasio</p>
-      ${rangeChipsHTML()}
-    </div>
+    <p class="vt-section-eyebrow">Saltos en gimnasio</p>
     <p class="vt-big-stat">${fmtNum(sumBetween(weekStart, now))}<small>esta semana · vs ${fmtNum(sumBetween(weekStart - WEEK, now - WEEK))} a esta altura la semana pasada</small></p>
     ${computeBuckets(ui.progressRange).length ? `<div class="vt-chart-flat"><canvas id="jumps-canvas" height="160"></canvas></div>` : ""}
     <p class="vt-footnote">Solo saltos registrados en tus sesiones de pesas. No incluye cancha.</p>
@@ -2191,10 +2185,7 @@ function loadSectionHTML() {
   const buckets = computeBuckets(ui.progressRange);
   const missing = buckets.reduce((a, b) => a + b.sessions.filter((s) => !s.rpe).length, 0);
   return `<section class="vt-section">
-    <div class="vt-sec-head">
-      <p class="vt-section-eyebrow">Carga ${monthly ? "mensual" : "semanal"}</p>
-      ${rangeChipsHTML()}
-    </div>
+    <p class="vt-section-eyebrow">Carga ${monthly ? "mensual" : "semanal"}</p>
     ${buckets.length ? `<div class="vt-chart-flat"><canvas id="load-canvas" height="160"></canvas></div>` : ""}
     <p class="vt-footnote">RPE de sesión × minutos. Solo sesiones donde respondiste la pregunta.${missing ? ` ${missing} sesi${missing !== 1 ? "ones" : "ón"} sin RPE.` : ""}</p>
   </section>`;
@@ -2314,20 +2305,20 @@ function settingsHTML() {
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Exportar datos<small>Último respaldo: ${settings.lastExportAt ? fmtRelDate(settings.lastExportAt) : "nunca"}</small></div>
-      <button class="vt-btn-icon" data-a="sheet-open" data-kind="export" aria-label="Exportar datos">${icon("download", 16)}</button>
+      <button class="vt-btn-icon" data-a="sheet-open" data-kind="export" aria-label="Exportar datos">${icon("download", 24)}</button>
     </div>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Importar datos<small>Respaldo completo, o rutinas / entrenamientos / ejercicios</small></div>
-      <div style="display:flex;gap:var(--sp-2)">
-        <label class="vt-btn-icon" style="cursor:pointer" aria-label="Importar archivo">${icon("upload", 16)}
+      <div class="vt-head-actions">
+        <label class="vt-btn-icon" style="cursor:pointer" aria-label="Importar archivo">${icon("upload", 24)}
           <input type="file" accept=".json,application/json" data-c="import-file" autocomplete="off">
         </label>
-        <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 16)}</button>
+        <button class="vt-btn-icon" data-a="paste-json-open" aria-label="Pegar JSON">${icon("clipboard", 24)}</button>
       </div>
     </div>
     <div class="vt-settings-row">
       <div class="vt-settings-label">Borrar datos personales<small>Entrenamientos o 1RM; no toca rutinas ni ejercicios</small></div>
-      <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 16)}</button>
+      <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 24)}</button>
     </div>
     <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
     <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>`;
@@ -2421,9 +2412,9 @@ function exercisesManagerHTML() {
   return `
     <header class="vt-header">
       ${tabHeaderHTML("Set 02 · Catálogo", "Ejercicios")}
-      <div style="display:flex;gap:var(--sp-2)">
-        <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 18)}</button>
-        <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 20)}</button>
+      <div class="vt-head-actions">
+        <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 24)}</button>
+        <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 24)}</button>
       </div>
     </header>
     <div class="vt-search" style="margin-bottom:var(--sp-4)">${icon("search", 16)}
@@ -2435,9 +2426,9 @@ function exercisesManagerHTML() {
 function groupsManagerHTML() {
   return `
     <header class="vt-header">
-      <button class="vt-btn-icon" data-a="groups-close" aria-label="Volver">${icon("back", 20)}</button>
+      <button class="vt-btn-icon" data-a="groups-close" aria-label="Volver">${icon("back", 24)}</button>
       <h1 class="vt-header-title">Grupos</h1>
-      <button class="vt-btn-icon" data-a="group-new" aria-label="Nuevo grupo">${icon("plus", 20)}</button>
+      <button class="vt-btn-icon" data-a="group-new" aria-label="Nuevo grupo">${icon("plus", 24)}</button>
     </header>
     <div class="vt-list">
       ${exerciseGroups.map((g) => `

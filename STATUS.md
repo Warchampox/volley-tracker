@@ -1250,3 +1250,15 @@ Entradas nuevas al final. No reescribir lo anterior.
   volumen en kg (t solo en totales de semana/mes). Notas sin cursiva.
 - Verificado a 393px: sesión de 3:12 h (sugiere 58 min), ajustar,
   editar en el detalle y recálculo de UA. Sin errores de consola.
+
+## 2026-10-07 cont. — Pulido, Fase 2 de 4: íconos sin recuadro y acciones
+- `.vt-btn-icon` sin fondo ni borde: área de 44×44, ícono de 24px,
+  fondo solo al presionar (Rutinas, Ejercicios, Grupos, los 4 Volver y
+  Ajustes). ▶ de cronometrar sin círculo, en azul. "Agregar serie" es
+  un botón de texto; "Agregar ejercicio" con borde sólido.
+- Sesión en vivo: ⋯ en el encabezado con Organizar ejercicios y
+  Descartar sesión; se fueron la fila del botón "Organizar" y el
+  "Descartar" del pie (Finalizar ocupa todo el ancho). Editor: ⋯ con
+  Organizar. El long-press sigue entrando a Organizar.
+- Progreso: un solo selector de rango (`.vt-range-bar`, pegado arriba
+  al hacer scroll), fuera de Volumen/Saltos/Carga.
