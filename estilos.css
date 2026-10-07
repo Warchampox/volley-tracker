@@ -203,16 +203,20 @@ button, svg {
 }
 .vt-btn-primary:active { filter: brightness(0.85); transform: scale(0.96); }
 .vt-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Botón secundario de ancho completo (Sesión libre, Agregar ejercicio,
+   Compartir): borde SÓLIDO. El punteado ya no se usa en botones — se leía
+   como un espacio sin terminar. */
 .vt-btn-outline {
   background: transparent;
-  border: 1px dashed var(--line);
-  color: var(--text-dim);
+  border: 1px solid var(--line);
+  color: var(--text);
   font-family: inherit;
   text-transform: uppercase;
   letter-spacing: var(--track);
   padding: var(--sp-3);
   border-radius: var(--r-md);
   width: 100%;
+  min-height: 48px;
   cursor: pointer;
   font-size: var(--fs-md);
   margin-top: var(--sp-2);
@@ -221,10 +225,6 @@ button, svg {
   gap: var(--sp-2);
 }
 .vt-btn-outline:hover { border-color: var(--blue); color: var(--blue); }
-/* Variante de borde SÓLIDO para acciones reales de ancho completo (Sesión
-   libre, Compartir): el punteado se leía como un espacio sin terminar y
-   queda solo para "agregar" (serie, ejercicio). */
-.vt-btn-solid { border-style: solid; color: var(--text); min-height: 48px; }
 .vt-flex { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }

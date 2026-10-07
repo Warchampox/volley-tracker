@@ -15,19 +15,42 @@ const TYPES = {
 // Semilla de grupos (solo se usa la primera vez que corre la app, para no
 // romper nada existente). Después de eso, la fuente de verdad es
 // exerciseGroups (persistido) — ver más abajo.
+// Los colores de grupo NUNCA pueden coincidir con un color reservado: ámbar
+// (PR), verde (serie completada), azul de marca, morado (superserie), naranja
+// (drop set) ni rojo (eliminar/fallida). Tampoco se repiten entre sí.
 const DEFAULT_GROUPS = [
-  { name: "Piernas", color: "var(--amber)" },
-  { name: "Pliometría", color: "var(--green)" },
-  { name: "Empuje", color: "var(--blue)" },
-  { name: "Tracción", color: "var(--blue)" },
-  { name: "Hombro", color: "var(--red)" },
-  { name: "Core", color: "var(--text-dim)" },
-  { name: "Custom", color: "var(--text-dim)" },
+  { name: "Piernas", color: "#3FB0A6" },    // teal
+  { name: "Pliometría", color: "#D86A9C" }, // rosado
+  { name: "Empuje", color: "#A9C54A" },     // lima
+  { name: "Tracción", color: "#4FB7E3" },   // celeste
+  { name: "Hombro", color: "#C26AD8" },     // magenta
+  { name: "Core", color: "#A89F91" },       // arena
+  { name: "Custom", color: "#6E7681" },     // gris
 ];
 
-// Paleta para grupos NUEVOS creados por el usuario — excluye ámbar y verde,
-// reservados exclusivamente para PR y serie completada (ver CLAUDE.md).
-const GROUP_PALETTE = ["#3B6FE0", "#C1594F", "#8FA0AC", "#9B6FE0", "#4FB8C1", "#E0763B", "#C14FA0"];
+// Colores por defecto de ANTES (hasta 2026-10-07): chocaban con los
+// reservados y se repetían. Solo sirven para la migración de abajo.
+const OLD_GROUP_DEFAULTS = {
+  "Piernas": "var(--amber)", "Pliometría": "var(--green)", "Empuje": "var(--blue)", "Tracción": "var(--blue)",
+  "Hombro": "var(--red)", "Core": "var(--text-dim)", "Custom": "var(--text-dim)",
+};
+
+// Pasa a la paleta nueva los grupos predefinidos que todavía tienen su color
+// viejo por defecto. Uno recoloreado a mano no se toca (el selector nunca
+// ofreció esos `var(--…)`, así que nombre + color viejo = nunca se cambió).
+// Devuelve true si cambió algo.
+function migrateGroupColors(groups) {
+  let changed = false;
+  for (const g of groups) {
+    const fresh = DEFAULT_GROUPS.find((d) => d.name === g.name);
+    if (fresh && g.color === OLD_GROUP_DEFAULTS[g.name]) { g.color = fresh.color; changed = true; }
+  }
+  return changed;
+}
+
+// Paleta del selector al crear o recolorear un grupo: los 7 de arriba + 2
+// extra (amarillo y azul lavanda). Ninguno es un color reservado.
+const GROUP_PALETTE = [...DEFAULT_GROUPS.map((g) => g.color), "#E3C94F", "#7FA7FF"];
 
 const DEFAULT_EXERCISES = [
   { id: "ex_sentadilla_trasera", name: "Sentadilla trasera", group: "Piernas", type: "weight" },
@@ -120,6 +143,12 @@ let exerciseGroups = load("exercise-groups", null); // [{name, color}]
 if (!Array.isArray(exerciseGroups) || exerciseGroups.length === 0) {
   exerciseGroups = DEFAULT_GROUPS.map((g) => ({ ...g }));
   save("exercise-groups", exerciseGroups);
+}
+// Migración de la paleta de grupos, una sola vez por dispositivo.
+if (!settings.groupPaletteV2) {
+  if (migrateGroupColors(exerciseGroups)) save("exercise-groups", exerciseGroups);
+  settings.groupPaletteV2 = true;
+  save("settings", settings);
 }
 
 const persistRoutines = () => save("routines", routines);
@@ -937,7 +966,7 @@ function routinesHTML() {
         <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 24)}</button>
       </div>
     </header>
-    <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-free-btn" data-a="train-free">${icon("plus", 18)} Sesión libre</button>
+    <button class="vt-btn-outline vt-flex-center vt-free-btn" data-a="train-free">${icon("plus", 18)} Sesión libre</button>
     ${body}`;
   const reminder = backupReminderText();
   const banner = !reminder ? "" : `<div class="vt-banner">
@@ -1171,7 +1200,7 @@ function editorHTML() {
         </div>`;
       }).join("")}
     </div>
-    <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
+    <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
     <div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full" data-a="editor-save">Guardar rutina</button>
     </div>`;
@@ -1271,7 +1300,7 @@ function trainActiveHTML() {
         </div>`;
       }).join("")}
     </div>
-    <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
+    <button class="vt-btn-outline vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
     <div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
     </div>`;
@@ -2110,7 +2139,7 @@ function exerciseDetailHTML() {
         <div class="vt-record-main"><span class="vt-record-name">${fmtDate(lastPR.date)}</span></div>
         <span class="vt-record-value">${fmtPRValue(lastPR)}</span>
       </div></div>
-      <button class="vt-btn-outline vt-btn-solid vt-flex-center vt-section-btn" data-a="pr-share" data-id="${exId}">${icon("share", 16)} Compartir récord</button>
+      <button class="vt-btn-outline vt-flex-center vt-section-btn" data-a="pr-share" data-id="${exId}">${icon("share", 16)} Compartir récord</button>
     </section>`}`;
 }
 
@@ -3092,7 +3121,7 @@ function sessionSummaryHTML() {
         ${saveAsRoutineSection}
         ${section("¿Qué tan dura fue?", rpeButtonsHTML(sum.sessionId, sum.rpe))}
         <div class="vt-sum-actions">
-          <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="summary-share">${icon("share", 16)} Compartir</button>
+          <button class="vt-btn-outline vt-flex-center" data-a="summary-share">${icon("share", 16)} Compartir</button>
           <button class="vt-btn-primary vt-full" data-a="summary-close">Listo</button>
         </div>
       </div>
@@ -3453,7 +3482,7 @@ function processImportedData(data) {
       if (Array.isArray(inFolders)) { routineFolders = inFolders; persistFolders(); }
       sessions = data.sessions; persistSessions();
       if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
-      if (Array.isArray(inGroups) && inGroups.length) { exerciseGroups = inGroups; persistGroups(); }
+      if (Array.isArray(inGroups) && inGroups.length) { exerciseGroups = inGroups; migrateGroupColors(exerciseGroups); persistGroups(); } // un respaldo viejo trae los colores viejos
       if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
       askAlert("Respaldo restaurado ✔");
     }, true);
@@ -3479,6 +3508,7 @@ function processImportedData(data) {
       // Solo grupos que no existen (por nombre): no pisa los colores propios.
       for (const g of inGroups)
         if (g?.name && !exerciseGroups.some((x) => x.name === g.name)) exerciseGroups.push({ name: g.name, color: g.color || GROUP_PALETTE[0] });
+      migrateGroupColors(exerciseGroups);
       persistGroups();
     }
     if (Array.isArray(inExercises)) {

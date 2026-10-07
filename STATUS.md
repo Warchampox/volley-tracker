@@ -1275,3 +1275,23 @@ Entradas nuevas al final. No reescribir lo anterior.
   y long-press. Verificado en sesión y editor a 393 y 360px: agrupar,
   eliminar, reemplazar, cancelar, guardar, long-press y reordenar
   (este último simulando el evento de SortableJS, no con el dedo).
+
+## 2026-10-07 cont. — Pulido, Fase 4 de 4: paleta de grupos (cierre)
+- `DEFAULT_GROUPS` con colores nuevos que no chocan con los reservados
+  ni se repiten; `GROUP_PALETTE` = esos 7 + #E3C94F y #7FA7FF.
+  Migración única (`migrateGroupColors`, `settings.groupPaletteV2`):
+  solo cambia los grupos predefinidos que seguían con su color viejo
+  por defecto. También se aplica al importar un respaldo viejo.
+- Limpieza: `.vt-btn-outline` es sólido por defecto y desaparece
+  `.vt-btn-solid` (ya no quedaban botones punteados).
+- CLAUDE.md: regla de ícono-acción sin recuadro, colores reservados y
+  paleta de grupos, unidades de volumen, notas sin cursiva, encabezado
+  de modo, ⋯ en encabezados, selector de rango único. sw.js v32 → v33.
+- Regresiones verificadas en el navegador (393px, y Organizar además a
+  360px): Organizar en sesión y editor (eliminar, agrupar, reemplazar,
+  cancelar, guardar, long-press; reordenar simulando el evento de
+  SortableJS), superseries, descartar desde el ⋯, finalizar sesión de
+  3:12 h, editar duración y recálculo de carga, crear y recolorear
+  grupo, selector de rango único, botones Volver (44×44). Sin errores
+  de consola. Pendiente en teléfono: arrastrar con el dedo en
+  Organizar y el tacto de los íconos sin recuadro.

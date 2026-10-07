@@ -72,6 +72,27 @@
   colores a nada más. Sin marca de agua, sin tinte de fondo en bloques.
 - Mayúsculas con tracking en labels/estructura; nombres de ejercicio,
   de rutina y notas libres van en formato normal (nunca mayúscula).
+- Ícono-acción SIN recuadro: un ícono que es una acción (volver,
+  nuevo, exportar, ⋯, cronometrar, etc.) va sin fondo ni borde, con
+  área táctil de 44×44 e ícono de 24px (`.vt-btn-icon`); el fondo
+  aparece solo al presionar. Excepciones — los únicos con forma
+  propia: el check de serie, el círculo azul ▶ de Iniciar, los
+  botones primarios y los selectores con opción activa (píldoras,
+  interruptor, RPE 1–10).
+- Colores reservados: ámbar = PR, verde = serie completada, azul
+  #3B6FE0 = marca, morado = superserie, naranja = drop set, rojo =
+  eliminar/fallida. Los grupos musculares NUNCA usan uno de esos ni
+  repiten color entre sí. Paleta por defecto (`DEFAULT_GROUPS`):
+  Piernas #3FB0A6 · Pliometría #D86A9C · Empuje #A9C54A · Tracción
+  #4FB7E3 · Hombro #C26AD8 · Core #A89F91 · Custom #6E7681; el
+  selector (`GROUP_PALETTE`) suma #E3C94F y #7FA7FF. Los grupos
+  viejos se migraron una vez (`settings.groupPaletteV2`,
+  `migrateGroupColors`); uno recoloreado a mano no se toca.
+- Unidades de volumen: el de UNA sesión va siempre en kg (`3.636 kg`:
+  resumen, fila y detalle de sesión, barra minimizada); las toneladas
+  (`7,3 t`) son solo para totales de semana o mes (`fmtVolume`).
+- Notas (del entrenador, de sesión, de serie): texto normal en
+  `--text-dim`, nunca en cursiva.
 - No reproducir escudos/logos de clubes o marcas registradas. Dejar
   placeholders de imagen con fallback para que el usuario los agregue.
 
@@ -145,10 +166,26 @@ Patrones (reutilizar, no inventar variantes):
   de 44px, agregarlo ahí.
 - Fin del descanso: bocina de marcador sintetizada (`beep()`), un solo
   toque, sin cuenta regresiva. La barra tiene −15 s / +15 s.
+- Encabezado de modo (`.vt-mode-head`, hoy solo Organizar): un modo
+  modal reemplaza el encabezado normal por Cancelar · TÍTULO + guía ·
+  Guardar, oculta la nav y las barras flotantes, y usa UNA barra
+  inferior pegada al borde (`organizeViewHTML`, `organizeFooterHTML`).
+  Se entra por el ⋯ del encabezado (sesión en vivo o editor) o
+  manteniendo presionado el nombre de un ejercicio.
+- ⋯ en encabezados: las acciones secundarias de una pantalla (Organizar,
+  Descartar sesión, Editar/Eliminar) viven en una hoja desde el ⋯, no
+  como botones sueltos que ocupan una fila.
+- Duración corregible: `durationDialogHTML` al finalizar una sesión de
+  más de 2,5 h y al tocar la duración en el detalle de sesión; la
+  carga sale siempre de `durationSec`.
+- Progreso tiene UN selector de rango (`.vt-range-bar`), nunca uno por
+  sección.
 - Selectores chicos como píldoras (`.vt-pills`), pestañas internas
   subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
-  acciones secundarias, borde sólido (`.vt-btn-solid`) para acciones
-  reales de ancho completo — el punteado queda solo para "agregar".
+  acciones secundarias (también "+ Agregar serie", `.vt-add-set`),
+  borde sólido (`.vt-btn-outline`) para acciones de ancho completo.
+  El borde punteado ya no se usa en botones (solo como subrayado de
+  un valor editable: nombre de sesión, duración).
 - Sin `.vt-card`: no existen tarjetas encajonadas en la app.
 - Gráficos (Chart.js): sin caja, eje Y siempre desde 0, serie
   principal en azul. Ámbar no se usa en gráficos.
