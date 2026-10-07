@@ -1262,3 +1262,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   Organizar. El long-press sigue entrando a Organizar.
 - Progreso: un solo selector de rango (`.vt-range-bar`, pegado arriba
   al hacer scroll), fuera de Volumen/Saltos/Carga.
+
+## 2026-10-07 cont. — Pulido, Fase 3 de 4: modo Organizar
+- Organizar es ahora un modo modal (`organizeViewHTML`, igual en sesión
+  y editor): encabezado propio Cancelar · ORGANIZAR · Guardar
+  (`.vt-mode-head`), sin nav ni barras flotantes mientras está activo,
+  filas compactas de 56px con nombre + "3 series" y barra de color
+  continua, círculo de selección con borde marcado, y UNA barra
+  inferior pegada al borde (guía sin selección; cuenta + Eliminar /
+  Agrupar / Reemplazar con selección).
+- Sin cambios en la lógica: borrador, SortableJS, `explicitlyRemoved`
+  y long-press. Verificado en sesión y editor a 393 y 360px: agrupar,
+  eliminar, reemplazar, cancelar, guardar, long-press y reordenar
+  (este último simulando el evento de SortableJS, no con el dedo).

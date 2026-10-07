@@ -276,92 +276,100 @@ button, svg {
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
-/* Manija de arrastre para reordenar ejercicios — SOLO existe en modo
-   Organizar (exerciseOrganizeRowHTML); la vista normal no la renderiza en
-   absoluto, así el bloque recupera todo el ancho horizontal sin hueco fantasma. */
-.vt-block-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
 .vt-block-body { flex: 1; min-width: 0; }
+
+/* ---------------------- Modo "Organizar ejercicios" ----------------------
+   Modo modal: encabezado propio (.vt-mode-head), sin nav, filas compactas
+   tipo tabla y UNA barra inferior pegada al borde. */
+
+/* Encabezado de modo: [Cancelar 1fr] [título auto] [Guardar 1fr], 64px, con
+   divisor abajo. Reemplaza al encabezado normal mientras el modo está activo
+   y queda pegado arriba (mismos márgenes negativos que .vt-header-sticky). */
+.vt-mode-head {
+  position: sticky; top: 0; z-index: 25;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--sp-2);
+  min-height: 64px;
+  margin: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-4)) 0; padding: 0 var(--sp-4);
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.vt-mode-title { text-align: center; }
+.vt-mode-title p {
+  margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: var(--track);
+}
+.vt-mode-title small { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--text-dim); }
+.vt-mode-title svg { vertical-align: -1px; }
+/* Acciones de texto del modo (Cancelar / Guardar y las de la barra inferior). */
+.vt-mode-btn {
+  justify-self: start; min-height: 44px; padding: 0;
+  background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+  font-family: inherit; font-size: var(--fs-md); font-weight: 600;
+}
+.vt-mode-btn:active { color: var(--text); }
+.vt-mode-primary { justify-self: end; color: var(--blue); }
+.vt-mode-danger { color: var(--red); }
+
+/* Filas: mínimo 56px, sin márgenes entre ellas (la barra de color del grupo
+   queda continua), divisor fino. */
+.vt-org-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  min-height: 56px; padding: var(--sp-2) 0 var(--sp-2) var(--sp-2);
+  border-left: 3px solid var(--line); border-bottom: 1px solid var(--line);
+  background: var(--bg); /* opaco: es lo que se ve mientras se arrastra */
+}
+.vt-org-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Nombre en IBM Plex Sans (no Barlow): acá es un ítem de lista, no un título. */
+.vt-org-name { font-size: var(--fs-md); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-org-sub { font-size: var(--fs-sm); color: var(--text-dim); }
+/* Manija de arrastre: solo existe en este modo. */
 .vt-drag-handle {
-  flex-shrink: 0;
-  width: 28px; height: 28px;
-  margin-top: 2px;
+  flex-shrink: 0; width: 28px; height: 28px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; padding: 0;
-  color: var(--text-dim);
+  background: transparent; border: none;
+  color: var(--text-dim); opacity: 0.6;
   cursor: grab;
   touch-action: none; /* evita que el navegador scrollee mientras se arrastra desde acá */
 }
 .vt-drag-handle:active { cursor: grabbing; }
 .sortable-ghost { opacity: 0.35; }
-.sortable-chosen .vt-block-body { opacity: 0.9; }
-
-/* ---------------------- Modo "Organizar ejercicios" ---------------------- */
-/* Fila compacta: manija + nombre + círculo de selección — nada más. */
-.vt-organize-name {
-  flex: 1; min-width: 0; padding-top: var(--sp-1);
-  font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-lg); font-weight: 700;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* Círculo de selección: vacío se tiene que leer como "tocable", no como
+   deshabilitado — transparente con borde marcado; elegido, azul con ✓. */
 .vt-select-circle {
-  width: 26px; height: 26px; flex-shrink: 0; margin-top: 1px;
-  border-radius: 50%; border: 1.5px solid var(--line);
-  background: var(--surface-2); color: transparent;
+  width: 24px; height: 24px; flex-shrink: 0; padding: 0;
+  border-radius: 50%; border: 1.5px solid var(--line-strong);
+  background: transparent; color: transparent;
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-  transition: filter 100ms ease, transform 100ms ease, background-color 180ms ease, border-color 180ms ease;
+  transition: transform 100ms ease, background-color 180ms ease, border-color 180ms ease;
 }
-.vt-select-circle:active { transform: scale(0.96); }
+.vt-select-circle:active { transform: scale(0.92); }
 .vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
 .vt-select-circle.is-on::after { content: "✓"; font-size: var(--fs-sm); line-height: 1; }
 
 /* Pulso breve al entrar a Organizar por mantener presionado (~180ms, sobre la
-   fila compacta ya en modo Organizar) — feedback de que el gesto se registró. */
+   fila ya en modo Organizar) — feedback de que el gesto se registró. */
 @keyframes vt-organize-pulse {
   0% { transform: scale(0.97); opacity: 0.7; }
   100% { transform: scale(1); opacity: 1; }
 }
 .vt-organize-pulse { animation: vt-organize-pulse 180ms ease-out; }
 
-/* Wrapper fijo compartido por las dos barras del modo Organizar (selección +
-   Cancelar/Guardar) — mismo patrón que #floating-stack (restbar +
-   minimized-bar): cada una vive adentro como bloque normal, así se apilan
-   solas sin coordinar posiciones a mano; si la de selección no está (nada
-   elegido) el wrapper igual queda bien con una sola. */
+/* Barra inferior única: pegada al borde de abajo (no flota), con divisor
+   arriba y respetando el área segura. updateOrganizePad() mide su alto para
+   que la última fila no quede tapada. */
 .vt-organize-footer-wrap {
   position: fixed;
   left: 50%; transform: translateX(-50%);
-  bottom: calc(64px + env(safe-area-inset-bottom));
+  bottom: 0;
   width: 100%; max-width: 480px;
   z-index: 45;
-  display: flex; flex-direction: column; gap: var(--sp-2);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-2) var(--sp-4) calc(var(--sp-2) + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--line);
 }
-/* Barra de acciones sobre la selección — pill flotante (ya no fija/sola: es
-   un hijo normal del wrapper de arriba). */
-.vt-organize-bar {
-  background: var(--surface-2);
-  border-radius: var(--r-md);
-  padding: var(--sp-3);
-  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
-  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-}
-.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A 360px tienen que caber la cuenta + Eliminar + Reemplazar en una línea:
-   por eso el padding horizontal de estos botones es el mínimo. */
-.vt-organize-actions { display: flex; flex-shrink: 0; }
-.vt-organize-actions .vt-btn-ghost { padding: var(--sp-2) var(--sp-1); white-space: nowrap; }
-.vt-organize-actions .vt-btn-ghost + .vt-btn-ghost { margin-left: var(--sp-2); }
-/* Cancelar / Guardar cambios — única forma de salir del modo Organizar,
-   mismo tratamiento visual que el footer de "Finalizar sesión". */
-.vt-organize-savebar {
-  display: flex; gap: var(--sp-3);
-  background: var(--surface-2);
-  border-radius: var(--r-md);
-  padding: var(--sp-3) var(--sp-4);
-  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-}
-/* Mismo reparto que el footer de sesión (Descartar / Finalizar): Cancelar
-   ocupa lo suyo y el primario se lleva el resto, sin partirse en dos líneas. */
-.vt-organize-savebar .vt-btn-ghost { flex: 0 0 auto; justify-content: center; padding: var(--sp-2) var(--sp-4); }
-.vt-organize-savebar .vt-btn-primary { flex: 1; white-space: nowrap; }
+.vt-org-guide { flex: 1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.vt-organize-actions { display: flex; flex-shrink: 0; gap: var(--sp-4); }
 
 /* ------------------- Ejercicio colapsado (sesión activa) ----------------- */
 .vt-collapsed-row {

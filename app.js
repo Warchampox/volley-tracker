@@ -455,46 +455,58 @@ function enterOrganizeMode(preselectIdx) {
   render();
 }
 
-// Fila compacta que reemplaza el bloque completo mientras se organiza:
-// manija + acento + nombre + círculo de selección.
-function exerciseOrganizeRowHTML(idx, ex, lbl) {
+// Fila compacta del modo Organizar: manija + nombre y cantidad de series +
+// círculo de selección. Sin márgenes entre filas, así la barra de color del
+// grupo (o el morado de la superserie) queda continua.
+function exerciseOrganizeRowHTML(idx, ex, lbl, item) {
   const selected = ui.selectedExercises.has(idx);
   const pulse = idx === justEnteredOrganizeIdx;
-  return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""} ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
-    <div class="vt-block-row">
-      <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
-      <span class="vt-organize-name">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
-      <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ejercicio"></button>
-    </div>
+  // En sesión son las series que hay; en el editor, las series objetivo.
+  const n = item.sets ? item.sets.length : Math.max(1, Math.round(num(item.targetSets)) || 3);
+  return `<div class="vt-org-row ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
+    <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
+    <span class="vt-org-text">
+      <span class="vt-org-name">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
+      <span class="vt-org-sub">${n} serie${n !== 1 ? "s" : ""}</span>
+    </span>
+    <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ejercicio"></button>
   </div>`;
 }
 
-// Barra de acciones sobre lo seleccionado — vacía si no hay nada elegido.
-function organizeActionBarHTML() {
-  const n = ui.selectedExercises.size;
-  if (n === 0) return "";
-  return `<div class="vt-organize-bar">
-    <span class="vt-organize-count">${n} elegido${n !== 1 ? "s" : ""}</span>
-    <div class="vt-organize-actions">
-      <button class="vt-btn-ghost vt-danger" data-a="organize-delete">${icon("trash", 16)} Eliminar</button>
-      ${n >= 2 ? `<button class="vt-btn-ghost" data-a="organize-group">${icon("link", 16)} Agrupar</button>` : ""}
-      ${n === 1 ? `<button class="vt-btn-ghost" data-a="organize-replace">${icon("repeat", 16)} Reemplazar</button>` : ""}
-    </div>
-  </div>`;
-}
-
-// Barra inferior fija del modo Organizar: apila la barra de selección (si hay
-// algo elegido) sobre la de Cancelar/Guardar cambios — mismo patrón de
-// wrapper fijo compartido que #floating-stack (restbar + minimized-bar), así
-// se apilan solas sin coordinar posiciones a mano.
+// Barra inferior ÚNICA del modo Organizar, pegada al borde de abajo (la nav
+// se oculta mientras el modo está activo): una guía si no hay nada elegido,
+// o la cuenta + las acciones sobre la selección.
 function organizeFooterHTML() {
-  return `<div class="vt-organize-footer-wrap">
-    ${organizeActionBarHTML()}
-    <div class="vt-organize-savebar">
-      <button class="vt-btn-ghost vt-danger" data-a="exercise-editmode-cancel">Cancelar</button>
-      <button class="vt-btn-primary vt-flex" data-a="exercise-editmode-save">${icon("check", 18)} Guardar cambios</button>
+  const n = ui.selectedExercises.size;
+  return `<div class="vt-organize-footer-wrap">${n === 0
+    ? `<p class="vt-org-guide">Elige ejercicios para eliminar, agrupar en superserie o reemplazar</p>`
+    : `<span class="vt-organize-count">${n} elegido${n !== 1 ? "s" : ""}</span>
+      <div class="vt-organize-actions">
+        <button class="vt-mode-btn vt-mode-danger" data-a="organize-delete">Eliminar</button>
+        ${n >= 2 ? `<button class="vt-mode-btn" data-a="organize-group">Agrupar</button>` : ""}
+        ${n === 1 ? `<button class="vt-mode-btn" data-a="organize-replace">Reemplazar</button>` : ""}
+      </div>`}</div>`;
+}
+
+// Pantalla del modo Organizar (sesión en vivo o editor de rutina). Es un
+// modo modal: tiene su propio encabezado (Cancelar · ORGANIZAR · Guardar) en
+// vez del normal, y render() oculta la nav y las barras flotantes. `listId`
+// es el id que espera mountSortables para ese contexto. Todo lee y escribe
+// sobre el borrador (exerciseEditDraft); el array real no se toca hasta Guardar.
+function organizeViewHTML(listId) {
+  const map = exMap();
+  const list = ui.exerciseEditDraft;
+  const ssLabels = computeSupersetLabels(list);
+  return `
+    <header class="vt-mode-head">
+      <button class="vt-mode-btn" data-a="exercise-editmode-cancel">Cancelar</button>
+      <div class="vt-mode-title"><p>Organizar</p><small>Arrastra ${icon("grip", 10)} · toca ○ para elegir</small></div>
+      <button class="vt-mode-btn vt-mode-primary" data-a="exercise-editmode-save">Guardar</button>
+    </header>
+    <div class="vt-org-list" id="${listId}">
+      ${list.map((it, idx) => exerciseOrganizeRowHTML(idx, map[it.exerciseId], ssLabels[idx], it)).join("")}
     </div>
-  </div>`;
+    ${organizeFooterHTML()}`;
 }
 
 // Agrupa los índices seleccionados en una superserie consecutiva a partir de
@@ -745,14 +757,18 @@ function render() {
   else if (ui.tab === "progreso") view = progressHTML();
   else if (ui.tab === "ajustes") view = settingsHTML();
 
+  // Organizar es un modo modal: mientras está activo no hay nav ni barras
+  // flotantes (el descanso sigue corriendo y suena igual, solo no se ve).
+  const modeActive = ui.exerciseEditMode && ui.tab === "rutinas";
+
   $app.innerHTML = `
     <div class="vt-frame">
       <div class="vt-content">${view}</div>
-      <div id="floating-stack">
+      <div id="floating-stack" ${modeActive ? 'style="display:none"' : ""}>
         <div id="minimized-bar" class="is-hidden"></div>
         <div id="restbar" class="is-hidden"></div>
       </div>
-      <nav class="vt-nav">
+      <nav class="vt-nav" ${modeActive ? 'style="display:none"' : ""}>
         ${NAV_ITEMS.map((n) => `
           <button class="vt-nav-item ${ui.tab === n.id ? "is-active" : ""}" data-a="tab" data-tab="${n.id}">
             ${icon(n.ic, 20)}<span>${n.label}</span>
@@ -1090,12 +1106,10 @@ function targetColumns(type, isPct) {
 }
 
 function editorHTML() {
+  if (ui.exerciseEditMode) return organizeViewHTML("editor-exercise-list");
   const r = ui.editingRoutine;
   const map = exMap();
-  const editMode = ui.exerciseEditMode;
-  // En modo Organizar, TODO lee/escribe sobre el borrador — el array real no
-  // se toca hasta "Guardar cambios" (o queda intacto si se Cancela).
-  const list = editMode ? ui.exerciseEditDraft : r.exercises;
+  const list = r.exercises;
   const ssLabels = computeSupersetLabels(list);
   return `
     <header class="vt-header">
@@ -1107,13 +1121,12 @@ function editorHTML() {
             value="${esc(r.name)}" data-i="editor-name" autocomplete="off">
         </div>
       </div>
-      ${editMode ? "" : `<button class="vt-more-btn" data-a="sheet-open" data-kind="editor" aria-label="Opciones de la rutina">${icon("more", 20)}</button>`}
+      <button class="vt-more-btn" data-a="sheet-open" data-kind="editor" aria-label="Opciones de la rutina">${icon("more", 20)}</button>
     </header>
     <div class="vt-list" id="editor-exercise-list">
       ${list.map((it, idx) => {
         const ex = map[it.exerciseId];
         const lbl = ssLabels[idx];
-        if (editMode) return exerciseOrganizeRowHTML(idx, ex, lbl);
         const t = ex?.type || "weight";
         const isPct = t !== "time" && it.loadMode === "percent";
         const oneRM = num(map[it.exerciseId]?.oneRM);
@@ -1159,9 +1172,9 @@ function editorHTML() {
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="editor">${icon("plus", 18)} Agregar ejercicio</button>
-    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer">
+    <div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full" data-a="editor-save">Guardar rutina</button>
-    </div>`}`;
+    </div>`;
 }
 
 /* --------------------------------- Vista Entrenar -------------------------------- */
@@ -1175,13 +1188,11 @@ function isExerciseComplete(e) {
 }
 
 function trainActiveHTML() {
+  if (ui.exerciseEditMode) return organizeViewHTML("session-exercise-list");
   const s = ui.activeSession;
   const map = exMap();
   const vol = sessionVolume(s, true);
-  const editMode = ui.exerciseEditMode;
-  // En modo Organizar, TODO lee/escribe sobre el borrador — el array real no
-  // se toca hasta "Guardar cambios" (o queda intacto si se Cancela).
-  const list = editMode ? ui.exerciseEditDraft : s.exercises;
+  const list = s.exercises;
   const ssLabels = computeSupersetLabels(list);
 
   return `
@@ -1205,7 +1216,6 @@ function trainActiveHTML() {
       ${list.map((e, exIdx) => {
         const ex = map[e.exerciseId];
         const lbl = ssLabels[exIdx];
-        if (editMode) return exerciseOrganizeRowHTML(exIdx, ex, lbl);
 
         const t = ex?.type || "weight";
         const uni = !!ex?.unilateral;
@@ -1262,9 +1272,9 @@ function trainActiveHTML() {
       }).join("")}
     </div>
     <button class="vt-btn-outline vt-btn-solid vt-flex-center" data-a="picker-open" data-ctx="session">${icon("plus", 18)} Agregar ejercicio</button>
-    ${editMode ? organizeFooterHTML() : `<div class="vt-sticky-footer">
+    <div class="vt-sticky-footer">
       <button class="vt-btn-primary vt-full vt-flex" data-a="session-finish">${icon("check", 18)} Finalizar sesión</button>
-    </div>`}`;
+    </div>`;
 }
 
 // Plantilla ÚNICA de columnas de valor por tipo de ejercicio. La usan el
