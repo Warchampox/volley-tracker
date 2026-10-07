@@ -1237,3 +1237,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   archivo, respaldo al modal, importar el mensaje con saludo incluido.
   No probado: la hoja de compartir real, WhatsApp, ni el botón Copiar
   (el portapapeles no está disponible en el panel de pruebas).
+
+## 2026-10-07 — Pulido de octubre, Fase 1 de 4: datos
+- Duración corregible: al finalizar una sesión de más de 2,5 h aparece
+  un modal propio ("Guardar así" / "Ajustar") con los minutos
+  sugeridos = inicio → última serie marcada (`st.doneAt`, que se
+  registra al marcar y no se guarda en la sesión final). En el detalle
+  de sesión la duración se toca para editarla (`durationDialogHTML`,
+  `statStripHTML` acepta celdas con acción). La carga se recalcula sola.
+- Saltos compara contra la semana pasada hasta el mismo día y hora
+  ("a esta altura la semana pasada"). El detalle de sesión muestra el
+  volumen en kg (t solo en totales de semana/mes). Notas sin cursiva.
+- Verificado a 393px: sesión de 3:12 h (sugiere 58 min), ajustar,
+  editar en el detalle y recálculo de UA. Sin errores de consola.

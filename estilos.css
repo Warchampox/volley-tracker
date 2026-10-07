@@ -633,9 +633,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: transparent; border: none; border-radius: 0; font-weight: 600;
 }
 .vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
-.vt-note-line { color: var(--text-dim); font-size: var(--fs-sm); font-style: italic; margin-top: 2px; }
+.vt-note-line { color: var(--text-dim); font-size: var(--fs-sm); margin-top: 2px; }
 /* Nota de entrenador por ejercicio (instrucción, sin comillas) */
-.vt-coach-note { color: var(--text-dim); font-size: var(--fs-sm); font-style: italic; margin: var(--sp-2) 0 2px; }
+.vt-coach-note { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-2) 0 2px; }
 
 /* ------------------------- Editor de rutina -------------------------
    Objetivos como una fila de tabla, con las mismas clases que la fila de
@@ -654,7 +654,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: transparent; border: none; color: var(--text-dim); cursor: pointer;
   font-family: inherit; font-size: var(--fs-sm); text-align: left;
 }
-.vt-note-link.has-note { font-style: italic; }
 .vt-note-input {
   display: block; width: 100%; margin-top: var(--sp-2); padding: var(--sp-2) 0;
   background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
@@ -826,6 +825,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-strip { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .vt-strip-cell { flex: 1; min-width: 0; padding: var(--sp-4) var(--sp-2); text-align: center; }
 .vt-strip-cell + .vt-strip-cell { border-left: 1px solid var(--line); }
+/* Celda tocable (duración editable): mismo aspecto, con el valor subrayado
+   punteado como única pista — igual que el nombre editable de la sesión. */
+.vt-strip-btn { background: transparent; border: none; border-radius: 0; color: inherit; font: inherit; cursor: pointer; }
+.vt-strip-btn .vt-strip-value { border-bottom: 1px dashed var(--line); }
+.vt-strip-btn:active { background: var(--surface); }
+.vt-strip-cell + .vt-strip-btn { border-left: 1px solid var(--line); }
 .vt-strip-label { display: block; font-size: var(--fs-xs); color: var(--text-dim); text-transform: uppercase; letter-spacing: var(--track); white-space: nowrap; margin-bottom: var(--sp-1); }
 .vt-strip-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-2xl); font-weight: 600; }
 .vt-strip-value small { font-size: var(--fs-sm); font-weight: 500; color: var(--text-dim); margin-left: var(--sp-1); }

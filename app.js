@@ -163,6 +163,7 @@ const ui = {
   picker: null,           // null | "editor" | "session" | "featured" | "replace"
   pickerQuery: "",
   sessionDetail: null,    // id de la sesión cuyo detalle está abierto (Historial), o null
+  durationDialog: null,   // null | {mode: "finish"|"edit", rawSec, minutes, onSave} — ver durationDialogHTML
   sessionRpeEdit: false,  // en el detalle de sesión: mostrando los botones 1–10 para poner/cambiar el RPE
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
@@ -771,6 +772,7 @@ function render() {
     ${ui.picker ? pickerHTML() : ""}
     ${ui.exerciseModal ? exerciseModalHTML() : ""}
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
+    ${ui.durationDialog ? durationDialogHTML() : ""}
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
     ${ui.infoDialog ? infoDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
@@ -1142,7 +1144,7 @@ function editorHTML() {
           ? `<textarea class="vt-note-input" rows="2" placeholder="Nota (ej: profunda, subir altura)"
               data-i="editor-note" data-idx="${idx}" autocomplete="off">${esc(it.note || "")}</textarea>`
           : it.note
-            ? `<button class="vt-note-link has-note" data-a="editor-note-open" data-idx="${idx}">${esc(it.note)}</button>`
+            ? `<button class="vt-note-link" data-a="editor-note-open" data-idx="${idx}">${esc(it.note)}</button>`
             : `<button class="vt-note-link" data-a="editor-note-open" data-idx="${idx}">+ Nota</button>`;
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
           <div class="vt-block-body">
@@ -1478,8 +1480,9 @@ function sessionPRs() {
   return (sessionPRCache = out);
 }
 
-// Peso total en formato corto: "3.636 kg", o "7,3 t" desde 1.000 kg cuando
-// `tons` está activo (encabezados de mes, franjas de stats).
+// Peso total en formato corto. Regla de unidades: el volumen de UNA sesión va
+// siempre en kg ("3.636 kg"); las toneladas ("7,3 t", con `tons`) son solo
+// para totales de semana o mes (stats de Progreso, encabezados de mes).
 function fmtVolume(v, tons = false) {
   return tons && v >= 1000
     ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })} t`
@@ -1565,7 +1568,7 @@ function doneListHTML(list, prIds, withNotes = false) {
 function sessionDetailHTML() {
   const s = sessions.find((x) => x.id === ui.sessionDetail);
   const dur = s.durationSec ? durationParts(s.durationSec) : { value: "—", unit: "" };
-  const [volValue, volUnit] = fmtVolume(sessionVolume(s, false), true).split(" ");
+  const [volValue, volUnit] = fmtVolume(sessionVolume(s, false)).split(" "); // una sesión va siempre en kg
   const done = s.exercises.filter((e) => e.sets.length);
   return `
     <header class="vt-header">
@@ -1576,7 +1579,7 @@ function sessionDetailHTML() {
       <button class="vt-more-btn" data-a="sheet-open" data-kind="session" data-id="${s.id}" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
     </header>
     ${statStripHTML([
-      { label: "Duración", value: dur.value, unit: dur.unit },
+      { label: "Duración", value: dur.value, unit: dur.unit, action: { a: "session-duration-edit", id: s.id } },
       { label: "Volumen", value: volValue, unit: volUnit },
       { label: "Series", value: done.reduce((a, e) => a + e.sets.length, 0) },
     ])}
@@ -2164,16 +2167,17 @@ function progressHTML() {
 function jumpsSectionHTML() {
   const map = exMap();
   if (!sessions.some((s) => s.exercises.some((e) => e.sets.length && countsJumps(map[e.exerciseId])))) return "";
-  const thisWeek = weekKey(new Date());
-  const prev = new Date(); prev.setDate(prev.getDate() - 7);
-  const lastWeek = weekKey(prev);
-  const sum = (key) => sessions.filter((s) => weekKey(new Date(s.date)) === key).reduce((a, s) => a + sessionJumps(s, map), 0);
+  // Comparación justa: esta semana (que va a medias) contra la semana pasada
+  // HASTA el mismo día y hora, no contra la semana pasada completa.
+  const now = Date.now(), weekStart = mondayOf(new Date()).getTime(), WEEK = 7 * 86400000;
+  const sumBetween = (from, to) => sessions.filter((s) => { const t = new Date(s.date).getTime(); return t >= from && t <= to; })
+    .reduce((a, s) => a + sessionJumps(s, map), 0);
   return `<section class="vt-section">
     <div class="vt-sec-head">
       <p class="vt-section-eyebrow">Saltos en gimnasio</p>
       ${rangeChipsHTML()}
     </div>
-    <p class="vt-big-stat">${fmtNum(sum(thisWeek))}<small>esta semana · vs ${fmtNum(sum(lastWeek))} la semana pasada</small></p>
+    <p class="vt-big-stat">${fmtNum(sumBetween(weekStart, now))}<small>esta semana · vs ${fmtNum(sumBetween(weekStart - WEEK, now - WEEK))} a esta altura la semana pasada</small></p>
     ${computeBuckets(ui.progressRange).length ? `<div class="vt-chart-flat"><canvas id="jumps-canvas" height="160"></canvas></div>` : ""}
     <p class="vt-footnote">Solo saltos registrados en tus sesiones de pesas. No incluye cancha.</p>
   </section>`;
@@ -2744,7 +2748,7 @@ function finishSession() {
   // Todo lo que antes iba después del confirm() de "series sin marcar" vive
   // acá adentro: se ejecuta directo si no hay nada sin marcar, o como
   // callback del modal de confirmación si sí lo hay.
-  const save = () => {
+  const save = (durationSec) => {
     // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
     // ejercicio terminaría comparándose contra sí mismo.
     const map = exMap();
@@ -2793,9 +2797,9 @@ function finishSession() {
 
     const cleaned = {
       ...s,
-      durationSec: Math.round((Date.now() - new Date(s.date).getTime()) / 1000),
+      durationSec,
       exercises: s.exercises
-        .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done) }))
+        .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done).map(({ doneAt, ...st }) => st) })) // doneAt era solo para la sugerencia de duración
         .filter((e) => e.sets.length > 0),
     };
 
@@ -2857,12 +2861,58 @@ function finishSession() {
     render();
   };
 
+  // Duración: del inicio hasta ahora. Si pasa de 2,5 h lo más probable es
+  // que la sesión haya quedado abierta — antes de guardar se pregunta, con la
+  // duración sugerida ya puesta (inicio → última serie marcada, si se sabe).
+  const withDuration = () => {
+    const start = new Date(s.date).getTime();
+    const rawSec = Math.round((Date.now() - start) / 1000);
+    if (rawSec <= 2.5 * 3600) { save(rawSec); return; }
+    const lastDone = Math.max(0, ...s.exercises.flatMap((e) => e.sets.filter((st) => st.done && st.doneAt).map((st) => st.doneAt)));
+    ui.durationDialog = {
+      mode: "finish", rawSec,
+      minutes: Math.max(1, Math.round((lastDone > start ? lastDone - start : rawSec * 1000) / 60000)),
+      onSave: save,
+    };
+    render();
+  };
+
   const unchecked = total - done;
   if (unchecked > 0) {
-    askConfirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`, save, false);
+    askConfirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`, withDuration, false);
   } else {
-    save();
+    withDuration();
   }
+}
+
+// Modal de duración. Dos usos: al finalizar una sesión de más de 2,5 h
+// (mode "finish": "Guardar así" deja la duración medida, "Ajustar" usa los
+// minutos del campo) y al tocar la duración en el detalle de una sesión del
+// historial (mode "edit"). La carga (RPE × min) sale siempre de durationSec,
+// así que usa la duración corregida sin hacer nada más.
+function durationDialogHTML() {
+  const d = ui.durationDialog;
+  const finish = d.mode === "finish";
+  const hm = `${Math.floor(d.rawSec / 3600)}:${String(Math.floor((d.rawSec % 3600) / 60)).padStart(2, "0")}`;
+  return `
+    <div class="vt-modal-backdrop" data-a="duration-cancel">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-form">
+          <p style="margin:0">${finish ? `La sesión duró ${hm} h. ¿Terminaste hace rato?` : "Duración de la sesión"}</p>
+          <label>Duración real (minutos)
+            <input type="number" inputmode="numeric" class="vt-input vt-mono" id="dur-minutes" min="1" step="1" value="${d.minutes}"
+              autocomplete="off" autocorrect="off" spellcheck="false" name="f_durmin">
+          </label>
+        </div>
+        <div class="vt-modal-actions">
+          ${finish
+            ? `<button class="vt-btn-ghost" data-a="duration-keep">Guardar así</button>
+               <button class="vt-btn-primary" data-a="duration-apply">Ajustar</button>`
+            : `<button class="vt-btn-ghost" data-a="duration-cancel">Cancelar</button>
+               <button class="vt-btn-primary" data-a="duration-apply">Guardar</button>`}
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ------------------------ Piezas reutilizables del resumen ------------------------ */
@@ -2893,11 +2943,16 @@ function weekDotsHTML() {
 }
 
 // Franja de stats plana: columnas iguales con divisores verticales, sin cajas.
-// items: [{label, value, unit?}]
+// items: [{label, value, unit?, action?}] — con `action` ({a, id}) la celda
+// es un botón (ej. la duración editable del detalle de sesión).
 function statStripHTML(items) {
-  return `<div class="vt-strip">${items.map((it) => `
-    <div class="vt-strip-cell"><span class="vt-strip-label">${it.label}</span>
-      <span class="vt-strip-value">${it.value}${it.unit ? `<small>${it.unit}</small>` : ""}</span></div>`).join("")}</div>`;
+  return `<div class="vt-strip">${items.map((it) => {
+    const inner = `<span class="vt-strip-label">${it.label}</span>
+      <span class="vt-strip-value">${it.value}${it.unit ? `<small>${it.unit}</small>` : ""}</span>`;
+    return it.action
+      ? `<button class="vt-strip-cell vt-strip-btn" data-a="${it.action.a}" data-id="${it.action.id}">${inner}</button>`
+      : `<div class="vt-strip-cell">${inner}</div>`;
+  }).join("")}</div>`;
 }
 
 // Series por grupo muscular de una lista de ejercicios de sesión ([{exerciseId,
@@ -3984,6 +4039,9 @@ document.addEventListener("click", (e) => {
       const st = ex.sets[setI];
       const wasComplete = isExerciseComplete(ex);
       st.done = !st.done;
+      // Hora en que se marcó: solo sirve para sugerir la duración real si la
+      // sesión se finaliza mucho después de la última serie (finishSession).
+      if (st.done) st.doneAt = Date.now(); else delete st.doneAt;
       if (st.done) {
         // Si esta misma serie estaba cronometrándose, se detiene y queda su valor.
         if (runningTimer && runningTimer.exIdx === exI && runningTimer.setIdx === setI) stopSetTimer();
@@ -4129,6 +4187,27 @@ document.addEventListener("click", (e) => {
     }
 
     /* Historial */
+    case "duration-cancel": ui.durationDialog = null; render(); break;
+    case "duration-keep":
+    case "duration-apply": {
+      const d = ui.durationDialog;
+      if (!d) break;
+      const min = Math.round(num(document.getElementById("dur-minutes")?.value));
+      if (a === "duration-apply" && !(min >= 1)) { askAlert("Escribe la duración en minutos."); break; }
+      ui.durationDialog = null;
+      d.onSave(a === "duration-keep" ? d.rawSec : min * 60); // onSave renderiza
+      break;
+    }
+    case "session-duration-edit": {
+      const ses = sessions.find((x) => x.id === id);
+      if (!ses) break;
+      ui.durationDialog = {
+        mode: "edit", rawSec: num(ses.durationSec), minutes: ses.durationSec ? sessionMinutes(ses) : "",
+        onSave: (sec) => { ses.durationSec = sec; persistSessions(); render(); },
+      };
+      render();
+      break;
+    }
     case "session-rpe-edit": ui.sessionRpeEdit = true; render(); break;
     case "session-rpe": {
       // RPE de la sesión (resumen de fin de sesión o detalle del historial).
