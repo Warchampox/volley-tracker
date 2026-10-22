@@ -67,11 +67,28 @@
 - Estilo tabla (ref. Hevy): sin tarjetas encajonadas, divisores finos,
   radio de esquina solo en elementos táctiles, acento vertical por
   grupo muscular.
-- Paleta: acento de marca azul cobalto #3B6FE0. Ámbar EXCLUSIVO para
+- Paleta: acento de marca azul cobalto #3B6FE0 (`--blue`) SOLO en
+  rellenos y bordes (botones primarios, ▶, barras de gráficos,
+  interruptores, check de selección, subrayado de foco). Todo texto o
+  ícono azul usa `--blue-text` #5A8BEE (el #3B6FE0 como texto no llega a
+  4,5:1). Ámbar EXCLUSIVO para
   PR/trofeo, verde EXCLUSIVO para serie completada — no reasignar esos
   colores a nada más. Sin marca de agua, sin tinte de fondo en bloques.
-- Mayúsculas con tracking en labels/estructura; nombres de ejercicio,
-  de rutina y notas libres van en formato normal (nunca mayúscula).
+- Reglas de mayúsculas (2026-10-22). En MAYÚSCULA con `--track`:
+  encabezados de columna (KG, REPS, SERIES, TIEMPO, DESC., también el
+  KG / %1RM del editor) en mono `--fs-xs`; labels de sección (ESTA SEMANA,
+  RÉCORDS, LO QUE HICISTE, nombres de grupo y de carpeta, labels de la
+  franja de stats) en IBM Plex Sans 600 `--fs-xs`; el `h1` Barlow de cada
+  pestaña; el titular del resumen. En formato normal (solo la primera
+  letra): todos los botones (incluidos los primarios y las píldoras), en
+  IBM Plex Sans 600 sin tracking; títulos de ventanas y hojas en Barlow
+  `--fs-xl`; etiquetas de la nav; labels de formulario; el encabezado de
+  Organizar. Nombres de ejercicio, de rutina y notas libres nunca en
+  mayúscula.
+- Eyebrows: solo los que informan (fecha de sesión, grupo en el detalle de
+  ejercicio, "Sesión nº N · fecha", "Editar rutina / Nueva rutina"), en
+  mono `--fs-xs`, sin mayúscula forzada, en `--blue-text`. Los encabezados
+  de pestaña van solo con el título (sin "SET 0X · …").
 - Ícono-acción SIN recuadro: un ícono que es una acción (volver,
   nuevo, exportar, ⋯, cronometrar, etc.) va sin fondo ni borde, con
   área táctil de 44×44 e ícono de 24px (`.vt-btn-icon`); el fondo
@@ -81,7 +98,8 @@
   interruptor, RPE 1–10).
 - Colores reservados: ámbar = PR, verde = serie completada, azul
   #3B6FE0 = marca, morado = superserie, naranja = drop set, rojo =
-  eliminar/fallida. Los grupos musculares NUNCA usan uno de esos ni
+  eliminar/fallida (`--red-fill` #B24A40 para rellenos con texto blanco,
+  `--red-text` #D46A60 para texto e íconos). Los grupos musculares NUNCA usan uno de esos ni
   repiten color entre sí. Paleta por defecto (`DEFAULT_GROUPS`):
   Piernas #3FB0A6 · Pliometría #D86A9C · Empuje #A9C54A · Tracción
   #4FB7E3 · Hombro #C26AD8 · Core #A89F91 · Custom #6E7681; el
@@ -115,12 +133,21 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
   barras, hoja de modal) · `--r-full` 999px (píldoras). `50%` solo
   para círculos.
 - Tracking: `--track` 0.06em para todo lo que va en mayúscula.
+- Colores de contraste (2026-10-22, medidos contra WCAG AA): `--blue-text`
+  #5A8BEE (texto azul, 6:1 sobre `--bg`), `--red-fill` #B24A40 (blanco
+  encima 5,3:1), `--red-text` #D46A60 (5,3:1 sobre `--surface`),
+  `--line-strong` #68687A (borde de controles vacíos y subrayado de
+  editables, 3,6:1 sobre `--bg`).
 - Números: siempre con `fmtNum()` (coma decimal chilena) y espacio
   antes de la unidad: `52,5 kg`, nunca `52.5kg`.
 
 Patrones (reutilizar, no inventar variantes):
 - Fila de serie tipo tabla `[nº] [valor] [×] [valor] [RPE] [✓]`: check
   a la derecha, nº sin caja, valores en columnas flex iguales.
+- Valor editable sin caja (series, objetivos del editor, 1RM, descanso
+  del ejercicio, RPE): subrayado tenue permanente `--editable-line` (60%
+  del ancho, centrado, en `--line-strong`); al enfocar, subrayado azul de
+  2px; en una serie completada (`.is-done`) no lleva subrayado.
   Encabezado y fila salen de la misma plantilla (`setColumns`), con
   anchos fijos en variables `--col-*` de `.vt-sets`. El trofeo de PR
   va absoluto, nunca como columna.
@@ -167,7 +194,7 @@ Patrones (reutilizar, no inventar variantes):
 - Fin del descanso: bocina de marcador sintetizada (`beep()`), un solo
   toque, sin cuenta regresiva. La barra tiene −15 s / +15 s.
 - Encabezado de modo (`.vt-mode-head`, hoy solo Organizar): un modo
-  modal reemplaza el encabezado normal por Cancelar · TÍTULO + guía ·
+  modal reemplaza el encabezado normal por Cancelar · Organizar + guía ·
   Guardar, oculta la nav y las barras flotantes, y usa UNA barra
   inferior pegada al borde (`organizeViewHTML`, `organizeFooterHTML`).
   Se entra por el ⋯ del encabezado (sesión en vivo o editor) o
@@ -184,11 +211,49 @@ Patrones (reutilizar, no inventar variantes):
   subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
   acciones secundarias (también "+ Agregar serie", `.vt-add-set`),
   borde sólido (`.vt-btn-outline`) para acciones de ancho completo.
-  El borde punteado ya no se usa en botones (solo como subrayado de
-  un valor editable: nombre de sesión, duración).
+  El borde punteado ya no se usa en botones (solo como subrayado de un
+  texto editable: nombre de sesión, duración; los valores numéricos
+  llevan el subrayado tenue de arriba).
 - Sin `.vt-card`: no existen tarjetas encajonadas en la app.
-- Gráficos (Chart.js): sin caja, eje Y siempre desde 0, serie
-  principal en azul. Ámbar no se usa en gráficos.
+- Gráficos (Chart.js): sin caja, serie principal en azul. El eje Y del
+  peso máximo (detalle de ejercicio) parte cerca del mínimo
+  (`suggestedMin` = mínimo × 0,85, Chart.js lo baja a una marca pareja);
+  volumen, saltos y carga parten en 0. La última barra (período actual)
+  siempre lleva fecha. Cada canvas lleva texto alternativo
+  (`chartSummary`). Ámbar no se usa en gráficos.
+- Diálogos: un ayudante ÚNICO (`setupDialogs`, corre al final de
+  render()) marca el modal de más arriba con `role="dialog"` y
+  `aria-modal`, deja inerte lo de atrás, mueve el foco al primer control
+  que no sea un campo de texto, encierra Tab, cierra con Escape (misma
+  acción que tocar el fondo) y devuelve el foco al botón que lo abrió.
+  Un modal nuevo no necesita nada extra si usa `.vt-modal-backdrop` con
+  `data-a` de cierre.
+- Hojas inferiores: barrita de 36×4 en `--line-strong` (la agrega
+  setupDialogs) y cierre arrastrando hacia abajo > 80 px o con un tirón
+  rápido (`sheetDrag`), además de la ✕, el fondo y Escape.
+- Confirmaciones: `askConfirm(message, onYes, { label, danger, onNo,
+  cancelLabel })`. El botón principal repite la acción con un verbo
+  ("Descartar sesión", "Eliminar rutina", "Finalizar y guardar"), nunca
+  "Confirmar" ni un "Eliminar" genérico.
+- Borrar una serie (swipe) se puede deshacer: aviso "Serie eliminada ·
+  Deshacer" de 5 s (`showUndoToast`) que devuelve la serie con sus
+  valores a la misma posición.
+- Zoom: el viewport sigue bloqueado (`maximum-scale=1, user-scalable=no`)
+  porque en julio de 2026 la app se agrandaba sola durante el uso. En su
+  lugar hay un zoom temporal: pellizcar con dos dedos agranda `<main>`
+  hasta 3× y al soltar vuelve en 250 ms (inmediato con movimiento
+  reducido). Cancela swipe, long-press y arrastre de Organizar; no aplica
+  dentro de diálogos. Nada con `position: fixed` puede vivir dentro de
+  `<main>` (por eso la barra de Organizar va fuera).
+- Encabezado de la sesión en vivo (`.vt-live-head`): título a 2 líneas
+  como máximo, nunca toca el reloj; bajo 380px tiempo y volumen bajan a
+  una segunda fila. Encabezado de ejercicio en sesión: el nombre ocupa la
+  fila; descanso, nota y colapsar van en la línea de "Última vez".
+- Accesibilidad: cada control sin texto lleva `aria-label`; los que
+  tienen estado, `aria-pressed` (check, píldoras, RPE) o `aria-current`
+  (nav). Avisos sin mover el foco por `announce()` (región `#sr-live`,
+  polite). Con `prefers-reduced-motion` no hay pop del trofeo, pulso de
+  Organizar ni animación de gráficos.
 
 ## Reglas de compactación
 Al compactar (automático o manual), preserva siempre:

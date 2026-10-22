@@ -455,3 +455,37 @@ Todas están en [`docs/auditoria/`](auditoria/). El prefijo indica el ancho:
 | `--line-strong` (borde del check) sobre fondo | 1,75 ✗ (control: 3:1) |
 | `--line` (divisor) sobre fondo | 1,39 |
 | Colores de grupo sobre fondo | 4,31 (Custom) a 11,99 |
+
+---
+
+## Estado (aplicación, 22 de octubre de 2026)
+
+Martín revisó la auditoría: se aplican todos los puntos A (A3 con otra solución), se adoptan B1, B2 y B3 y se mantienen B4, B5 y B6. No se hace nada de la sección C. Versión publicada con estos cambios: `goat-v34`.
+
+| Punto | Estado | Cómo quedó |
+| --- | --- | --- |
+| A1 | Aplicado | Campos de serie con nombre ("Serie 2, kilos"); check con `aria-pressed` y "Marcar / Desmarcar serie N". |
+| A2 | Aplicado | Ayudante único `setupDialogs`: rol de diálogo, foco adentro, Tab encerrado, Escape cierra, foco de vuelta al botón que abrió. |
+| A3 | Aplicado distinto | El viewport sigue bloqueado (en julio la app se agrandaba sola). En su lugar, zoom temporal con dos dedos (hasta 3×) que vuelve solo al soltar. |
+| A4 | Aplicado | `--red-fill` #B24A40, `--red-text` #D46A60, `--line-strong` #68687A. |
+| A5 | Aplicado | Encabezado de sesión en grilla; título a 2 líneas como máximo; bajo 380 px tiempo y volumen en una segunda fila. |
+| A6 | Aplicado | `askConfirm` recibe el verbo; las 18 confirmaciones repiten su acción. |
+| A7 | Aplicado | "Serie eliminada · Deshacer" durante 5 s. |
+| A8 | Aplicado | Nombre del ejercicio a todo el ancho; descanso, nota y colapsar en la línea de "Última vez". |
+| A9 | Aplicado | Chevron en los selects. |
+| A10 | Aplicado | Progreso vacío con "Empezar una sesión". |
+| A11 | Aplicado | Primer uso sin atenuar el catálogo y con el primer grupo abierto. |
+| A12 | Aplicado | Barrita de 36×4 y cierre arrastrando más de 80 px o con un tirón rápido. |
+| A13 | Aplicado | `<main>`, h2, `aria-live` polite, texto alternativo en gráficos, foco visible en buscadores, movimiento reducido. |
+| A14 | Aplicado | "Bocina al terminar el descanso", aviso para instalar GOAT, prefijo "C", Historial con saltos o sin volumen en vez de "0 kg". |
+| A15 | Aplicado | Marcas parejas en el eje del peso; la última barra siempre con fecha. |
+| A16 | Aplicado | Con las reglas de mayúsculas de B2. |
+| B1 | Adoptado | `--blue-text` #5A8BEE para todo texto azul; `--blue` solo rellenos y bordes. |
+| B2 | Adoptado | Sin eyebrow "SET 0X"; mayúscula solo en columnas, labels de sección, título de pestaña y titular del resumen. Pantalla de sesión: 27 → 15 elementos en mayúscula. |
+| B3 | Adoptado | Subrayado tenue (60 %, centrado) en valores editables; azul al enfocar; sin subrayado en series completadas. |
+| B4 | Mantenido | El azul sigue en botones, nav y pestañas. |
+| B5 | Mantenido | Identidad visual propia, sin estética iOS. |
+| B6 | Mantenido | El código sigue igual; CLAUDE.md ahora dice que el peso máximo parte cerca del mínimo y volumen, saltos y carga en 0. |
+| C1–C8 | No aplicados | Como se recomendó. |
+
+Pendiente de probar en el teléfono: el pellizco, el swipe con deshacer, cerrar hojas deslizando y VoiceOver.

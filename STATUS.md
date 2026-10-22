@@ -1349,3 +1349,18 @@ Entradas nuevas al final. No reescribir lo anterior.
   objetivos, 1RM, descanso y RPE; azul de 2px al enfocar; sin subrayado en
   series completadas. Además: la barra de sesión minimizada ahora lleva a
   la sesión desde cualquier pestaña (antes solo se cerraba).
+
+## 2026-10-22 cont. — Auditoría aplicada (cierre)
+- CLAUDE.md: tokens nuevos, reglas de mayúsculas y eyebrows, subrayado de
+  editables, diálogos, hojas, confirmaciones con verbo, deshacer serie,
+  zoom temporal (con el porqué del viewport bloqueado), encabezados de
+  sesión y ejercicio, y la frase corregida de los ejes (B6). La auditoría
+  tiene su sección "Estado". sw.js v33 → v34.
+- Regresiones verificadas en el navegador (toques simulados): swipe +
+  deshacer, long-press, arrastre en Organizar, pellizco sin disparar los
+  tres anteriores, barras fijas durante y después del pellizco, las 18
+  confirmaciones con su verbo, 17 hojas cerradas con ✕, fondo y Escape (y
+  el gesto en hoja, confirmación y selector), nav y contrastes, trofeo de
+  PR en vivo. Movimiento reducido: regla CSS comprobada, no se pudo emular.
+- Pendiente en el teléfono: pellizco real, swipe + deshacer, cerrar hojas
+  deslizando, VoiceOver y el trofeo con "reducir movimiento" activado.
