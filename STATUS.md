@@ -1307,3 +1307,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   buscadores, sin pop del trofeo con movimiento reducido.
 - Verificado en el navegador a 390 y 360 px (foco, Escape, Tab, etiquetas,
   colores calculados). Pendiente: probar con VoiceOver en el teléfono.
+
+## 2026-10-22 cont. — Auditoría, Fase 2 de 4: sesión y gestos (A3, A5, A7, A8, A12)
+- A3: el viewport sigue bloqueado; pellizcar con dos dedos agranda <main>
+  (hasta 3×) y al soltar vuelve en 250 ms (inmediato con movimiento
+  reducido). El segundo dedo cancela swipe, long-press y arrastre de
+  Organizar (sin reordenar). La barra de Organizar pasó fuera de <main>.
+- A5: encabezado de sesión en grilla, título a 2 líneas máx.; bajo 380px
+  tiempo y volumen van en una segunda fila. A8: nombre del ejercicio a todo
+  el ancho; descanso, nota y colapsar en la línea de "Última vez". A7: borrar
+  una serie muestra "Serie eliminada · Deshacer" 5 s. A12: barrita en las
+  hojas y cierre arrastrando > 80 px o con un tirón rápido.
+- Verificado a 390 y 360 px con toques simulados. Pendiente en el teléfono:
+  pellizco real, swipe + deshacer y cerrar hojas deslizando.

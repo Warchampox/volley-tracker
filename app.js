@@ -519,7 +519,8 @@ function organizeFooterHTML() {
 
 // Pantalla del modo Organizar (sesión en vivo o editor de rutina). Es un
 // modo modal: tiene su propio encabezado (Cancelar · ORGANIZAR · Guardar) en
-// vez del normal, y render() oculta la nav y las barras flotantes. `listId`
+// vez del normal, y render() oculta la nav y las barras flotantes (y pone la
+// barra inferior, organizeFooterHTML, fuera de <main>). `listId`
 // es el id que espera mountSortables para ese contexto. Todo lee y escribe
 // sobre el borrador (exerciseEditDraft); el array real no se toca hasta Guardar.
 function organizeViewHTML(listId) {
@@ -534,8 +535,7 @@ function organizeViewHTML(listId) {
     </header>
     <div class="vt-org-list" id="${listId}">
       ${list.map((it, idx) => exerciseOrganizeRowHTML(idx, map[it.exerciseId], ssLabels[idx], it)).join("")}
-    </div>
-    ${organizeFooterHTML()}`;
+    </div>`;
 }
 
 // Agrupa los índices seleccionados en una superserie consecutiva a partir de
@@ -768,6 +768,7 @@ const NAV_ITEMS = [
 ];
 
 function render() {
+  if (lastDeletedSet && ui.activeSession?.id !== lastDeletedSet.sessionId) hideUndoToast();
   // Para el ayudante de diálogos (setupDialogs): ¿había uno abierto y qué
   // control tenía el foco antes de reconstruir el DOM?
   const dialogWasOpen = !!document.querySelector(DIALOG_SEL);
@@ -798,6 +799,7 @@ function render() {
   $app.innerHTML = `
     <div class="vt-frame">
       <main class="vt-content">${view}</main>
+      ${modeActive ? organizeFooterHTML() : ""}
       <div id="floating-stack" ${modeActive ? 'style="display:none"' : ""}>
         <div id="minimized-bar" class="is-hidden"></div>
         <div id="restbar" class="is-hidden"></div>
@@ -868,6 +870,8 @@ function setupDialogs(wasOpen, prevFocusKey) {
     return;
   }
   if (!wasOpen) { dialogReturnKey = lastClickKey || prevFocusKey; lastClickKey = null; }
+  // Toda hoja inferior lleva la barrita de arriba (se cierra arrastrándola, ver sheetDrag).
+  layers.forEach((l) => l.querySelector(".vt-modal")?.insertAdjacentHTML("afterbegin", '<div class="vt-grabber" aria-hidden="true"></div>'));
   const panel = top.querySelector(".vt-modal") || top;
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
@@ -901,6 +905,62 @@ document.addEventListener("keydown", (e) => {
   if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
   else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
 });
+
+// Cerrar una hoja arrastrándola hacia abajo: desde la barrita, el encabezado
+// o el cuerpo si su lista está arriba del todo (si no, el dedo scrollea la
+// lista). Se cierra pasados 80 px o con un tirón rápido; si no, vuelve a su
+// lugar. Cerrar = la misma acción que tocar el fondo.
+const SHEET_CLOSE_PX = 80, SHEET_CLOSE_SPEED = 0.6; // px/ms
+let sheetDrag = null; // { backdrop, panel, scroller, startX, startY, lastY, lastT, speed, dy, deciding, active }
+
+document.addEventListener("touchstart", (e) => {
+  sheetDrag = null;
+  if (e.touches.length !== 1) return;
+  const top = topDialog();
+  const panel = top?.matches(".vt-modal-backdrop[data-a]") && top.querySelector(".vt-modal");
+  if (!panel || !panel.contains(e.target) || e.target.closest("input, textarea, select")) return;
+  const t = e.touches[0];
+  sheetDrag = { backdrop: top, panel, scroller: e.target.closest(".vt-modal-body"), startX: t.clientX, startY: t.clientY,
+    lastY: t.clientY, lastT: e.timeStamp, speed: 0, dy: 0, deciding: true, active: false };
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  const d = sheetDrag;
+  if (!d || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dx = t.clientX - d.startX, dy = t.clientY - d.startY;
+  if (d.deciding) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    d.deciding = false;
+    d.active = dy > 0 && Math.abs(dy) > Math.abs(dx) && (!d.scroller || d.scroller.scrollTop <= 0);
+    if (!d.active) { sheetDrag = null; return; }
+    d.panel.style.transition = "none";
+  }
+  e.preventDefault();
+  d.dy = Math.max(0, dy);
+  d.speed = (t.clientY - d.lastY) / Math.max(1, e.timeStamp - d.lastT);
+  d.lastY = t.clientY; d.lastT = e.timeStamp;
+  d.panel.style.transform = `translateY(${d.dy}px)`;
+}, { passive: false });
+
+function endSheetDrag() {
+  const d = sheetDrag;
+  sheetDrag = null;
+  if (!d?.active) return;
+  suppressClickUntil = Date.now() + 150; // el dedo que suelta no toca la fila que quedó debajo
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (d.dy > SHEET_CLOSE_PX || d.speed > SHEET_CLOSE_SPEED) {
+    if (reduce) { d.backdrop.click(); return; }
+    d.panel.style.transition = "transform 180ms ease-in";
+    d.panel.style.transform = "translateY(100%)";
+    setTimeout(() => d.backdrop.click(), 180);
+  } else {
+    d.panel.style.transition = reduce ? "" : "transform 250ms cubic-bezier(.2, .8, .2, 1)";
+    d.panel.style.transform = "";
+  }
+}
+document.addEventListener("touchend", endSheetDrag);
+document.addEventListener("touchcancel", endSheetDrag);
 
 // Avisa a lectores de pantalla sin mover el foco (región aria-live="polite"
 // de index.html): fin del descanso, serie eliminada, etc.
@@ -959,6 +1019,7 @@ function mountSortables() {
       onStart: startGhostLock,
       onEnd: (evt) => {
         stopGhostLock();
+        if (pinchCancelledDrag) { pinchCancelledDrag = false; render(); return; } // cortado por un pellizco: vuelve al orden de antes
         if (evt.oldIndex === evt.newIndex) return;
         // La manija (y por lo tanto el drag) solo existe en modo Organizar —
         // reordena el borrador, nunca el array real directamente.
@@ -978,6 +1039,7 @@ function mountSortables() {
       onStart: startGhostLock,
       onEnd: (evt) => {
         stopGhostLock();
+        if (pinchCancelledDrag) { pinchCancelledDrag = false; render(); return; }
         if (evt.oldIndex === evt.newIndex) return;
         const [moved] = ui.exerciseEditDraft.splice(evt.oldIndex, 1);
         ui.exerciseEditDraft.splice(evt.newIndex, 0, moved);
@@ -1309,20 +1371,20 @@ function trainActiveHTML() {
   const ssLabels = computeSupersetLabels(list);
 
   return `
-    <header class="vt-header vt-header-sticky">
-      <div class="vt-header-brand"><div>
+    <header class="vt-header vt-header-sticky vt-live-head">
+      <div class="vt-live-title">
         <p class="vt-eyebrow">${fmtDate(s.date)}</p>
         ${s.routineId === null
-          ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" autocomplete="off">`
+          ? `<input type="text" class="vt-session-name-input" value="${esc(s.routineName)}" data-i="session-name" aria-label="Nombre de la sesión" autocomplete="off">`
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
-      </div></div>
-      <div class="vt-live-right">
+      </div>
+      <div class="vt-live-score">
         <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
         <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
-        <div class="vt-head-actions">
-          <button class="vt-more-btn" data-a="sheet-open" data-kind="live" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
-          <button class="vt-more-btn" data-a="session-minimize" aria-label="Minimizar sesión">${icon("chevDown", 20)}</button>
-        </div>
+      </div>
+      <div class="vt-head-actions vt-live-actions">
+        <button class="vt-more-btn" data-a="sheet-open" data-kind="live" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
+        <button class="vt-more-btn" data-a="session-minimize" aria-label="Minimizar sesión">${icon("chevDown", 20)}</button>
       </div>
     </header>
     <div class="vt-list" id="session-exercise-list">
@@ -1354,20 +1416,22 @@ function trainActiveHTML() {
           <div class="vt-block-body">
             <div class="vt-card-top">
               <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h2>
-              <div style="display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0">
+            </div>
+            ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
+            <div class="vt-ex-meta">
+              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
+              <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
                     value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
                     data-i="ex-rest" data-ex="${exIdx}" aria-label="Descanso en segundos"
                     autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
                 </span>
-                <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
-                <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar">${icon("chevUp", 16)}</button>
+                <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" aria-expanded="${ui.openExNotes.has(exIdx)}" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
+                <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar ejercicio">${icon("chevUp", 16)}</button>
               </div>
             </div>
-            ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
-            ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:var(--sp-2) 0" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" autocomplete="off">` : ""}
-            ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
+            ${ui.openExNotes.has(exIdx) ? `<input type="text" class="vt-input" style="margin:0 0 var(--sp-2)" placeholder="Nota de este ejercicio hoy…" value="${esc(e.sessionNote || "")}" data-i="session-note" data-ex="${exIdx}" aria-label="Nota de este ejercicio hoy" autocomplete="off">` : ""}
             <div class="vt-sets">
               ${e.sets.length ? setCapsHTML(t, uni) : ""}
               ${(() => {
@@ -2784,15 +2848,58 @@ function defaultSet(type, target, prevSet, unilateral) {
   };
 }
 
-// Elimina una serie de la sesión activa. Compartido por el botón "×" y el swipe-to-delete.
+// Elimina una serie de la sesión activa (swipe-to-delete). Se puede deshacer
+// durante 5 s desde el aviso "Serie eliminada · Deshacer" (showUndoToast).
 function deleteSet(exI, setI) {
   // Mantiene el cronómetro apuntando a la serie correcta si cambian los índices.
   if (runningTimer && runningTimer.exIdx === exI) {
     if (runningTimer.setIdx === setI) runningTimer = null;
     else if (runningTimer.setIdx > setI) runningTimer.setIdx--;
   }
-  ui.activeSession.exercises[exI].sets.splice(setI, 1);
+  const ex = ui.activeSession.exercises[exI];
+  const [removed] = ex.sets.splice(setI, 1);
+  lastDeletedSet = { sessionId: ui.activeSession.id, exI, setI, exerciseId: ex.exerciseId, set: removed };
   render();
+  showUndoToast();
+}
+
+// Última serie borrada, mientras su aviso está a la vista; null después.
+let lastDeletedSet = null;
+let undoToastTimer = null;
+
+function hideUndoToast() {
+  clearTimeout(undoToastTimer);
+  document.getElementById("undo-toast")?.remove();
+  lastDeletedSet = null;
+}
+
+// Aviso con botón Deshacer, mismo lenguaje que #recovered-toast. Elemento de
+// DOM aparte (no pasa por render()): sobrevive a los redibujos. Un borrado
+// nuevo reemplaza al anterior, que queda definitivo.
+function showUndoToast() {
+  clearTimeout(undoToastTimer);
+  document.getElementById("undo-toast")?.remove();
+  const bar = document.createElement("div");
+  bar.id = "undo-toast";
+  bar.setAttribute("role", "status");
+  bar.innerHTML = `<span>Serie eliminada</span><button type="button">Deshacer</button>`;
+  bar.querySelector("button").addEventListener("click", undoDeleteSet);
+  document.body.appendChild(bar);
+  undoToastTimer = setTimeout(hideUndoToast, 5000);
+}
+
+// Devuelve la serie con sus valores a la misma posición, si la sesión y el
+// ejercicio siguen siendo los mismos (si no, ya no hay dónde ponerla).
+function undoDeleteSet() {
+  const d = lastDeletedSet;
+  hideUndoToast();
+  const ex = d && ui.activeSession?.id === d.sessionId ? ui.activeSession.exercises[d.exI] : null;
+  if (!ex || ex.exerciseId !== d.exerciseId) return;
+  const at = Math.min(d.setI, ex.sets.length);
+  ex.sets.splice(at, 0, d.set);
+  if (runningTimer && runningTimer.exIdx === d.exI && runningTimer.setIdx >= at) runningTimer.setIdx++;
+  render();
+  announce("Serie restaurada");
 }
 
 function buildSessionFromRoutine(r) {
@@ -3681,7 +3788,7 @@ function importJSON(file) {
 
 /* ------------------------------- Swipe-to-delete de series ------------------------------- */
 // Deslizar una fila de serie hacia la izquierda revela un fondo rojo con basura;
-// soltar pasado el 40% del recorrido la elimina (misma acción que el botón "×").
+// soltar pasado el 40% del recorrido la elimina (con aviso para deshacer).
 // No interfiere con el drag handle de reordenar ejercicios: son zonas de DOM distintas
 // (la manija vive en la cabecera del bloque, fuera de .vt-swipe-wrap).
 
@@ -3746,6 +3853,77 @@ function endSwipe() {
 document.addEventListener("touchend", endSwipe);
 document.addEventListener("touchcancel", endSwipe);
 
+/* ------------------------- Zoom temporal con dos dedos ------------------------- */
+// El viewport sigue bloqueado (maximum-scale=1, user-scalable=no en
+// index.html): en julio de 2026 la app se agrandaba sola durante el uso. En su
+// lugar, pellizcar con dos dedos agranda <main> (hasta 3×) para mirar un
+// detalle y, al soltar, vuelve sola a su tamaño — como el zoom de una foto en
+// Instagram. Solo se transforma <main>: la nav, las barras flotantes y la
+// barra de Organizar son hermanas, así su position: fixed no se rompe.
+// Dentro de un diálogo el pellizco no hace nada.
+const PINCH_MAX = 3;
+let pinch = null; // { layer, d0, m0: {x, y} }
+let pinchCancelledDrag = false; // el arrastre de Organizar se cortó por un pellizco: no reordenar
+
+const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+const touchMid = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+
+// Al entrar el segundo dedo se cancela todo gesto de un dedo en curso: el
+// swipe de serie (vuelve a su lugar, endSwipe ya no borra), el long-press de
+// Organizar y un arrastre de SortableJS (termina sin reordenar).
+function cancelOneFingerGestures() {
+  if (swipeState) {
+    const { wrapEl, rowEl } = swipeState;
+    swipeState = null;
+    rowEl.style.transition = "";
+    rowEl.style.transform = "translateX(0)";
+    wrapEl.classList.remove("is-swiping");
+  }
+  cancelLongPress();
+  if (typeof Sortable !== "undefined" && Sortable.dragged) {
+    pinchCancelledDrag = true;
+    document.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
+    try { document.dispatchEvent(new TouchEvent("touchcancel", { bubbles: true })); } catch { /* sin TouchEvent: alcanza con pointercancel */ }
+  }
+}
+
+document.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 2 || pinch || topDialog() || !e.target.closest?.("#app")) return;
+  const layer = $app.querySelector(".vt-content");
+  if (!layer) return;
+  cancelOneFingerGestures();
+  const r = layer.getBoundingClientRect(), m0 = touchMid(e.touches);
+  layer.style.transition = "none";
+  layer.style.willChange = "transform";
+  layer.style.transformOrigin = `${m0.x - r.left}px ${m0.y - r.top}px`;
+  pinch = { layer, d0: touchDist(e.touches) || 1, m0 };
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  if (!pinch || e.touches.length !== 2) return;
+  e.preventDefault(); // ni scroll ni zoom del navegador mientras dura el pellizco
+  const scale = Math.min(PINCH_MAX, Math.max(1, touchDist(e.touches) / pinch.d0));
+  const m = touchMid(e.touches);
+  pinch.layer.style.transform = `translate(${m.x - pinch.m0.x}px, ${m.y - pinch.m0.y}px) scale(${scale})`;
+}, { passive: false });
+
+function endPinch(e) {
+  if (!pinch || e.touches.length >= 2) return;
+  const { layer } = pinch;
+  pinch = null;
+  suppressClickUntil = Date.now() + 300; // soltar los dedos no debe tocar lo que quedó debajo
+  const clear = () => { layer.style.transition = layer.style.transform = layer.style.transformOrigin = layer.style.willChange = ""; };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { clear(); return; }
+  layer.style.transition = "transform 250ms cubic-bezier(.2, .8, .2, 1)";
+  layer.style.transform = "translate(0, 0) scale(1)";
+  layer.addEventListener("transitionend", clear, { once: true });
+  setTimeout(clear, 300); // por si transitionend no llega (ya estaba en escala 1)
+}
+document.addEventListener("touchend", endPinch);
+document.addEventListener("touchcancel", endPinch);
+// Safari de iOS ignora user-scalable=no; sin esto haría su propio zoom encima.
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+
 /* ------------------- Mantener presionado: entra a Organizar ------------------- */
 // Mantener el dedo ~500ms sobre el NOMBRE de un ejercicio (fuera del modo
 // Organizar) entra al modo con ese ejercicio ya preseleccionado. Gesto de
@@ -3767,6 +3945,7 @@ function cancelLongPress() {
 }
 
 document.addEventListener("pointerdown", (e) => {
+  if (!e.isPrimary || pinch) { cancelLongPress(); return; } // un segundo dedo es un pellizco, no un long-press
   if (ui.exerciseEditMode) return; // el long-press solo sirve para ENTRAR, no hace nada ya adentro
   if (!ui.editingRoutine && !ui.activeSession) return;
   const h2 = e.target.closest(".vt-block h2");

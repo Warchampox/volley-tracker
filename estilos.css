@@ -87,6 +87,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   display: flex;
   flex-direction: column;
   position: relative;
+  /* El zoom temporal (pellizco) agranda <main> con transform: lo que sobresale
+     se corta acá en vez de agrandar el ancho de la página. clip (no hidden)
+     para no crear un contenedor de scroll que rompa los sticky. */
+  overflow-x: clip;
 }
 .vt-content {
   flex: 1;
@@ -157,8 +161,25 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   white-space: nowrap;
   text-align: right;
 }
-/* Lado derecho del encabezado de sesión: tiempo, volumen, ⋯ y minimizar. */
-.vt-live-right { display: flex; align-items: center; gap: var(--sp-4); flex-shrink: 0; }
+/* Encabezado de la sesión en vivo: [título 1fr] [tiempo · volumen] [⋯ ˅].
+   El título se corta a 2 líneas y nunca toca el reloj. Bajo 380px tiempo y
+   volumen bajan a una segunda fila, a todo el ancho. */
+.vt-live-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "title score actions"; align-items: center; column-gap: var(--sp-3);
+}
+.vt-live-title { grid-area: title; min-width: 0; }
+.vt-live-title .vt-header-title-sm {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.1; overflow-wrap: anywhere;
+}
+.vt-live-score { grid-area: score; display: flex; align-items: center; gap: var(--sp-4); }
+.vt-live-actions { grid-area: actions; }
+@media (max-width: 379px) {
+  .vt-live-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "score score"; row-gap: var(--sp-2); }
+  .vt-live-score { justify-content: flex-start; }
+  .vt-live-score .vt-scoreboard { text-align: left; }
+}
 .vt-scoreboard small { display: block; font-size: var(--fs-xs); color: var(--text-dim); font-weight: 500; letter-spacing: var(--track); text-transform: uppercase; }
 
 .vt-btn-icon, .vt-btn-ghost {
@@ -399,6 +420,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 
 .vt-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+/* Línea bajo el nombre del ejercicio: "Última vez" a la izquierda (se parte
+   en líneas si hace falta) y descanso · nota · colapsar alineados a la derecha. */
+.vt-ex-meta { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-1) 0 var(--sp-2); }
+.vt-ex-meta .vt-lasttime { flex: 1; min-width: 0; margin: 0; }
+.vt-ex-tools { display: flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; margin-left: auto; margin-right: calc(-1 * var(--sp-2)); }
 .vt-muted { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
 .vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; }
 .vt-lasttime { color: var(--text-dim); font-size: var(--fs-sm); font-family: 'IBM Plex Mono', monospace; margin: var(--sp-2) 0 var(--sp-3); }
@@ -746,6 +772,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: var(--surface); width: 100%; max-width: 480px; border-radius: var(--r-md) var(--r-md) 0 0;
   max-height: 75vh; display: flex; flex-direction: column; border: 1px solid var(--line); border-bottom: none;
 }
+/* Barrita de la hoja: indica que se puede cerrar arrastrándola hacia abajo. */
+.vt-grabber { flex-shrink: 0; width: 36px; height: 4px; margin: var(--sp-2) auto 0; border-radius: var(--r-full); background: var(--line-strong); }
 .vt-modal-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4); border-bottom: 1px solid var(--line); }
 .vt-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); text-transform: uppercase; margin: 0; flex: 1; }
 .vt-search { flex: 1; display: flex; align-items: center; gap: var(--sp-2); background: var(--surface-2); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); color: var(--text-dim); }
@@ -1048,6 +1076,24 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   z-index: 100;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
   animation: vt-toast-fade 3.5s ease forwards;
+}
+/* "Serie eliminada · Deshacer" (showUndoToast): misma píldora que
+   #recovered-toast, con un botón de texto; dura 5 s. */
+#undo-toast {
+  position: fixed;
+  top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--sp-2);
+  white-space: nowrap;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-full);
+  color: var(--text-dim); font-size: var(--fs-sm);
+  padding: 0 var(--sp-2) 0 var(--sp-4);
+  z-index: 100;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+}
+#undo-toast button {
+  min-height: 44px; padding: 0 var(--sp-2);
+  background: transparent; border: none; color: var(--blue); cursor: pointer;
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
 }
 @keyframes vt-toast-fade {
   0%, 80% { opacity: 1; }
