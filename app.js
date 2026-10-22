@@ -401,7 +401,7 @@ const jumpsLineHTML = (n) => n > 0 ? `<p class="vt-jumps-line"><b>${fmtNum(n)}</
 // Fila de 10 botones (1–10) para el RPE de la sesión. Tocar el elegido lo quita.
 function rpeButtonsHTML(sessionId, current) {
   return `<div class="vt-rpe-scale">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
-    `<button class="${current === n ? "is-active" : ""}" data-a="session-rpe" data-id="${sessionId}" data-value="${n}" aria-label="RPE ${n}">${n}</button>`).join("")}</div>`;
+    `<button class="${current === n ? "is-active" : ""}" data-a="session-rpe" data-id="${sessionId}" data-value="${n}" aria-label="RPE ${n}" aria-pressed="${current === n}">${n}</button>`).join("")}</div>`;
 }
 
 // 1RM estimado (Epley), redondeado al disco de 2,5 kg más cercano. Solo es
@@ -498,7 +498,7 @@ function exerciseOrganizeRowHTML(idx, ex, lbl, item) {
       <span class="vt-org-name">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
       <span class="vt-org-sub">${n} serie${n !== 1 ? "s" : ""}</span>
     </span>
-    <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ejercicio"></button>
+    <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ${esc(ex?.name || "ejercicio")}" aria-pressed="${selected}"></button>
   </div>`;
 }
 
@@ -642,6 +642,7 @@ function tickRest() {
     rest = null;
     beep();
     if (settings.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+    announce("Terminó el descanso");
     updateRestBar();
     return;
   }
@@ -767,6 +768,10 @@ const NAV_ITEMS = [
 ];
 
 function render() {
+  // Para el ayudante de diálogos (setupDialogs): ¿había uno abierto y qué
+  // control tenía el foco antes de reconstruir el DOM?
+  const dialogWasOpen = !!document.querySelector(DIALOG_SEL);
+  const prevFocusKey = controlKey(document.activeElement);
   exerciseStatsCache = null; // se recalcula una sola vez por render, la primera vez que alguien lo pida
   sessionPRCache = null;
   if (ui.sessionDetail && !sessions.some((x) => x.id === ui.sessionDetail)) ui.sessionDetail = null; // la sesión se eliminó
@@ -792,14 +797,14 @@ function render() {
 
   $app.innerHTML = `
     <div class="vt-frame">
-      <div class="vt-content">${view}</div>
+      <main class="vt-content">${view}</main>
       <div id="floating-stack" ${modeActive ? 'style="display:none"' : ""}>
         <div id="minimized-bar" class="is-hidden"></div>
         <div id="restbar" class="is-hidden"></div>
       </div>
       <nav class="vt-nav" ${modeActive ? 'style="display:none"' : ""}>
         ${NAV_ITEMS.map((n) => `
-          <button class="vt-nav-item ${ui.tab === n.id ? "is-active" : ""}" data-a="tab" data-tab="${n.id}">
+          <button class="vt-nav-item ${ui.tab === n.id ? "is-active" : ""}" data-a="tab" data-tab="${n.id}" ${ui.tab === n.id ? 'aria-current="page"' : ""}>
             ${icon(n.ic, 20)}<span>${n.label}</span>
             ${n.id === "rutinas" && ui.activeSession ? '<span class="vt-dot"></span>' : ""}
           </button>`).join("")}
@@ -824,7 +829,86 @@ function render() {
   updateOrganizePad();
   if (ui.tab === "progreso" || ui.progressDetail) mountChart();
   mountSortables();
+  setupDialogs(dialogWasOpen, prevFocusKey);
   if (ui.activeSession) persistActiveSession();
+}
+
+/* ------------------------------- Diálogos accesibles ------------------------------- */
+// Ayudante ÚNICO para todos los modales (hojas, confirmaciones, avisos,
+// selector, formularios y el resumen de sesión). Corre al final de cada
+// render(): marca el de más arriba como diálogo, deja inerte todo lo de
+// atrás, mueve el foco adentro al abrir y lo devuelve al botón que lo abrió
+// al cerrar. Tab queda encerrado y Escape cierra (keydown, más abajo).
+const DIALOG_SEL = ".vt-modal-backdrop, .vt-summary-overlay";
+const FOCUSABLE_SEL = 'button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+let dialogReturnKey = null; // controlKey del botón que abrió el diálogo
+let lastClickKey = null;    // controlKey del último control tocado (Safari no enfoca botones al tocarlos)
+
+// render() reconstruye todo el DOM, así que un control se vuelve a encontrar
+// por su id o por sus atributos data-* (data-a, data-id, data-kind…).
+function controlKey(el) {
+  if (!el || el === document.body || !el.dataset) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const parts = Object.entries(el.dataset).filter(([k]) => k !== "stop")
+    .map(([k, v]) => `[data-${k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}="${CSS.escape(v)}"]`);
+  return parts.length ? parts.join("") : null;
+}
+
+const focusablesIn = (root) => [...root.querySelectorAll(FOCUSABLE_SEL)].filter((x) => x.getClientRects().length);
+const topDialog = () => { const all = document.querySelectorAll(DIALOG_SEL); return all[all.length - 1] || null; };
+
+function setupDialogs(wasOpen, prevFocusKey) {
+  const layers = [...document.querySelectorAll(DIALOG_SEL)];
+  const top = layers[layers.length - 1];
+  $app.querySelector(".vt-frame").inert = !!top;
+  layers.forEach((l) => { l.inert = l !== top; });
+  if (!top) {
+    if (wasOpen && dialogReturnKey) document.querySelector(dialogReturnKey)?.focus({ preventScroll: true });
+    dialogReturnKey = null;
+    return;
+  }
+  if (!wasOpen) { dialogReturnKey = lastClickKey || prevFocusKey; lastClickKey = null; }
+  const panel = top.querySelector(".vt-modal") || top;
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  if (!panel.hasAttribute("aria-label")) {
+    // Título de la hoja; las confirmaciones y avisos no tienen, se nombran por su mensaje.
+    const title = panel.querySelector(".vt-modal-title, .vt-sum-headline, .vt-modal-form > p");
+    if (title) { title.id ||= "vt-dialog-title"; panel.setAttribute("aria-labelledby", title.id); }
+  }
+  // Si el diálogo solo se redibujó (ej. elegir un color), el foco vuelve al
+  // mismo control. Si es nuevo, al primer control que no sea un campo de
+  // texto (en el teléfono, enfocar un campo abriría el teclado sin pedirlo).
+  const same = wasOpen && prevFocusKey && panel.querySelector(prevFocusKey);
+  const list = focusablesIn(panel);
+  const target = same || list.find((x) => !x.matches("input, textarea, select")) || list[0];
+  target?.focus({ preventScroll: true });
+}
+
+document.addEventListener("keydown", (e) => {
+  const top = topDialog();
+  if (!top) return;
+  if (e.key === "Escape") {
+    // Misma acción que tocar el fondo (cancelar / cerrar). El resumen de
+    // sesión no tiene fondo: se cierra solo con "Listo".
+    if (top.matches(".vt-modal-backdrop[data-a]")) { e.preventDefault(); top.click(); }
+    return;
+  }
+  if (e.key !== "Tab") return;
+  const list = focusablesIn(top.querySelector(".vt-modal") || top);
+  if (!list.length) return;
+  const first = list[0], last = list[list.length - 1], inside = top.contains(document.activeElement);
+  if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+});
+
+// Avisa a lectores de pantalla sin mover el foco (región aria-live="polite"
+// de index.html): fin del descanso, serie eliminada, etc.
+function announce(msg) {
+  const el = document.getElementById("sr-live");
+  if (!el) return;
+  el.textContent = "";
+  setTimeout(() => { el.textContent = msg; }, 50);
 }
 
 // Reordenar ejercicios por arrastre (manija .vt-drag-handle), en el editor de rutina
@@ -915,7 +999,7 @@ function routineRowHTML(r, map, lastUsed) {
   return `<div class="vt-routine-row">
     <div class="vt-routine-text">
       <div class="vt-routine-head">
-        <h3 class="vt-routine-name">${esc(r.name) || "Sin nombre"}</h3>
+        <h2 class="vt-routine-name">${esc(r.name) || "Sin nombre"}</h2>
         <button class="vt-more-btn" data-a="sheet-open" data-kind="routine" data-id="${r.id}" aria-label="Más opciones">${icon("more", 18)}</button>
       </div>
       <p class="vt-routine-meta">${n} ejercicio${n !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
@@ -1045,7 +1129,7 @@ function folderModalHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title">${m.id ? "Renombrar carpeta" : "Nueva carpeta"}</h2>
-          <button class="vt-btn-ghost" data-a="folder-modal-cancel">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="folder-modal-cancel" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-form">
           <label>Nombre
@@ -1065,7 +1149,7 @@ function pasteJsonModalHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title">Pegar para importar</h2>
-          <button class="vt-btn-ghost" data-a="paste-json-cancel">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="paste-json-cancel" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-form">
           <textarea class="vt-input vt-textarea" id="paste-json-text" rows="8"
@@ -1084,7 +1168,7 @@ function moveRoutineHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title">Mover a carpeta</h2>
-          <button class="vt-btn-ghost" data-a="move-close">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="move-close" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-body">
           <button class="vt-modal-row" data-a="move-pick" data-folder="">${icon("x", 15)} Sin carpeta</button>
@@ -1164,8 +1248,8 @@ function editorHTML() {
         // opción activa nombra la columna). En tiempo no hay modo %.
         const caps = cols.map((c) => !c.toggle ? `<span class="vt-cap vt-col-val">${c.cap}</span>`
           : `<span class="vt-col-val vt-pills vt-cap-toggle">
-              <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg">${t === "bodyweight" ? "+kg" : "kg"}</button>
-              <button class="${isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="percent">%1RM</button>
+              <button class="${!isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="kg" aria-pressed="${!isPct}">${t === "bodyweight" ? "+kg" : "kg"}</button>
+              <button class="${isPct ? "is-active" : ""}" data-a="editor-loadmode" data-idx="${idx}" data-mode="percent" aria-pressed="${isPct}">%1RM</button>
             </span>`).join("");
         const fields = cols.map((c) => {
           const v = it[c.field] ?? c.def ?? 0;
@@ -1188,7 +1272,7 @@ function editorHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h3>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h3>
+              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h2>
             </div>
             <div class="vt-sets vt-targets">
               <div class="vt-set-caps">${caps}</div>
@@ -1269,7 +1353,7 @@ function trainActiveHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h3>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h3>
+              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h2>
               <div style="display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
@@ -1448,40 +1532,45 @@ function typeSelectorHTML(exIdx, setIdx) {
   </div>`;
 }
 
+// Cómo se nombra cada columna para un lector de pantalla ("Serie 2, kilos").
+const SET_FIELD_SPOKEN = { weight: "kilos", reps: "repeticiones", seconds: "tiempo", repsL: "repeticiones izquierda", repsR: "repeticiones derecha" };
+
 function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   const stype = getSetType(st);
+  // Nombre de la serie para lectores de pantalla: "Serie 2", "Serie de calentamiento".
+  const spoken = stype === "warmup" ? "Serie de calentamiento" : stype === "dropset" ? "Drop set" : stype === "failed" ? "Serie fallida" : `Serie ${label}`;
   const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
   const typeKey = `${exIdx}:${setIdx}`;
   const openType = ui.openTypeSelector === typeKey;
   const typeBtnClass = stype === "warmup" ? "is-warmup" : stype === "dropset" ? "is-dropset" : stype === "failed" ? "is-failed" : "";
-  const attrs = (f) =>
-    `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
+  const attrs = (f, spokenField) =>
+    `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}, ${spokenField}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
 
   const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
   const fields = setColumns(type, unilateral).map((c) => {
     if (c.x) return `<span class="vt-x vt-col-x">×</span>`;
     if (c.timer) return `<button class="vt-timer-btn vt-col-timer ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 22)}</button>`;
-    if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds")}>`;
+    if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds", "tiempo")}>`;
     const value = c.f === "repsL" ? repsL(st) : c.f === "repsR" ? repsR(st) : num(st[c.f]);
-    return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-mono vt-set-input vt-col-val" value="${value}" ${attrs(c.f)}>`;
+    return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-mono vt-set-input vt-col-val" value="${value}" ${attrs(c.f, c.f === "weight" && c.cap === "+kg" ? "lastre en kilos" : SET_FIELD_SPOKEN[c.f])}>`;
   }).join("");
 
   return `
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
       <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
-        <button class="vt-settype-btn vt-col-num ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Tipo de serie">${label}</button>
+        <button class="vt-settype-btn vt-col-num ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}: cambiar tipo" aria-expanded="${openType}">${label}</button>
         ${fields}
-        <button class="vt-rpe-btn vt-col-rpe ${st.rpe ? "has-value" : ""}" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="RPE">${icon("gauge", 15)}</button>
-        <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Marcar serie">${icon("check", 15)}</button>
-        ${pr ? `<span class="vt-pr" title="¡PR!">${icon("trophy", 16)}</span>` : ""}
+        <button class="vt-rpe-btn vt-col-rpe ${st.rpe ? "has-value" : ""}" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}: RPE${st.rpe ? ` ${fmtNum(st.rpe)}` : ""}" aria-expanded="${open}">${icon("gauge", 15)}</button>
+        <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${st.done ? "Desmarcar" : "Marcar"} ${spoken.charAt(0).toLowerCase() + spoken.slice(1)}" aria-pressed="${!!st.done}">${icon("check", 15)}</button>
+        ${pr ? `<span class="vt-pr" title="¡PR!" role="img" aria-label="Récord">${icon("trophy", 16)}</span>` : ""}
       </div>
     </div>
     ${openType ? typeSelectorHTML(exIdx, setIdx) : ""}
     ${open ? `<div class="vt-setline2">
       <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
-        value="${st.rpe ?? ""}" ${attrs("rpe")}>
+        value="${st.rpe ?? ""}" ${attrs("rpe", "RPE")}>
     </div>` : ""}`;
 }
 
@@ -1567,10 +1656,10 @@ function historyListHTML() {
     return emptyHTML("Todavía no hay historial", "Cuando termines un entrenamiento, va a aparecer acá.", "");
   return `
     <div class="vt-search">${icon("search", 16)}
-      <input placeholder="Buscar por nombre…" value="${esc(ui.historyQuery)}" data-i="history-q" autocomplete="off">
+      <input placeholder="Buscar por nombre…" value="${esc(ui.historyQuery)}" data-i="history-q" aria-label="Buscar sesión por nombre" autocomplete="off">
     </div>
     <div class="vt-hist-filters"><div class="vt-pills">
-      ${HISTORY_RANGE_CHIPS.map((c) => `<button class="${ui.historyRange === c.id ? "is-active" : ""}" data-a="history-range" data-range="${c.id}">${c.label}</button>`).join("")}
+      ${HISTORY_RANGE_CHIPS.map((c) => `<button class="${ui.historyRange === c.id ? "is-active" : ""}" data-a="history-range" data-range="${c.id}" aria-pressed="${ui.historyRange === c.id}">${c.label}</button>`).join("")}
     </div></div>
     <div id="history-filtered-list">${historyFilteredListHTML()}</div>`;
 }
@@ -1741,7 +1830,7 @@ function computeBuckets(range) {
 
 function rangeChipsHTML() {
   return `<div class="vt-pills">
-    ${RANGE_CHIPS.map((c) => `<button class="${ui.progressRange === c.id ? "is-active" : ""}" data-a="prog-range" data-range="${c.id}">${c.label}</button>`).join("")}
+    ${RANGE_CHIPS.map((c) => `<button class="${ui.progressRange === c.id ? "is-active" : ""}" data-a="prog-range" data-range="${c.id}" aria-pressed="${ui.progressRange === c.id}">${c.label}</button>`).join("")}
   </div>`;
 }
 
@@ -2114,7 +2203,7 @@ function exerciseDetailHTML() {
     <section class="vt-section">
       <div class="vt-sec-head">
         <div class="vt-pills">
-          ${options.map((o) => `<button class="${metric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}">${o.label}</button>`).join("")}
+          ${options.map((o) => `<button class="${metric === o.id ? "is-active" : ""}" data-a="prog-metric" data-m="${o.id}" aria-pressed="${metric === o.id}">${o.label}</button>`).join("")}
         </div>
         ${rangeChipsHTML()}
       </div>
@@ -2151,7 +2240,7 @@ const PROGRESS_SECTIONS = [{ id: "resumen", label: "Resumen" }, { id: "historial
 
 function progressSectionToggleHTML() {
   return `<div class="vt-tabs">
-    ${PROGRESS_SECTIONS.map((s) => `<button class="${ui.progressSection === s.id ? "is-active" : ""}" data-a="progress-section" data-section="${s.id}">${s.label}</button>`).join("")}
+    ${PROGRESS_SECTIONS.map((s) => `<button class="${ui.progressSection === s.id ? "is-active" : ""}" data-a="progress-section" data-section="${s.id}" aria-pressed="${ui.progressSection === s.id}">${s.label}</button>`).join("")}
   </div>`;
 }
 
@@ -2248,11 +2337,24 @@ function chartScales(yFormat, yMin = 0) {
   };
 }
 
+// Texto alternativo de un gráfico (el canvas no se lee solo): qué muestra,
+// el valor del último punto y el máximo del rango.
+function chartSummary(title, labels, values, fmt) {
+  if (!values.length) return title;
+  const max = Math.max(...values), iMax = values.indexOf(max);
+  return `${title}. ${labels[labels.length - 1]}: ${fmt(values[values.length - 1])}. Máximo: ${fmt(max)}, ${labels[iMax]}.`;
+}
+function describeChart(canvas, text) {
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", text);
+}
+
 // Gráfico de barras por período (volumen, saltos, carga): el período actual
 // en azul, el resto apagado. Devuelve la instancia, o null si no hay canvas.
-function mountBars(canvasId, buckets, values, yFormat, tooltipFormat) {
+function mountBars(canvasId, buckets, values, yFormat, tooltipFormat, title) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
+  describeChart(canvas, chartSummary(title, buckets.map((b) => b.label), values, tooltipFormat));
   return new Chart(canvas, {
     type: "bar",
     data: {
@@ -2268,6 +2370,7 @@ function mountBars(canvasId, buckets, values, yFormat, tooltipFormat) {
 
 function mountChart() {
   if (typeof Chart === "undefined") return;
+  Chart.defaults.animation = matchMedia("(prefers-reduced-motion: reduce)").matches ? false : Chart.defaults.animation;
   if (chart) { chart.destroy(); chart = null; }
   extraCharts.forEach((c) => c.destroy());
   extraCharts = [];
@@ -2275,16 +2378,17 @@ function mountChart() {
   if (!ui.progressDetail) {
     // Resumen de Progreso: volumen (gráfico principal) + saltos y carga si corresponden.
     const buckets = computeBuckets(ui.progressRange);
+    const per = bucketGranularity(ui.progressRange) === "month" ? "mensual" : "semanal";
     const sumBy = (fn) => buckets.map((b) => Math.round(b.sessions.reduce((a, s) => a + fn(s), 0)));
     const volume = sumBy((s) => sessionVolume(s, false));
     const inTons = Math.max(0, ...volume) >= 1000;
     chart = mountBars("prog-canvas", buckets, volume,
       (v) => inTons ? `${(v / 1000).toLocaleString("es-CL", { maximumFractionDigits: 1 })}t` : fmtNum(v),
-      (v) => `${fmtNum(v)} kg`);
+      (v) => `${fmtNum(v)} kg`, `Volumen ${per}`);
     const map = exMap();
     [
-      mountBars("jumps-canvas", buckets, sumBy((s) => sessionJumps(s, map)), fmtNum, (v) => `${fmtNum(v)} saltos`),
-      mountBars("load-canvas", buckets, sumBy((s) => sessionLoad(s) || 0), fmtNum, (v) => `${fmtNum(v)} UA`),
+      mountBars("jumps-canvas", buckets, sumBy((s) => sessionJumps(s, map)), fmtNum, (v) => `${fmtNum(v)} saltos`, `Saltos en gimnasio, ${per}`),
+      mountBars("load-canvas", buckets, sumBy((s) => sessionLoad(s) || 0), fmtNum, (v) => `${fmtNum(v)} UA`, `Carga ${per}`),
     ].forEach((c) => { if (c) extraCharts.push(c); });
     return;
   }
@@ -2312,6 +2416,8 @@ function mountChart() {
     if (metric === "weight" && data.length)
       yMin = Math.max(0, Math.floor(Math.min(...data.map((p) => p.v)) * 0.85 / 5) * 5);
   }
+  const metricLabel = metricOptions(exId).find((o) => o.id === metric)?.label || "";
+  describeChart(canvas, datasets.map((d) => chartSummary(`${exName(exId)}, ${metricLabel}${d.label ? ` ${d.label.toLowerCase()}` : ""} en ${RANGE_WORDS[ui.progressRange]}`, labels, d.data, yFormat)).join(" "));
   chart = new Chart(canvas, {
     type: "line",
     data: { labels, datasets },
@@ -2457,7 +2563,7 @@ function exercisesManagerHTML() {
       </div>
     </header>
     <div class="vt-search" style="margin-bottom:var(--sp-4)">${icon("search", 16)}
-      <input placeholder="Buscar ejercicio…" value="${esc(ui.exercisesQuery)}" data-i="exercises-q" autocomplete="off">
+      <input placeholder="Buscar ejercicio…" value="${esc(ui.exercisesQuery)}" data-i="exercises-q" aria-label="Buscar ejercicio" autocomplete="off">
     </div>
     <div id="exercises-list">${exercisesListHTML()}</div>`;
 }
@@ -2489,7 +2595,7 @@ function groupModalHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title">${m.originalName ? "Editar grupo" : "Nuevo grupo"}</h2>
-          <button class="vt-btn-ghost" data-a="group-modal-cancel">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="group-modal-cancel" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-form">
           <label>Nombre
@@ -2513,7 +2619,7 @@ function exerciseModalHTML() {
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title">${m.id ? "Editar ejercicio" : "Nuevo ejercicio"}</h2>
-          <button class="vt-btn-ghost" data-a="ex-modal-cancel">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="ex-modal-cancel" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-form">
           <label>Nombre
@@ -2554,12 +2660,12 @@ function exerciseModalHTML() {
 function pickerHTML() {
   return `
     <div class="vt-modal-backdrop" data-a="picker-close">
-      <div class="vt-modal" data-stop="1">
+      <div class="vt-modal" data-stop="1" aria-label="Elegir ejercicio">
         <div class="vt-modal-head">
           <div class="vt-search">${icon("search", 16)}
-            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" autofocus autocomplete="off">
+            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" aria-label="Buscar ejercicio" autofocus autocomplete="off">
           </div>
-          <button class="vt-btn-ghost" data-a="picker-close">${icon("x", 18)}</button>
+          <button class="vt-btn-ghost" data-a="picker-close" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-body" id="picker-list">${pickerListHTML()}</div>
       </div>
@@ -2638,7 +2744,7 @@ function emptyHTML(title, detail, action) {
   // vacío se ve igual de bien sin ella.
   return `<div class="vt-empty">
     <img src="icons/goat-face.png" alt="" class="vt-empty-mascot" onerror="this.style.display='none'">
-    <h3>${title}</h3><p>${detail}</p>${action}
+    <h2>${title}</h2><p>${detail}</p>${action}
   </div>`;
 }
 
@@ -3645,8 +3751,8 @@ document.addEventListener("touchcancel", endSwipe);
 // Organizar) entra al modo con ese ejercicio ya preseleccionado. Gesto de
 // temporizador, fuera del sistema de delegación de "click" — se cancela si
 // hay movimiento significativo antes de cumplirse (no compite con el scroll).
-// Se ata solo al <h3> del bloque (nombre/cabecera), nunca a sus controles:
-// en la sesión activa el <h3> convive con descanso/nota/colapsar pero es un
+// Se ata solo al <h2> del bloque (nombre/cabecera), nunca a sus controles:
+// en la sesión activa el <h2> convive con descanso/nota/colapsar pero es un
 // elemento propio sin acción de click encima, así que no hace falta excluir
 // nada explícitamente — inputs y botones quedan afuera del selector solo.
 const LONG_PRESS_MS = 500;
@@ -3663,9 +3769,9 @@ function cancelLongPress() {
 document.addEventListener("pointerdown", (e) => {
   if (ui.exerciseEditMode) return; // el long-press solo sirve para ENTRAR, no hace nada ya adentro
   if (!ui.editingRoutine && !ui.activeSession) return;
-  const h3 = e.target.closest(".vt-block h3");
-  if (!h3) return;
-  const blockEl = h3.closest("[data-block-idx]");
+  const h2 = e.target.closest(".vt-block h2");
+  if (!h2) return;
+  const blockEl = h2.closest("[data-block-idx]");
   if (!blockEl) return;
   // Bloquea selección de texto/menú contextual/zoom del navegador sobre este
   // gesto — si no, le gana la carrera al temporizador de long-press de abajo.
@@ -3696,6 +3802,7 @@ document.addEventListener("click", (e) => {
   // (ej. el toggle de colapsar de una fila colapsada) — ver long-press más abajo.
   if (Date.now() < suppressClickUntil) return;
   const el = e.target.closest("[data-a]");
+  lastClickKey = controlKey(el);
   if (!el) return;
   // El fondo oscuro cierra el modal, pero un clic dentro del panel no debe cerrarlo.
   if (el.classList.contains("vt-modal-backdrop") && e.target.closest(".vt-modal")) return;
@@ -4710,6 +4817,7 @@ window.addEventListener("beforeunload", (e) => {
 function showRecoveredToast() {
   const bar = document.createElement("div");
   bar.id = "recovered-toast";
+  bar.setAttribute("role", "status");
   bar.textContent = "Recuperamos tu sesión en curso";
   document.body.appendChild(bar);
   setTimeout(() => bar.remove(), 3500);
@@ -4766,6 +4874,7 @@ function showUpdateToast() {
   updateAvailable = true;
   const bar = document.createElement("div");
   bar.id = "update-toast";
+  bar.setAttribute("role", "status");
   bar.innerHTML = `<span>Hay una versión nueva</span><button type="button">Recargar</button>`;
   bar.querySelector("button").addEventListener("click", applyUpdate);
   document.body.appendChild(bar);

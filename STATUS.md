@@ -1295,3 +1295,15 @@ Entradas nuevas al final. No reescribir lo anterior.
   grupo, selector de rango único, botones Volver (44×44). Sin errores
   de consola. Pendiente en teléfono: arrastrar con el dedo en
   Organizar y el tacto de los íconos sin recuadro.
+
+## 2026-10-22 — Auditoría, Fase 1 de 4: accesibilidad y contraste (A1, A2, A4, A13)
+- Campos de serie con nombre ("Serie 2, kilos"), check con `aria-pressed` y
+  "Marcar / Desmarcar serie N"; selectores con `aria-pressed`, nav con
+  `aria-current`. Ayudante único de diálogos (`setupDialogs`): rol, foco
+  adentro, Tab encerrado, Escape cierra, foco de vuelta al botón que abrió.
+- Tokens `--red-fill` #B24A40 y `--red-text` #D46A60; `--line-strong` pasa a
+  #68687A. `<main>`, h2 en nombres de rutina/ejercicio, `#sr-live` polite
+  (fin del descanso), texto alternativo en gráficos, foco visible en
+  buscadores, sin pop del trofeo con movimiento reducido.
+- Verificado en el navegador a 390 y 360 px (foco, Escape, Tab, etiquetas,
+  colores calculados). Pendiente: probar con VoiceOver en el teléfono.
