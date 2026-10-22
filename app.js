@@ -1114,7 +1114,7 @@ function routinesHTML() {
 
   const html = `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 01 · Preparación", "Rutinas")}
+      ${tabHeaderHTML("Rutinas")}
       <div class="vt-head-actions">
         <button class="vt-btn-icon" data-a="folder-new" aria-label="Nueva carpeta">${icon("folder", 24)}</button>
         <button class="vt-btn-icon" data-a="routine-new" aria-label="Nueva rutina">${icon("plus", 24)}</button>
@@ -2320,7 +2320,7 @@ function progressSectionToggleHTML() {
 }
 
 function progressHTML() {
-  const head = `<header class="vt-header">${tabHeaderHTML("Set 04 · Análisis", "Progreso")}</header>`;
+  const head = `<header class="vt-header">${tabHeaderHTML("Progreso")}</header>`;
   const toggle = progressSectionToggleHTML();
 
   if (ui.progressSection === "historial") return `${head}${toggle}${historyListHTML()}`;
@@ -2520,7 +2520,7 @@ function mountChart() {
 function settingsHTML() {
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 05 · Configuración", "Ajustes")}
+      ${tabHeaderHTML("Ajustes")}
     </header>
     <p class="vt-section-eyebrow">General</p>
     <label class="vt-settings-row">
@@ -2643,7 +2643,7 @@ function exercisesListHTML() {
 function exercisesManagerHTML() {
   return `
     <header class="vt-header">
-      ${tabHeaderHTML("Set 02 · Catálogo", "Ejercicios")}
+      ${tabHeaderHTML("Ejercicios")}
       <div class="vt-head-actions">
         <button class="vt-btn-icon" data-a="groups-open" aria-label="Gestionar grupos">${icon("tag", 24)}</button>
         <button class="vt-btn-icon" data-a="ex-new" aria-label="Nuevo ejercicio">${icon("plus", 24)}</button>
@@ -2835,11 +2835,10 @@ function emptyHTML(title, detail, action) {
   </div>`;
 }
 
-// Encabezado de pestaña.
-function tabHeaderHTML(eyebrow, title) {
-  return `<div class="vt-header-brand"><div>
-    <p class="vt-eyebrow">${eyebrow}</p><h1>${title}</h1>
-  </div></div>`;
+// Encabezado de pestaña: solo el título (el eyebrow "SET 0X · …" no decía
+// nada que la pestaña no dijera ya).
+function tabHeaderHTML(title) {
+  return `<div class="vt-header-brand"><h1>${title}</h1></div>`;
 }
 
 /* -------------------------------- Lógica de sesión -------------------------------- */
@@ -4446,7 +4445,11 @@ document.addEventListener("click", (e) => {
       ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
       render();
       break;
-    case "session-restore": ui.sessionMinimized = false; render(); break;
+    case "session-restore": // la barra minimizada se ve en todas las pestañas: lleva a Entrenar
+      ui.sessionMinimized = false;
+      ui.tab = "rutinas"; ui.progressDetail = null; ui.sessionDetail = null; ui.manageGroups = false;
+      render(); window.scrollTo(0, 0);
+      break;
     case "rest-cancel": stopRest(); break;
     case "rest-adjust": adjustRest(num(el.dataset.delta)); break;
 

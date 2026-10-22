@@ -1333,3 +1333,19 @@ Entradas nuevas al final. No reescribir lo anterior.
   (o nada) en vez de "0 kg". A15: piso del gráfico de peso como
   suggestedMin (marcas parejas) y la última barra siempre con fecha.
 - A16 (mayúsculas) va con las reglas de la Fase 4. Verificado a 390 y 360 px.
+
+## 2026-10-22 cont. — Auditoría, Fase 4 de 4: decisiones B1, B2, B3 (+ A16)
+- B1: `--blue-text` #5A8BEE para todo texto o ícono azul (eyebrows, nav y
+  pestaña activas, links, Guardar de Organizar, deltas, reloj y descanso);
+  `--blue` queda para rellenos y bordes. La mini curva sigue en `--blue`
+  (es gráfico).
+- B2/A16: sin eyebrow "SET 0X" en las pestañas. Mayúscula con tracking solo
+  en encabezados de columna, labels de sección (ahora IBM Plex Sans 600),
+  títulos de pestaña y el titular del resumen; botones, títulos de hojas,
+  nav y "Organizar" en formato normal. Pantalla de sesión: 27 → 15
+  elementos con `text-transform: uppercase` (contando la barra de descanso
+  en ambos casos; 14 sin ella).
+- B3: subrayado tenue (60% centrado, `--editable-line`) en series,
+  objetivos, 1RM, descanso y RPE; azul de 2px al enfocar; sin subrayado en
+  series completadas. Además: la barra de sesión minimizada ahora lleva a
+  la sesión desde cualquier pestaña (antes solo se cerraba).

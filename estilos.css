@@ -8,7 +8,8 @@
   --text: #FFFFFF;
   --text-dim: #8FA0AC;
   --amber: #E8A33D; /* reservado para PR */
-  --blue: #3B6FE0;  /* acento principal de marca (U. de Chile) */
+  --blue: #3B6FE0;  /* acento de marca: SOLO rellenos y bordes (botones, ▶, barras, interruptores, foco) */
+  --blue-text: #5A8BEE; /* todo texto o ícono azul sobre fondo oscuro: 6:1 sobre --bg (el #3B6FE0 da 4,3:1) */
   --green: #6FAE7C; /* reservado para serie completada */
   --red: #C1594F;      /* tono base de eliminar/fallida; en la interfaz se usan los dos de abajo */
   --red-fill: #B24A40; /* rellenos con texto blanco encima (botón Eliminar, fondo del swipe): 5,3:1 */
@@ -43,6 +44,11 @@
 
   /* Tracking: 1 */
   --track: 0.06em; /* todo lo que va en mayúscula */
+
+  /* Valor editable sin caja (series, objetivos, 1RM, descanso, RPE): un
+     subrayado tenue permanente del 60% del ancho, centrado (un input no
+     puede medir su texto). Al enfocar pasa al subrayado azul de 2px. */
+  --editable-line: linear-gradient(var(--line-strong), var(--line-strong)) center bottom / 60% 1px no-repeat transparent;
 }
 
 * { box-sizing: border-box; }
@@ -109,12 +115,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   margin-bottom: var(--sp-4);
 }
 .vt-header-brand { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+/* Eyebrow: solo los que informan (fecha, grupo, "Editar rutina"). Mono, sin
+   mayúscula forzada, en azul de texto. */
 .vt-eyebrow {
   font-family: 'IBM Plex Mono', monospace;
   font-size: var(--fs-xs);
-  letter-spacing: var(--track);
-  text-transform: uppercase;
-  color: var(--blue);
+  color: var(--blue-text);
   margin: 0 0 2px;
 }
 .vt-header h1 {
@@ -157,7 +163,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   font-family: 'IBM Plex Mono', monospace;
   font-size: var(--fs-lg);
   font-weight: 600;
-  color: var(--blue);
+  color: var(--blue-text);
   white-space: nowrap;
   text-align: right;
 }
@@ -212,7 +218,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .vt-settings-row > .vt-btn-icon { margin-right: calc(-1 * var(--sp-2)); }
 /* "Volver": el ícono (no su área de 44px) es el que calza con el borde izquierdo. */
 .vt-header-brand > .vt-btn-icon { margin: 0 calc(-1 * var(--sp-1)) 0 calc(-1 * var(--sp-2)); }
-.vt-btn-ghost { color: var(--text-dim); padding: var(--sp-2); text-transform: uppercase; letter-spacing: var(--track); }
+.vt-btn-ghost { color: var(--text-dim); padding: var(--sp-2); font-weight: 600; }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red-text) !important; }
 
@@ -223,8 +229,6 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   font-family: inherit;
   font-weight: 600;
   font-size: var(--fs-md);
-  text-transform: uppercase;
-  letter-spacing: var(--track);
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-md);
   cursor: pointer;
@@ -244,8 +248,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   border: 1px solid var(--line);
   color: var(--text);
   font-family: inherit;
-  text-transform: uppercase;
-  letter-spacing: var(--track);
+  font-weight: 600;
   padding: var(--sp-3);
   border-radius: var(--r-md);
   width: 100%;
@@ -257,7 +260,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   align-items: center;
   gap: var(--sp-2);
 }
-.vt-btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+.vt-btn-outline:hover { border-color: var(--blue); color: var(--blue-text); }
 .vt-flex { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .vt-flex-center { justify-content: center; }
 .vt-full { width: 100%; }
@@ -265,7 +268,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .vt-add-set {
   display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0;
   background: transparent; border: none; color: var(--text-dim); cursor: pointer;
-  font-family: inherit; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: var(--track);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
 }
 .vt-add-set:active { color: var(--text); }
 
@@ -326,10 +329,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   background: var(--bg); border-bottom: 1px solid var(--line);
 }
 .vt-mode-title { text-align: center; }
-.vt-mode-title p {
-  margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: var(--track);
-}
+.vt-mode-title p { margin: 0; font-size: var(--fs-md); font-weight: 600; }
 .vt-mode-title small { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--text-dim); }
 .vt-mode-title svg { vertical-align: -1px; }
 /* Acciones de texto del modo (Cancelar / Guardar y las de la barra inferior). */
@@ -339,7 +339,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   font-family: inherit; font-size: var(--fs-md); font-weight: 600;
 }
 .vt-mode-btn:active { color: var(--text); }
-.vt-mode-primary { justify-self: end; color: var(--blue); }
+.vt-mode-primary { justify-self: end; color: var(--blue-text); }
 .vt-mode-danger { color: var(--red-text); }
 
 /* Filas: mínimo 56px, sin márgenes entre ellas (la barra de color del grupo
@@ -550,7 +550,7 @@ select.vt-input {
 .vt-rest-mini input {
   width: 40px; padding: var(--sp-2) 2px; text-align: center;
   font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim);
-  background: transparent; border: none; border-radius: 0;
+  background: var(--editable-line); border: none; border-radius: 0;
 }
 .vt-rest-mini input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; color: var(--text); }
 
@@ -589,9 +589,11 @@ select.vt-input {
    El ancho lo pone .vt-col-val (flex), no un width fijo por tipo. */
 .vt-set-input {
   text-align: center; padding: var(--sp-3) var(--sp-1);
-  background: transparent; border: none; border-radius: 0;
+  background: var(--editable-line); border: none; border-radius: 0;
   font-weight: 600; font-size: var(--fs-lg);
 }
+/* Serie completada: el dato ya quedó registrado, sin pista de "editable". */
+.vt-set-row.is-done .vt-set-input { background: transparent; }
 .vt-set-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 
 /* Sin flechas de stepper sobre los números */
@@ -649,7 +651,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   transition: filter 100ms ease, transform 100ms ease, color 180ms ease;
 }
 .vt-settype-btn:active { transform: scale(0.96); }
-.vt-settype-btn.is-warmup { color: var(--blue); }
+.vt-settype-btn.is-warmup { color: var(--blue-text); }
 .vt-settype-btn.is-dropset { color: var(--dropset); }
 .vt-settype-btn.is-failed { color: var(--red-text); }
 
@@ -669,14 +671,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); font-weight: 600;
   padding: var(--sp-2); border-radius: var(--r-sm); cursor: pointer;
 }
-.vt-type-picker-opt.is-warmup { color: var(--blue); border-color: var(--blue); }
+.vt-type-picker-opt.is-warmup { color: var(--blue-text); border-color: var(--blue); }
 .vt-type-picker-opt.is-dropset { color: var(--dropset); border-color: var(--dropset); }
 .vt-type-picker-opt.is-failed { color: var(--red-text); border-color: var(--red-text); }
 
 .vt-timer-btn {
   width: var(--col-timer); height: var(--col-timer); flex-shrink: 0; padding: 0;
   border: none; background: transparent;
-  color: var(--blue); /* solo el ícono, sin círculo: es una acción, no un estado */
+  color: var(--blue-text); /* solo el ícono, sin círculo: es una acción, no un estado */
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: transform 100ms ease;
@@ -684,7 +686,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-timer-btn:active { transform: scale(0.9); }
 /* El input de tiempo cambia a azul mientras esa serie se está cronometrando
    (vuelve a blanco al detenerse — ver clase is-running en setRowHTML). */
-.vt-set-input-clock.is-running { color: var(--blue); }
+.vt-set-input-clock.is-running { color: var(--blue-text); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva (misma
    técnica de dos capas que is-done/is-pr para quedar opaca detrás del swipe). */
 .vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(143, 160, 172, 0.08), rgba(143, 160, 172, 0.08)), var(--bg); border-left-color: var(--text-dim); }
@@ -695,7 +697,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-setline2 { display: flex; gap: var(--sp-2); padding: 2px var(--sp-2) var(--sp-2) calc(2px + var(--sp-1) + var(--col-num) + var(--sp-1)); align-items: center; }
 .vt-rpe-input {
   width: 64px; text-align: center; padding: var(--sp-3) var(--sp-1);
-  background: transparent; border: none; border-radius: 0; font-weight: 600;
+  background: var(--editable-line); border: none; border-radius: 0; font-weight: 600;
 }
 .vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 .vt-note-line { color: var(--text-dim); font-size: var(--fs-sm); margin-top: 2px; }
@@ -709,7 +711,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    KG / %1RM (.vt-pills). */
 .vt-grow { flex: 1; min-width: 0; }
 .vt-cap-toggle { justify-content: center; }
-.vt-cap-toggle button { padding: 2px var(--sp-1); }
+/* KG / %1RM del editor: son a la vez selector y encabezado de columna, así
+   que siguen la regla de encabezado de columna (mayúscula con tracking). */
+.vt-cap-toggle button { padding: 2px var(--sp-1); text-transform: uppercase; letter-spacing: var(--track); }
 .vt-target-calc { margin: var(--sp-2) 0 0; }
 .vt-target-calc.is-missing { color: var(--red-text); }
 /* Nota del entrenador: link "+ Nota" en gris; con nota, el texto mismo es el
@@ -762,8 +766,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   position: relative;
   border-top: 2px solid transparent;
 }
-.vt-nav-item span { text-transform: uppercase; letter-spacing: var(--track); }
-.vt-nav-item.is-active { color: var(--blue); border-top-color: var(--blue); }
+.vt-nav-item.is-active { color: var(--blue-text); border-top-color: var(--blue); }
 .vt-dot { position: absolute; top: 6px; right: 26%; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
 .vt-empty { text-align: center; padding: var(--sp-16) var(--sp-6); color: var(--text-dim); }
@@ -782,7 +785,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Barrita de la hoja: indica que se puede cerrar arrastrándola hacia abajo. */
 .vt-grabber { flex-shrink: 0; width: 36px; height: 4px; margin: var(--sp-2) auto 0; border-radius: var(--r-full); background: var(--line-strong); }
 .vt-modal-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4); border-bottom: 1px solid var(--line); }
-.vt-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); text-transform: uppercase; margin: 0; flex: 1; }
+.vt-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: var(--fs-xl); margin: 0; flex: 1; }
 .vt-search { flex: 1; display: flex; align-items: center; gap: var(--sp-2); background: var(--surface-2); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); color: var(--text-dim); }
 .vt-search input { background: transparent; border: none; color: var(--text); flex: 1; font-size: var(--fs-md); font-family: inherit; min-width: 0; }
 .vt-search input:focus { outline: none; }
@@ -800,7 +803,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Fila de hoja con título + explicación debajo (menú de exportar). */
 .vt-modal-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vt-modal-row-text small { font-size: var(--fs-sm); color: var(--text-dim); }
-.vt-modal-row-action { color: var(--blue); }
+.vt-modal-row-action { color: var(--blue-text); }
 /* Fila que no es un botón entero (trae su propio botón de quitar a la derecha). */
 .vt-modal-row-static { cursor: default; padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
 .vt-modal-row-static:hover { background: transparent; }
@@ -849,7 +852,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-sum-hero-num small { font-size: var(--fs-3xl); color: var(--text-dim); margin-left: var(--sp-1); }
 .vt-sum-hero-sub { font-size: var(--fs-sm); color: var(--text-dim); margin: var(--sp-2) 0 0; }
 .vt-sum-hero-sub b { color: var(--text); font-weight: 600; }
-.vt-sum-up { color: var(--blue); }
+.vt-sum-up { color: var(--blue-text); }
 
 /* Sección genérica (resumen de sesión y Progreso): label en mayúscula + contenido. */
 .vt-section { margin-top: var(--sp-6); }
@@ -871,7 +874,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Botón de texto (sin caja): acciones secundarias dentro de una sección. */
 .vt-text-btn {
   background: transparent; border: none; padding: var(--sp-2) 0;
-  color: var(--blue); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
+  color: var(--blue-text); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
   cursor: pointer; text-align: left;
 }
 .vt-text-btn:active { filter: brightness(0.8); }
@@ -923,7 +926,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-row-name { font-size: var(--fs-md); min-width: 0; }
 .vt-row-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); text-align: right; flex-shrink: 0; max-width: 58%; }
 .vt-pr-inline { margin-left: var(--sp-1); vertical-align: -1px; animation: none; }
-.vt-diff-added { color: var(--blue); }
+.vt-diff-added { color: var(--blue-text); }
 .vt-diff-removed { color: var(--red-text); }
 
 /* Reparto por grupo muscular (repartoHTML): barras BLANCAS, no con el color
@@ -942,7 +945,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   padding: var(--sp-1) 0 var(--sp-3);
   font-family: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--text-dim); cursor: pointer;
 }
-.vt-tabs button.is-active { color: var(--text); border-bottom-color: var(--blue); }
+.vt-tabs button.is-active { color: var(--blue-text); border-bottom-color: var(--blue); }
 
 /* Selector chico de píldoras (rango 1M·2M·6M·1A, métrica del detalle): la
    activa con fondo --surface-2. Cabe entero a 360px, sin scroll horizontal. */
@@ -951,7 +954,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: transparent; border: none; border-radius: var(--r-full);
   padding: var(--sp-1) var(--sp-2);
   font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: var(--track);
   color: var(--text-dim); cursor: pointer; white-space: nowrap;
 }
 .vt-pills button.is-active { background: var(--surface-2); color: var(--text); }
@@ -1015,7 +1017,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-hint-dim { opacity: 0.7; }
 .vt-detail-empty { margin: 0; padding: var(--sp-6) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .vt-row-center { align-items: center; }
-.vt-row-input .vt-max-input { text-align: right; }
+.vt-row-input .vt-max-input { text-align: right; background-position: right bottom; } /* subrayado bajo el número, que va a la derecha */
 .vt-row-input { display: inline-flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--text-dim); }
 
 /* -------------------- Aviso de actualización disponible ------------------ */
@@ -1037,9 +1039,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
 }
 #update-toast button {
-  background: transparent; border: none; color: var(--blue);
+  background: transparent; border: none; color: var(--blue-text);
   font-family: inherit; font-weight: 600; font-size: var(--fs-sm);
-  text-transform: uppercase; letter-spacing: var(--track);
   cursor: pointer; padding: var(--sp-1) var(--sp-2); flex-shrink: 0;
 }
 #update-toast button:active { filter: brightness(0.85); }
@@ -1057,9 +1058,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-banner > span { flex: 1; min-width: 0; }
 .vt-banner-action {
   flex-shrink: 0; min-height: 44px; padding: 0 var(--sp-2);
-  background: transparent; border: none; color: var(--blue); cursor: pointer;
+  background: transparent; border: none; color: var(--blue-text); cursor: pointer;
   font-family: inherit; font-weight: 600; font-size: var(--fs-sm);
-  text-transform: uppercase; letter-spacing: var(--track);
 }
 .vt-banner-close {
   flex-shrink: 0; width: 44px; height: 44px; padding: 0;
@@ -1099,7 +1099,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 #undo-toast button {
   min-height: 44px; padding: 0 var(--sp-2);
-  background: transparent; border: none; color: var(--blue); cursor: pointer;
+  background: transparent; border: none; color: var(--blue-text); cursor: pointer;
   font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
 }
 @keyframes vt-toast-fade {
@@ -1152,7 +1152,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-rest-btn:active { background: var(--surface); }
 .vt-rest-label { font-size: var(--fs-xs); color: var(--text-dim); letter-spacing: var(--track); text-transform: uppercase; }
-.vt-rest-time { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-3xl); font-weight: 700; color: var(--blue); }
+.vt-rest-time { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-3xl); font-weight: 700; color: var(--blue-text); }
 .vt-rest-cancel { border-color: transparent; color: var(--text-dim); padding: 0; }
 .vt-rest-cancel:active { color: var(--text); }
 
@@ -1173,13 +1173,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-minibar-stats {
   flex-shrink: 0; display: flex; gap: var(--sp-3);
-  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--blue); font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-sm); color: var(--blue-text); font-weight: 600;
 }
 
 /* Encabezado de sección genérico (Ajustes, PRs recientes, etc.): mayúscula
    con tracking, sin caja — reemplaza los .vt-card que agrupaban secciones. */
 .vt-section-eyebrow {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'IBM Plex Sans', sans-serif;
   font-size: var(--fs-xs); font-weight: 600;
   letter-spacing: var(--track); text-transform: uppercase;
   color: var(--text-dim);
@@ -1278,7 +1278,7 @@ label.vt-settings-row { cursor: pointer; }
 .vt-recent-value { font-family: 'IBM Plex Mono', monospace; font-size: var(--fs-lg); font-weight: 600; white-space: nowrap; }
 .vt-recent-date { font-size: var(--fs-xs); color: var(--text-dim); }
 .vt-group-title {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'IBM Plex Sans', sans-serif;
   font-size: var(--fs-xs); font-weight: 600;
   letter-spacing: var(--track); text-transform: uppercase;
   color: var(--text-dim);
@@ -1293,7 +1293,7 @@ label.vt-settings-row { cursor: pointer; }
 /* Input de 1RM en el detalle de ejercicio: sin caja, subrayado al enfocar. */
 .vt-max-input {
   width: 68px; text-align: center; padding: var(--sp-2) 2px;
-  background: transparent; border: none; border-radius: 0;
+  background: var(--editable-line); border: none; border-radius: 0;
   font-weight: 600; font-size: var(--fs-md);
 }
 .vt-max-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
