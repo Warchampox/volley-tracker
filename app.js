@@ -775,6 +775,35 @@ const NAV_ITEMS = [
   { id: "ajustes", label: "Ajustes", ic: "sliders" },
 ];
 
+// Lo que muestra una pestaña de la nav (sin detalles abiertos). La usa
+// render() y también la vista previa de la pestaña vecina al deslizar.
+function tabViewHTML(tab) {
+  if (tab === "rutinas") {
+    if (ui.editingRoutine) return editorHTML();
+    if (ui.activeSession && !ui.sessionMinimized) return trainActiveHTML();
+    return routinesHTML();
+  }
+  if (tab === "ejercicios") return ui.manageGroups ? groupsManagerHTML() : exercisesManagerHTML();
+  if (tab === "progreso") return progressHTML();
+  if (tab === "ajustes") return settingsHTML();
+  return "";
+}
+
+// Cambia de pestaña (nav o deslizamiento): cierra editor, detalles y modo
+// Organizar, y detiene el cronómetro de serie sin perder lo acumulado.
+function goToTab(tab) {
+  stopSetTimer();
+  ui.editingRoutine = null;
+  ui.manageGroups = false;
+  ui.exerciseEditMode = false;
+  ui.exerciseEditDraft = null;
+  ui.selectedExercises.clear();
+  ui.progressDetail = null;
+  ui.sessionDetail = null;
+  ui.tab = tab;
+  render();
+}
+
 function render() {
   if (lastDeletedSet && ui.activeSession?.id !== lastDeletedSet.sessionId) hideUndoToast();
   // Para el ayudante de diálogos (setupDialogs): ¿había uno abierto y qué
@@ -791,14 +820,7 @@ function render() {
   // regresa a esa misma pestaña).
   if (ui.progressDetail && (ui.tab === "ejercicios" || ui.tab === "progreso")) view = exerciseDetailHTML();
   else if (ui.sessionDetail && ui.tab === "progreso") view = sessionDetailHTML();
-  else if (ui.tab === "rutinas") {
-    if (ui.editingRoutine) view = editorHTML();
-    else if (ui.activeSession && !ui.sessionMinimized) view = trainActiveHTML();
-    else view = routinesHTML();
-  }
-  else if (ui.tab === "ejercicios") view = ui.manageGroups ? groupsManagerHTML() : exercisesManagerHTML();
-  else if (ui.tab === "progreso") view = progressHTML();
-  else if (ui.tab === "ajustes") view = settingsHTML();
+  else view = tabViewHTML(ui.tab);
 
   // Organizar es un modo modal: mientras está activo no hay nav ni barras
   // flotantes (el descanso sigue corriendo y suena igual, solo no se ve).
@@ -2452,9 +2474,11 @@ function mountBars(canvasId, buckets, values, yFormat, tooltipFormat, title) {
   });
 }
 
-function mountChart() {
+let chartAnimationDefault; // la animación de fábrica de Chart.js, para poder volver a ella
+function mountChart(animate = true) {
   if (typeof Chart === "undefined") return;
-  Chart.defaults.animation = matchMedia("(prefers-reduced-motion: reduce)").matches ? false : Chart.defaults.animation;
+  chartAnimationDefault ??= Chart.defaults.animation;
+  Chart.defaults.animation = animate && !matchMedia("(prefers-reduced-motion: reduce)").matches ? chartAnimationDefault : false;
   if (chart) { chart.destroy(); chart = null; }
   extraCharts.forEach((c) => c.destroy());
   extraCharts = [];
@@ -3904,6 +3928,7 @@ function cancelOneFingerGestures() {
     wrapEl.classList.remove("is-swiping");
   }
   cancelLongPress();
+  cancelTabSwipe();
   if (typeof Sortable !== "undefined" && Sortable.dragged) {
     pinchCancelledDrag = true;
     document.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
@@ -3947,6 +3972,127 @@ document.addEventListener("touchend", endPinch);
 document.addEventListener("touchcancel", endPinch);
 // Safari de iOS ignora user-scalable=no; sin esto haría su propio zoom encima.
 document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+/* -------------------- Deslizar entre pestañas (arrastre real) -------------------- */
+// En las pantallas de lista de cada pestaña (no en la sesión en vivo, el
+// editor, Organizar, los detalles ni con un diálogo abierto), arrastrar de
+// lado mueve la pestaña actual con el dedo y trae la vecina pegada a su
+// lado, como dos páginas. Al soltar decide con la posición PROYECTADA (dónde
+// quedaría con la velocidad que lleva): si pasa la mitad del ancho, termina
+// de cambiar; si no, vuelve. Se puede revertir a mitad de camino volviendo
+// el dedo. En los extremos (Entrenar, Ajustes) hay resistencia y no cambia.
+// No arranca sobre controles que ya se deslizan de lado (Recientes, campos).
+const TAB_ORDER = NAV_ITEMS.map((n) => n.id);
+const TAB_SWIPE_DECIDE = 10;    // px antes de decidir si el gesto es horizontal
+const TAB_SWIPE_PROJECT = 180;  // ms de velocidad que se proyectan al soltar
+const TAB_SWIPE_EDGE = 12;      // px junto al borde de la pantalla que se ignoran (gesto "atrás" del sistema)
+let tabSwipe = null; // { startX, startY, lastX, lastT, speed, dx, deciding, active, width, left, neighbor, side, preview }
+
+const tabSwipeAllowed = () =>
+  !ui.editingRoutine && !ui.exerciseEditMode && !ui.progressDetail && !ui.sessionDetail && !ui.manageGroups
+  && !(ui.tab === "rutinas" && ui.activeSession && !ui.sessionMinimized) && !topDialog() && !pinch;
+
+// Vista previa de la pestaña vecina: una copia de solo lectura (inerte, sin
+// toques) fijada arriba de la pantalla, del mismo ancho que la columna.
+function tabSwipePreview(d, side) {
+  d.preview?.remove();
+  d.side = side;
+  d.neighbor = TAB_ORDER[TAB_ORDER.indexOf(ui.tab) + side] || null;
+  d.preview = null;
+  if (!d.neighbor) return;
+  const el = document.createElement("div");
+  el.className = "vt-content vt-tab-preview";
+  el.inert = true;
+  el.setAttribute("aria-hidden", "true");
+  el.style.left = `${d.left}px`;
+  el.style.width = `${d.width}px`;
+  el.innerHTML = tabViewHTML(d.neighbor);
+  $app.querySelector(".vt-frame").appendChild(el);
+  d.preview = el;
+  if (d.neighbor === "progreso") mountChart(false); // los gráficos de la copia, sin animar
+}
+
+function placeTabSwipe(d, dx, animate) {
+  const main = $app.querySelector(".vt-content:not(.vt-tab-preview)");
+  const t = animate ? `transform ${animate}ms cubic-bezier(.2, .8, .2, 1)` : "none";
+  main.style.transition = t;
+  main.style.transform = `translateX(${dx}px)`;
+  if (d.preview) {
+    d.preview.style.transition = t;
+    d.preview.style.transform = `translateX(${dx + d.side * d.width}px)`;
+  }
+}
+
+function clearTabSwipe(d) {
+  const main = $app.querySelector(".vt-content:not(.vt-tab-preview)");
+  if (main) main.style.transition = main.style.transform = "";
+  d.preview?.remove();
+  if (d.neighbor === "progreso") mountChart(); // suelta los gráficos de la copia (no quedan canvas)
+}
+
+// Cancela un arrastre de pestaña en curso (entró un segundo dedo): vuelve sin animar.
+function cancelTabSwipe() {
+  const d = tabSwipe;
+  tabSwipe = null;
+  if (d?.active) clearTabSwipe(d);
+}
+
+document.addEventListener("touchstart", (e) => {
+  tabSwipe = null;
+  if (e.touches.length !== 1 || !tabSwipeAllowed()) return;
+  if (!e.target.closest?.(".vt-content") || e.target.closest(".vt-recents, .vt-swipe-wrap, input, textarea, select")) return;
+  const t = e.touches[0];
+  if (t.clientX < TAB_SWIPE_EDGE || t.clientX > innerWidth - TAB_SWIPE_EDGE) return;
+  const frame = $app.querySelector(".vt-frame").getBoundingClientRect();
+  tabSwipe = { startX: t.clientX, startY: t.clientY, lastX: t.clientX, lastT: e.timeStamp, speed: 0, dx: 0,
+    deciding: true, active: false, width: frame.width, left: frame.left, neighbor: null, side: 0, preview: null };
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  const d = tabSwipe;
+  if (!d || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dx = t.clientX - d.startX, dy = t.clientY - d.startY;
+  if (d.deciding) {
+    if (Math.abs(dx) < TAB_SWIPE_DECIDE && Math.abs(dy) < TAB_SWIPE_DECIDE) return;
+    d.deciding = false;
+    if (Math.abs(dx) < Math.abs(dy) * 1.2) { tabSwipe = null; return; } // vertical: es scroll
+    d.active = true;
+    d.startX = t.clientX; // arranca pegado al dedo, sin salto de los primeros px
+  }
+  e.preventDefault();
+  const raw = t.clientX - d.startX;
+  const side = raw < 0 ? 1 : -1; // hacia la izquierda trae la pestaña de la derecha
+  if (side !== d.side) tabSwipePreview(d, side);
+  d.dx = d.neighbor ? raw : raw * 0.25; // sin vecina: resistencia
+  // Velocidad suavizada (px/ms): una muestra suelta es ruidosa.
+  d.speed = 0.7 * (t.clientX - d.lastX) / Math.max(1, e.timeStamp - d.lastT) + 0.3 * d.speed;
+  d.lastX = t.clientX; d.lastT = e.timeStamp;
+  placeTabSwipe(d, d.dx, 0);
+}, { passive: false });
+
+function endTabSwipe(e) {
+  const d = tabSwipe;
+  tabSwipe = null;
+  if (!d?.active) return;
+  if (e.timeStamp - d.lastT > 100) d.speed = 0; // el dedo se quedó quieto antes de soltar: no hubo tirón
+  suppressClickUntil = Date.now() + 300; // soltar no toca lo que quedó debajo
+  const projected = d.dx + d.speed * TAB_SWIPE_PROJECT;
+  const commit = d.neighbor && Math.sign(projected) === -d.side && Math.abs(projected) > d.width / 2;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Lo que falta del recorrido toma un tiempo proporcional (más rápido si ya está cerca).
+  const target = commit ? -d.side * d.width : 0;
+  const ms = reduce ? 0 : Math.round(120 + 160 * Math.abs(target - d.dx) / d.width);
+  const finish = () => {
+    clearTabSwipe(d);
+    if (commit) { goToTab(d.neighbor); window.scrollTo(0, 0); }
+  };
+  if (!ms) { finish(); return; }
+  placeTabSwipe(d, target, ms);
+  setTimeout(finish, ms);
+}
+document.addEventListener("touchend", endTabSwipe);
+document.addEventListener("touchcancel", endTabSwipe);
 
 /* ------------------- Mantener presionado: entra a Organizar ------------------- */
 // Mantener el dedo ~500ms sobre el NOMBRE de un ejercicio (fuera del modo
@@ -4019,18 +4165,7 @@ document.addEventListener("click", (e) => {
     case "sheet-open": ui.actionSheet = { kind: el.dataset.kind, id }; render(); break;
     case "sheet-close": render(); break;
     case "tab": {
-      const go = () => {
-        stopSetTimer(); // cambiar de pestaña detiene el cronómetro sin perder lo acumulado
-        ui.editingRoutine = null;
-        ui.manageGroups = false;
-        ui.exerciseEditMode = false;
-        ui.exerciseEditDraft = null;
-        ui.selectedExercises.clear();
-        ui.progressDetail = null;
-        ui.sessionDetail = null;
-        ui.tab = el.dataset.tab;
-        render();
-      };
+      const go = () => goToTab(el.dataset.tab);
       // Salir del editor por la nav también avisa si hay cambios sin guardar.
       if (ui.editingRoutine) leaveEditor(go); else go();
       break;

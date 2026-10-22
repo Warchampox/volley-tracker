@@ -1364,3 +1364,15 @@ Entradas nuevas al final. No reescribir lo anterior.
   PR en vivo. Movimiento reducido: regla CSS comprobada, no se pudo emular.
 - Pendiente en el teléfono: pellizco real, swipe + deshacer, cerrar hojas
   deslizando, VoiceOver y el trofeo con "reducir movimiento" activado.
+
+## 2026-10-22 cont. — Deslizar entre pestañas
+- Pedido de Martín: cambiar de pestaña deslizando, como arrastre real. La
+  pestaña sigue al dedo con la vecina al lado; al soltar, posición
+  proyectada > mitad del ancho = cambia, si no vuelve; resistencia en
+  Entrenar y Ajustes. Desactivado en sesión en vivo, editor, Organizar,
+  detalles y diálogos. Nuevos `tabViewHTML` y `goToTab` (los usa también
+  la nav); `mountChart(animate)` para los gráficos de la copia.
+- Verificado con toques simulados a 390px: corto vuelve, largo cambia,
+  tirón rápido cambia, extremos resisten, vertical no hace nada, segundo
+  dedo cancela, sesión en vivo no se desliza, gráficos en la copia.
+  Pendiente: probarlo con el dedo en el teléfono (sensación y umbral).

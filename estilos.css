@@ -98,6 +98,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
      para no crear un contenedor de scroll que rompa los sticky. */
   overflow-x: clip;
 }
+/* Pestaña vecina mientras se desliza entre pestañas (app.js, tabSwipe):
+   copia fija arriba de la pantalla, al lado de <main>, bajo la nav. */
+.vt-tab-preview {
+  position: fixed; top: 0; bottom: 0; z-index: 1;
+  overflow: hidden; background: var(--bg); pointer-events: none;
+}
 .vt-content {
   flex: 1;
   padding: var(--sp-6) var(--sp-4) 100px;

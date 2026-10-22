@@ -245,6 +245,16 @@ Patrones (reutilizar, no inventar variantes):
   reducido). Cancela swipe, long-press y arrastre de Organizar; no aplica
   dentro de diálogos. Nada con `position: fixed` puede vivir dentro de
   `<main>` (por eso la barra de Organizar va fuera).
+- Deslizar entre pestañas (`tabSwipe`): arrastre real, no un comando. La
+  pestaña actual sigue al dedo y la vecina (copia inerte, `tabViewHTML`)
+  entra pegada a su lado. Al soltar decide con la posición proyectada
+  (posición + velocidad × 180 ms): pasada la mitad del ancho cambia; si
+  no, vuelve. En los extremos hay resistencia. Solo en las pantallas de
+  lista de cada pestaña: nunca en la sesión en vivo, el editor,
+  Organizar, los detalles ni con un diálogo abierto; no arranca sobre
+  Recientes, campos ni junto al borde de la pantalla. Un segundo dedo lo
+  cancela. Cambiar de pestaña por la nav o deslizando pasa por
+  `goToTab`.
 - Encabezado de la sesión en vivo (`.vt-live-head`): título a 2 líneas
   como máximo, nunca toca el reloj; bajo 380px tiempo y volumen bajan a
   una segunda fila. Encabezado de ejercicio en sesión: el nombre ocupa la
