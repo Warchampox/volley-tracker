@@ -1320,3 +1320,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   hojas y cierre arrastrando > 80 px o con un tirón rápido.
 - Verificado a 390 y 360 px con toques simulados. Pendiente en el teléfono:
   pellizco real, swipe + deshacer y cerrar hojas deslizando.
+
+## 2026-10-22 cont. — Auditoría, Fase 3 de 4: textos, formularios y vacíos (A6, A9–A11, A14, A15)
+- A6: `askConfirm(message, onYes, { label, danger, onNo, cancelLabel })`; las
+  18 llamadas tienen un verbo que repite la acción ("Descartar sesión",
+  "Eliminar rutina", "Finalizar y guardar", "Borrar 1RM"…). A9: chevron en
+  los selects. A10: Progreso vacío con "Empezar una sesión". A11: primer uso
+  sin atenuar el catálogo y con el primer grupo abierto (openExerciseGroups
+  sin definir = primer grupo).
+- A14: "Bocina al terminar el descanso", línea para instalar GOAT si el
+  almacenamiento no está protegido, calentamiento "C", Historial con saltos
+  (o nada) en vez de "0 kg". A15: piso del gráfico de peso como
+  suggestedMin (marcas parejas) y la última barra siempre con fecha.
+- A16 (mayúsculas) va con las reglas de la Fase 4. Verificado a 390 y 360 px.

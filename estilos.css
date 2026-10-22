@@ -505,7 +505,14 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 .vt-input:focus { outline: none; border-color: var(--blue); }
 .vt-mono { font-family: 'IBM Plex Mono', monospace; }
-select.vt-input { appearance: none; -webkit-appearance: none; }
+/* Select propio: sin la flecha del sistema, con un chevron dibujado a la
+   derecha para que se lea como "toca para elegir" y no como campo de texto. */
+select.vt-input {
+  appearance: none; -webkit-appearance: none;
+  padding-right: var(--sp-8);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238FA0AC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right var(--sp-3) center; background-size: 16px;
+}
 
 /* ------------------------- Fila de serie (tabla) -------------------------
    Orden: [nº] [valor] [×] [valor] [RPE] [✓]. Los valores son columnas

@@ -135,8 +135,10 @@ if (!Array.isArray(exercises) || exercises.length === 0) {
   exercises = DEFAULT_EXERCISES.map((e) => ({ ...e }));
   save("custom-exercises", exercises);
 }
+// openExerciseGroups sin definir = nunca se tocó: abre el primer grupo
+// (defaultOpenGroups). Quien ya abrió o cerró grupos conserva lo suyo.
 let settings = Object.assign({
-  sound: true, vibrate: true, featuredExercises: [], openFolders: [], openExerciseGroups: [],
+  sound: true, vibrate: true, featuredExercises: [], openFolders: [],
 }, load("settings", {}));
 let routineFolders = load("routine-folders", []); // [{id, name}] — routine.folderId null = suelta
 let exerciseGroups = load("exercise-groups", null); // [{name, color}]
@@ -179,6 +181,9 @@ function persistActiveSession() {
 // call site decide su propio valor por defecto, igual que antes.
 const groupNames = () => exerciseGroups.map((g) => g.name);
 const groupColor = (name) => exerciseGroups.find((g) => g.name === name)?.color;
+// Grupos abiertos en la pestaña Ejercicios: lo guardado, o en el primer uso
+// el primer grupo, para que el catálogo no se vea vacío.
+const openExerciseGroups = () => new Set(settings.openExerciseGroups ?? [exercises[0]?.group].filter(Boolean));
 
 /* ---------------------------------- Estado UI ---------------------------------- */
 
@@ -210,7 +215,7 @@ const ui = {
   openExNotes: new Set(), // exIdx con la nota de ejercicio (sessionNote) abierta
   openTypeSelector: null, // "exIdx:setIdx" con el selector de tipo de serie abierto, o null
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
-  confirmDialog: null,    // null | {message, danger, onYes}
+  confirmDialog: null,    // null | {message, label, danger, onYes, onNo, cancelLabel} — ver askConfirm
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
@@ -225,10 +230,13 @@ const ui = {
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
-// el resto de la app). onYes se guarda y se ejecuta recién si el usuario
-// toca "Confirmar"/"Eliminar"; si cancela o cierra, no pasa nada.
-function askConfirm(message, onYes, danger = false, onNo = null) {
-  ui.confirmDialog = { message, danger, onYes, onNo };
+// el resto de la app). onYes se ejecuta recién si el usuario toca el botón
+// principal; si cancela o cierra, solo corre onNo (si hay).
+// `label` es el texto de ese botón y repite la acción de la pregunta
+// ("Descartar sesión", "Eliminar rutina"), nunca un "Confirmar" genérico.
+// `danger` lo pinta rojo; `cancelLabel` reemplaza a "Cancelar".
+function askConfirm(message, onYes, { label, danger = false, onNo = null, cancelLabel = "Cancelar" }) {
+  ui.confirmDialog = { message, label, danger, onYes, onNo, cancelLabel };
   render();
 }
 
@@ -258,7 +266,7 @@ const repsR = (st) => num(st.repsR ?? st.reps);
 // lectura en runtime, nunca se migra el dato guardado. Los sets nuevos
 // siempre escriben setType (nunca warmup).
 const getSetType = (st) => st.setType ?? (st.warmup ? "warmup" : null);
-const typePrefix = (t) => t === "warmup" ? "c" : t === "dropset" ? "D" : t === "failed" ? "F" : "";
+const typePrefix = (t) => t === "warmup" ? "C" : t === "dropset" ? "D" : t === "failed" ? "F" : "";
 
 /* ------------------------------------ Íconos ------------------------------------ */
 
@@ -1261,7 +1269,7 @@ function leaveEditor(next) {
     ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
     next();
   };
-  if (editorIsDirty()) askConfirm("Tienes cambios sin guardar en esta rutina. ¿Descartarlos?", go, true);
+  if (editorIsDirty()) askConfirm("Tienes cambios sin guardar en esta rutina. ¿Descartarlos?", go, { label: "Descartar cambios", danger: true });
   else go();
 }
 
@@ -1681,7 +1689,10 @@ function fmtVolume(v, tons = false) {
 // Barlow + línea de datos), con chevron. Tocarla abre el detalle de la sesión.
 function sessionRowHTML(s) {
   const nPR = sessionPRs()[s.id]?.size || 0;
-  const meta = [fmtDateShort(s.date), s.durationSec ? fmtDurationMin(s.durationSec) : "", fmtVolume(sessionVolume(s, false))].filter(Boolean).join(" · ");
+  // Sin volumen (pliometría, peso corporal): los saltos si hubo; si no, nada en vez de "0 kg".
+  const vol = sessionVolume(s, false), jumps = vol > 0 ? 0 : sessionJumps(s);
+  const amount = vol > 0 ? fmtVolume(vol) : jumps > 0 ? `${fmtNum(jumps)} saltos` : "";
+  const meta = [fmtDateShort(s.date), s.durationSec ? fmtDurationMin(s.durationSec) : "", amount].filter(Boolean).join(" · ");
   return `<button class="vt-hist-row" data-a="session-detail-open" data-id="${s.id}">
     <span class="vt-hist-text">
       <span class="vt-routine-name">${esc(s.routineName)}</span>
@@ -2315,7 +2326,8 @@ function progressHTML() {
   if (ui.progressSection === "historial") return `${head}${toggle}${historyListHTML()}`;
 
   if (sessions.length === 0)
-    return `${head}${toggle}${emptyHTML("Todavía no hay nada que mostrar", "Registra al menos una sesión y tu progreso va a empezar a aparecer acá.", "")}`;
+    return `${head}${toggle}${emptyHTML("Todavía no hay nada que mostrar", "Registra al menos una sesión y tu progreso va a empezar a aparecer acá.",
+      `<button class="vt-btn-primary" data-a="tab" data-tab="rutinas">Empezar una sesión</button>`)}`;
 
   const ws = weeklyStats();
   const vol = ws.volume >= 1000
@@ -2394,7 +2406,9 @@ function chartScales(yFormat, yMin = 0) {
   return {
     x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8 } },
     y: {
-      beginAtZero: yMin === 0, min: yMin, grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
+      // yMin > 0 va como suggestedMin (no min): Chart.js redondea el piso a
+      // una marca pareja (60, 80, 100) en vez de poner una marca suelta en 55.
+      beginAtZero: yMin === 0, ...(yMin > 0 ? { suggestedMin: yMin } : { min: 0 }), grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
       grid: { color: "#1B1B1F" }, border: { display: false },
       ticks: { ...tick, maxTicksLimit: 4, callback: yFormat },
     },
@@ -2419,6 +2433,12 @@ function mountBars(canvasId, buckets, values, yFormat, tooltipFormat, title) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
   describeChart(canvas, chartSummary(title, buckets.map((b) => b.label), values, tooltipFormat));
+  const scales = chartScales(yFormat);
+  // Etiquetas del eje X contadas desde la ÚLTIMA barra (el período actual
+  // siempre lleva fecha): una de cada `every`, según el ancho disponible.
+  const every = Math.max(1, Math.ceil(buckets.length / Math.max(3, Math.floor(canvas.parentElement.clientWidth / 56))));
+  scales.x.ticks = { ...scales.x.ticks, autoSkip: false,
+    callback: (v, i) => (buckets.length - 1 - i) % every === 0 ? buckets[i].label : "" };
   return new Chart(canvas, {
     type: "bar",
     data: {
@@ -2427,7 +2447,7 @@ function mountBars(canvasId, buckets, values, yFormat, tooltipFormat, title) {
     },
     options: {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => tooltipFormat(c.parsed.y) } } },
-      scales: chartScales(yFormat),
+      scales,
     },
   });
 }
@@ -2474,11 +2494,11 @@ function mountChart() {
     const data = progressData(exId, metric);
     labels = data.map((p) => p.date);
     datasets = [line("", data, "#3B6FE0")];
-    // Peso máx.: el eje parte un 15% bajo el valor más bajo del rango,
-    // redondeado hacia abajo a múltiplo de 5 (nunca negativo). El resto de
-    // las métricas (volumen, reps, tiempo) sigue partiendo en 0.
+    // Peso máx.: el eje parte cerca del valor más bajo del rango (un 15%
+    // abajo; Chart.js lo baja a la marca pareja más cercana). El resto de las
+    // métricas (volumen, reps, tiempo) sigue partiendo en 0.
     if (metric === "weight" && data.length)
-      yMin = Math.max(0, Math.floor(Math.min(...data.map((p) => p.v)) * 0.85 / 5) * 5);
+      yMin = Math.max(0, Math.min(...data.map((p) => p.v)) * 0.85);
   }
   const metricLabel = metricOptions(exId).find((o) => o.id === metric)?.label || "";
   describeChart(canvas, datasets.map((d) => chartSummary(`${exName(exId)}, ${metricLabel}${d.label ? ` ${d.label.toLowerCase()}` : ""} en ${RANGE_WORDS[ui.progressRange]}`, labels, d.data, yFormat)).join(" "));
@@ -2504,7 +2524,7 @@ function settingsHTML() {
     </header>
     <p class="vt-section-eyebrow">General</p>
     <label class="vt-settings-row">
-      <div class="vt-settings-label">Sonido<small>Pitido al terminar el descanso</small></div>
+      <div class="vt-settings-label">Sonido<small>Bocina al terminar el descanso</small></div>
       <input type="checkbox" class="vt-switch" ${settings.sound ? "checked" : ""} data-c="set-sound" autocomplete="off">
     </label>
     <label class="vt-settings-row">
@@ -2530,7 +2550,8 @@ function settingsHTML() {
       <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 24)}</button>
     </div>
     <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
-    <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>`;
+    <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>
+    ${storagePersisted ? "" : `<p class="vt-muted" style="text-align:center">Instala GOAT en la pantalla de inicio para que el teléfono no borre tus datos</p>`}`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -2542,13 +2563,15 @@ function catalogRowHTML(e, st) {
   // El tipo solo se menciona cuando NO es el caso común (peso × reps).
   const kind = [e.type === "time" ? "Tiempo" : e.type === "bodyweight" ? "Peso corporal" : "", e.unilateral ? "Unilateral" : ""].filter(Boolean);
   const parts = [...kind];
-  if (!st) parts.push("Sin registros");
+  if (!st) { if (sessions.length) parts.push("Sin registros"); } // primer uso: nada que decir todavía
   else {
     parts.push(st.best !== null ? `Mejor <b>${fmtMark(e.id, st.best, st.metric)}</b>` : "Sin marca");
     parts.push(fmtRelDate(st.lastDate));
   }
   const curve = st && st.points.length >= 3 ? sparklineHTML(st.points.slice(-10).map((p) => p.v), 56, 20) : "<span></span>";
-  return `<button class="vt-cat-row ${st ? "" : "is-empty"}" data-a="prog-detail-open" data-id="${e.id}">
+  // Sin historial en toda la app (primer uso) no se atenúa nada: el catálogo
+  // de fábrica no debe leerse como deshabilitado.
+  return `<button class="vt-cat-row ${st || !sessions.length ? "" : "is-empty"}" data-a="prog-detail-open" data-id="${e.id}">
     <span class="vt-cat-text"><span class="vt-cat-name">${esc(e.name)}</span><span class="vt-cat-sub">${parts.join(" · ")}</span></span>
     ${curve}
     <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
@@ -2583,7 +2606,7 @@ function exercisesListHTML() {
   const stats = exerciseStats();
   const q = ui.exercisesQuery.trim().toLowerCase();
   const searching = q.length > 0;
-  const openSaved = new Set(settings.openExerciseGroups || []);
+  const openSaved = openExerciseGroups();
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
   // Primero los entrenados, del uso más reciente al más viejo; después los
   // sin registros, por orden alfabético.
@@ -2775,8 +2798,8 @@ function confirmDialogHTML() {
           <p style="margin:0">${esc(d.message)}</p>
         </div>
         <div class="vt-modal-actions">
-          <button class="vt-btn-ghost" data-a="confirm-cancel">Cancelar</button>
-          <button class="vt-btn-primary ${d.danger ? "vt-btn-danger" : ""}" data-a="confirm-yes">${d.danger ? "Eliminar" : "Confirmar"}</button>
+          <button class="vt-btn-ghost" data-a="confirm-cancel">${esc(d.cancelLabel)}</button>
+          <button class="vt-btn-primary ${d.danger ? "vt-btn-danger" : ""}" data-a="confirm-yes">${esc(d.label)}</button>
         </div>
       </div>
     </div>`;
@@ -2984,7 +3007,7 @@ function finishSession() {
       persistActiveSession(); // limpia el autoguardado, ya no hay sesión que recuperar
       ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
       stopRest(); render();
-    }, true);
+    }, { label: "Descartar sesión", danger: true });
     return;
   }
 
@@ -3122,7 +3145,7 @@ function finishSession() {
 
   const unchecked = total - done;
   if (unchecked > 0) {
-    askConfirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar las ${done} marcadas?`, withDuration, false);
+    askConfirm(`Hay ${unchecked} serie${unchecked !== 1 ? "s" : ""} sin marcar que se descartará${unchecked !== 1 ? "n" : ""}. ¿Finalizar y guardar ${done === 1 ? "la serie marcada" : `las ${done} marcadas`}?`, withDuration, { label: "Finalizar y guardar" });
   } else {
     withDuration();
   }
@@ -3698,7 +3721,7 @@ function processImportedData(data) {
       if (Array.isArray(inGroups) && inGroups.length) { exerciseGroups = inGroups; migrateGroupColors(exerciseGroups); persistGroups(); } // un respaldo viejo trae los colores viejos
       if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
       askAlert("Respaldo restaurado ✔");
-    }, true);
+    }, { label: "Reemplazar datos", danger: true });
     return;
   }
 
@@ -3769,10 +3792,12 @@ function processImportedData(data) {
   if (!hasSessions) { apply(false); return; }
   const n = data.sessions.length;
   askConfirm(`Este archivo trae ${n} entrenamiento${n !== 1 ? "s" : ""}. Son datos personales: agrégalos solo si son tuyos (por ejemplo, para recuperarlos). ¿Agregarlos a tu historial?`,
-    () => apply(true), false,
-    // "No": si además trae rutinas se importan igual, sin los entrenamientos;
-    // si era solo historial, no se importa nada.
-    () => { if (Array.isArray(data.routines)) apply(false); else render(); });
+    () => apply(true), {
+      label: "Agregar entrenamientos", cancelLabel: "No agregar",
+      // "No": si además trae rutinas se importan igual, sin los entrenamientos;
+      // si era solo historial, no se importa nada.
+      onNo: () => { if (Array.isArray(data.routines)) apply(false); else render(); },
+    });
 }
 
 function importJSON(file) {
@@ -4054,7 +4079,7 @@ document.addEventListener("click", (e) => {
       askConfirm("¿Eliminar esta rutina? (el historial no se borra)", () => {
         routines = routines.filter((r) => r.id !== id);
         persistRoutines(); render();
-      }, true);
+      }, { label: "Eliminar rutina", danger: true });
       break;
     case "routine-start": {
       const r = routines.find((x) => x.id === id);
@@ -4070,7 +4095,7 @@ document.addEventListener("click", (e) => {
           ui.tab = "rutinas";
           render();
         };
-        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, { label: "Descartar y empezar", danger: true });
         else start();
       }
       break;
@@ -4094,7 +4119,7 @@ document.addEventListener("click", (e) => {
         settings.openFolders = (settings.openFolders || []).filter((x) => x !== id);
         persistSettings();
         render();
-      }, true);
+      }, { label: "Eliminar carpeta", danger: true });
       break;
     }
     case "folder-toggle": {
@@ -4290,7 +4315,7 @@ document.addEventListener("click", (e) => {
         };
 
         if (doneLost > 0) {
-          askConfirm(`Vas a perder ${doneLost} serie${doneLost !== 1 ? "s" : ""} marcada${doneLost !== 1 ? "s" : ""} de los ejercicios eliminados. ¿Guardar los cambios de todas formas?`, commit, true);
+          askConfirm(`Vas a perder ${doneLost} serie${doneLost !== 1 ? "s" : ""} marcada${doneLost !== 1 ? "s" : ""} de los ejercicios eliminados. ¿Guardar los cambios de todas formas?`, commit, { label: "Guardar igual", danger: true });
         } else {
           commit();
         }
@@ -4327,7 +4352,7 @@ document.addEventListener("click", (e) => {
         ui.collapsedExercises.clear();
         render();
       };
-      if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+      if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, { label: "Descartar y empezar", danger: true });
       else start();
       break;
     }
@@ -4413,7 +4438,7 @@ document.addEventListener("click", (e) => {
         ui.openNotes.clear(); ui.openExNotes.clear();
         ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
         stopRest(); render();
-      }, true);
+      }, { label: "Descartar sesión", danger: true });
       break;
     case "session-finish": finishSession(); break;
     case "session-minimize":
@@ -4555,7 +4580,7 @@ document.addEventListener("click", (e) => {
       askConfirm("¿Eliminar esta sesión del historial?", () => {
         sessions = sessions.filter((s) => s.id !== id);
         persistSessions(); render();
-      }, true);
+      }, { label: "Eliminar sesión", danger: true });
       break;
     case "session-repeat": {
       const past = sessions.find((s) => s.id === id);
@@ -4572,7 +4597,7 @@ document.addEventListener("click", (e) => {
           ui.tab = "rutinas";
           render();
         };
-        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, true);
+        if (ui.activeSession) askConfirm("Ya hay una sesión en curso. ¿Descartarla y empezar otra?", start, { label: "Descartar y empezar", danger: true });
         else start();
       }
       break;
@@ -4613,7 +4638,7 @@ document.addEventListener("click", (e) => {
     /* Pestaña Ejercicios */
     case "exgroup-toggle": {
       const name = el.dataset.name;
-      const open = new Set(settings.openExerciseGroups || []);
+      const open = openExerciseGroups();
       open.has(name) ? open.delete(name) : open.add(name);
       settings.openExerciseGroups = [...open];
       persistSettings();
@@ -4640,7 +4665,7 @@ document.addEventListener("click", (e) => {
         settings.featuredExercises = (settings.featuredExercises || []).filter((x) => x !== id);
         persistSettings();
         render();
-      }, true);
+      }, { label: "Eliminar ejercicio", danger: true });
       break;
     }
     case "ex-modal-cancel": ui.exerciseModal = null; render(); break;
@@ -4698,7 +4723,7 @@ document.addEventListener("click", (e) => {
         exercises = exercises.map((e) => e.group === name ? { ...e, group: "Custom" } : e);
         persistExercises();
         render();
-      }, true);
+      }, { label: "Eliminar grupo", danger: true });
       break;
     }
     case "group-color-pick": ui.groupModal.color = el.dataset.color; render(); break;
@@ -4752,13 +4777,13 @@ document.addEventListener("click", (e) => {
           persistSessions();
           ui.sessionDetail = null; ui.progressDetail = null;
           askAlert("Historial de entrenamientos borrado.");
-        }, true);
+        }, { label: "Borrar entrenamientos", danger: true });
       } else {
         askConfirm("¿Borrar el 1RM guardado de todos los ejercicios? Las rutinas en modo %1RM van a pedir que lo definas de nuevo. No se puede deshacer.", () => {
           exercises.forEach((e) => { delete e.oneRM; });
           persistExercises();
           askAlert("1RM borrados.");
-        }, true);
+        }, { label: "Borrar 1RM", danger: true });
       }
       break;
     }
@@ -5067,7 +5092,7 @@ function applyUpdate() {
     waiting.postMessage("SKIP_WAITING");
   };
   if (sessionHasUnsavedProgress()) {
-    askConfirm("Actualizar la app ahora perderá el progreso no guardado de la sesión en curso. ¿Continuar?", reload, false);
+    askConfirm("Actualizar la app ahora perderá el progreso no guardado de la sesión en curso. ¿Continuar?", reload, { label: "Actualizar ahora" });
   } else {
     reload();
   }
