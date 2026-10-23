@@ -57,7 +57,7 @@
   /* Tracking: 1 */
   --track: 0.02em; /* todo lo que va en mayúscula (encabezados de columna y labels de sección) */
 
-  /* Valor editable sin caja (series, objetivos, 1RM, descanso, RPE): un
+  /* Valor editable sin caja (series, objetivos, 1RM, descanso): un
      subrayado tenue permanente del 60% del ancho, centrado (un input no
      puede medir su texto). Al enfocar pasa al subrayado azul de 2px. */
   --editable-line: linear-gradient(var(--line-strong), var(--line-strong)) center bottom / 60% 1px no-repeat transparent;

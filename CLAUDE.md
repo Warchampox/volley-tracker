@@ -101,7 +101,8 @@
   oscuro: el gris es el mismo blanco con opacidad). `--bg` #000 (tiene que
   ser IDÉNTICO a `background_color` / `theme_color` de manifest.json, al
   meta theme-color y al fondo del ícono maskable, o la splash muestra un
-  marco), `--surface` #1C1C1E, `--surface-2` #2C2C2E, `--line`
+  marco), `--surface` #1C1C1E, `--surface-2` #2C2C2E, `--surface-3`
+  #3A3A3C (botones dentro de un menú flotante), `--line`
   rgba(84,84,88,.55). Texto: `--text` #FFF (tinta principal),
   `--text-dim` rgba(235,235,245,.60) (secundario, ≥ 5,3:1 sobre los tres
   fondos), `--text-faint` rgba(235,235,245,.30) (terciario). NUNCA un gris
@@ -113,8 +114,8 @@
   botones). En `--text-dim`: etiquetas, unidades, fechas, subtítulos, la
   lista de ejercicios bajo cada rutina, labels de sección y encabezados de
   columna. En `--text-faint`: placeholders, el "×" entre kg y reps, los
-  "·" separadores (`sepJoin`), íconos de RPE sin valor y controles
-  deshabilitados (en vez de bajar la opacidad).
+  "·" separadores (`sepJoin`), el RPE vacío ("—") de la tabla de Última
+  vez y controles deshabilitados (en vez de bajar la opacidad).
 - Eyebrows: solo los que informan (fecha de sesión, grupo en el detalle de
   ejercicio, "Sesión nº N · fecha", "Editar rutina / Nueva rutina"), en
   `--fs-xs`, sin mayúscula forzada, en `--blue-text`. Los encabezados
@@ -155,13 +156,14 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
   (valores) · `--fs-xl` 20px (títulos de bloque/rutina/modal) ·
   `--fs-2xl` 24px (header chico, nombre de sesión) · `--fs-3xl` 32px
   (título de pestaña, descanso, titular del resumen) · `--fs-hero`
-  88px (SOLO el número héroe del resumen de sesión).
+  88px (SOLO el número héroe del resumen de sesión) · `--fs-menu` 16px
+  (SOLO menús flotantes: filas, título y valores de la tabla).
 - Espaciado (grilla de 4): `--sp-1` 4px · `--sp-2` 8px · `--sp-3` 12px
   · `--sp-4` 16px · `--sp-6` 24px · `--sp-8` 32px · `--sp-12` 48px ·
   `--sp-16` 64px.
 - Radios: `--r-sm` 8px (controles chicos) · `--r-md` 12px (botones,
-  barras, hoja de modal) · `--r-full` 999px (píldoras). `50%` solo
-  para círculos.
+  barras, hoja de modal) · `--r-lg` 14px (menú flotante) · `--r-full`
+  999px (píldoras). `50%` solo para círculos.
 - Tracking: `--track` 0.02em para lo que va en mayúscula (el 0.06em de
   antes era para la mono, que ya no existe).
 - Colores de contraste (2026-10-22, medidos contra WCAG AA): `--blue-text`
@@ -173,10 +175,26 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
   antes de la unidad: `52,5 kg`, nunca `52.5kg`.
 
 Patrones (reutilizar, no inventar variantes):
-- Fila de serie tipo tabla `[nº] [valor] [×] [valor] [RPE] [✓]`: check
-  a la derecha, nº sin caja, valores en columnas flex iguales.
+- Fila de serie tipo tabla `[nº] [valor] [×] [valor] [✓]`: check a la
+  derecha, nº sin caja, valores en columnas flex iguales. El RPE de serie
+  YA NO tiene columna (2026-10-23): si la serie lo tiene, va "@8" en 11px
+  `--text-dim` debajo del número.
+- Menú de serie (`setMenuHTML`): tocar el nº de serie abre un menú
+  flotante (anillo `--blue` de 2px en el número) con el tipo (Normal /
+  C Calentamiento / D Drop set / F Fallida, 4 botones de 52px con el
+  nombre; elegir aplica y el menú sigue abierto), el esfuerzo RPE ENTERO
+  1–10 en 2 × 5 (guarda y cierra; tocar el elegido lo quita) y "Eliminar
+  serie" con el mismo deshacer del swipe. RPE con decimal de sesiones
+  viejas: se conserva en los datos y se muestra redondeado hacia abajo
+  (`setRpe`); al importar se limpia a enteros 1–10 (`cleanImportedRpe`).
+- "Última vez" (sesión en vivo): botón al inicio de la línea de controles
+  del bloque (solo si hay historial) que abre un menú flotante con la
+  sesión anterior en tabla (columnas por tipo, C/D/F en su color, RPE
+  vacío "—"), "Mejor serie: …" y "Usar estos valores" (copia sobre las
+  series SIN marcar, serie por serie y con su tipo, agrega las que faltan;
+  aviso "Valores copiados · Deshacer"). No hay línea de texto "Última vez".
 - Valor editable sin caja (series, objetivos del editor, 1RM, descanso
-  del ejercicio, RPE): subrayado tenue permanente `--editable-line` (60%
+  del ejercicio): subrayado tenue permanente `--editable-line` (60%
   del ancho, centrado, en `--line-strong`); al enfocar, subrayado azul de
   2px; en una serie completada (`.is-done`) no lleva subrayado.
   Encabezado y fila salen de la misma plantilla (`setColumns`), con
@@ -290,16 +308,37 @@ Patrones (reutilizar, no inventar variantes):
   acción que tocar el fondo) y devuelve el foco al botón que lo abrió.
   Un modal nuevo no necesita nada extra si usa `.vt-modal-backdrop` con
   `data-a` de cierre.
+- Menú flotante (`popoverHTML`, `positionPopover`, `closePopover`,
+  `ui.popover`): componente ÚNICO para menús chicos anclados a un botón.
+  Panel `--surface-2`, radio `--r-lg`, sombra 0 12px 32px, ancho según el
+  contenido (216px a 100vw − 32px), sobre un fondo atenuado al 35% que lo
+  cierra. Abre hacia abajo y, si no cabe, hacia arriba; se alinea al borde
+  del botón (izquierdo o derecho según la mitad de pantalla). Entra desde
+  la esquina del botón (escala 0,96 → 1 y opacidad, 140ms) y sale en
+  100ms; con movimiento reducido, solo opacidad. Es un diálogo más para
+  setupDialogs (foco, Escape, Tab, retorno del foco). Filas de 48px con
+  ícono 20 y texto `--fs-menu`; las destructivas en `--red-text` con un
+  divisor antes. Elegir una acción lo cierra, salvo las marcadas
+  `data-keep`.
+- Cuándo menú flotante y cuándo hoja inferior: menú flotante para las
+  acciones cortas de un ⋯ (sesión en vivo, editor, rutina, carpeta,
+  detalle de sesión y de ejercicio: `MENU_KINDS`), el menú de serie y
+  "Última vez". Hoja inferior para lo que necesita subtítulo por opción o
+  más espacio (Exportar, Compartir rutina, Borrar datos personales, el
+  selector, formularios). Modal centrado solo para confirmaciones y el
+  aviso de duración.
 - Hojas inferiores: barrita de 36×4 en `--line-strong` (la agrega
   setupDialogs) y cierre arrastrando hacia abajo > 80 px o con un tirón
-  rápido (`sheetDrag`), además de la ✕, el fondo y Escape.
+  rápido (`sheetDrag`), además del fondo y Escape. Las hojas de menú
+  (Exportar, Compartir, Borrar datos) van sin ✕.
 - Confirmaciones: `askConfirm(message, onYes, { label, danger, onNo,
   cancelLabel })`. El botón principal repite la acción con un verbo
   ("Descartar sesión", "Eliminar rutina", "Finalizar y guardar"), nunca
   "Confirmar" ni un "Eliminar" genérico.
-- Borrar una serie (swipe) se puede deshacer: aviso "Serie eliminada ·
-  Deshacer" de 5 s (`showUndoToast`) que devuelve la serie con sus
-  valores a la misma posición.
+- Borrar una serie (swipe o menú de serie) se puede deshacer: aviso
+  "Serie eliminada · Deshacer" de 5 s que devuelve la serie con sus
+  valores a la misma posición. El aviso es genérico:
+  `showUndoToast(texto, undo)` (también lo usa "Usar estos valores").
 - Zoom: el viewport sigue bloqueado (`maximum-scale=1, user-scalable=no`)
   porque en julio de 2026 la app se agrandaba sola durante el uso. En su
   lugar hay un zoom temporal: pellizcar con dos dedos agranda `<main>`

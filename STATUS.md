@@ -1499,3 +1499,13 @@ Entradas nuevas al final. No reescribir lo anterior.
   siguen como modal. Verificado a 360 y 390 px: posición pegada al botón,
   abre hacia arriba si no cabe, foco a la primera fila, Escape devuelve el
   foco al ⋯, y todas las acciones (Agregar ejercicio, Compartir, etc.).
+- Cierre de menús: CLAUDE.md con el componente de menú flotante, la regla
+  menú flotante / hoja inferior / modal, "Última vez" con tabla y "Usar
+  estos valores", el menú de serie (tipo + RPE entero 1–10 + eliminar) y
+  que el RPE de serie ya no tiene columna. sw.js goat-v35 → goat-v36.
+  Regresiones verificadas: filas de los 4 tipos a 360px con Última vez
+  abierto, Usar estos valores con series marcadas y más series antes (y su
+  deshacer), swipe + deshacer, long-press, pellizco, PR en vivo con RPE,
+  resumen, JSON exportado (rpe numérico y setType sin cambios), foco y
+  Escape en los menús. Pendiente en el teléfono: menú de serie y Usar
+  estos valores con el dedo.
