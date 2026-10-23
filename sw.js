@@ -75,7 +75,7 @@ self.addEventListener("fetch", (e) => {
       )
     );
   } else {
-    // Otros orígenes (Chart.js CDN, Google Fonts): network-first con fallback a cache.
+    // Otros orígenes (Chart.js y SortableJS por CDN; ya no hay fuentes web): network-first con fallback a cache.
     e.respondWith(
       fetch(e.request).then((res) => {
         const copy = res.clone();

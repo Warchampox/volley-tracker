@@ -1376,3 +1376,13 @@ Entradas nuevas al final. No reescribir lo anterior.
   tirón rápido cambia, extremos resisten, vertical no hace nada, segundo
   dedo cancela, sesión en vivo no se desliza, gráficos en la copia.
   Pendiente: probarlo con el dedo en el teléfono (sensación y umbral).
+
+## 2026-10-23 — Tipografía del sistema, Fase 1 de 2: fuente del sistema
+- Sin fuentes web (fuera Google Fonts, Barlow e IBM Plex). Una sola
+  familia `--font` (system-ui → SF en iPhone, Roboto en Android); los
+  números que iban en mono llevan `tabular-nums` (`.vt-num` y una regla
+  con los componentes). Canvas de compartir y Chart.js con la misma familia.
+- Jerarquía por peso: h1 32/700 sin mayúscula, nombres de bloque 20/600,
+  filas 15/500, valores 18/600, botones 600. Mayúscula solo en columnas
+  (11/600) y labels de sección (13/600); `--track` 0.02em. Bajo 380px el
+  título de la sesión baja a 20px. Verificado a 390 y 360 px.

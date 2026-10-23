@@ -305,6 +305,9 @@ const PATHS = {
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
 };
 
+// Valor de un token de estilos.css, para lo que no lee CSS (Chart.js, canvas).
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 const icon = (name, s = 18) =>
   `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] || ""}</svg>`;
 
@@ -1348,7 +1351,7 @@ function editorHTML() {
           const attrs = c.clock
             ? `type="text" inputmode="numeric" value="${fmtClockInput(num(v))}"`
             : `type="number" inputmode="decimal" value="${num(v)}" step="${c.step}"`;
-          return `<input class="vt-input vt-mono vt-set-input vt-col-val" ${attrs}
+          return `<input class="vt-input vt-num vt-set-input vt-col-val" ${attrs}
             data-i="editor-target" data-field="${c.field}" data-idx="${idx}" aria-label="${c.cap}"
             autocomplete="off" autocorrect="off" spellcheck="false" name="f_${c.field}_${idx}">`;
         }).join("");
@@ -1409,8 +1412,8 @@ function trainActiveHTML() {
           : `<h1 class="vt-header-title-sm">${esc(s.routineName)}</h1>`}
       </div>
       <div class="vt-live-score">
-        <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>TIEMPO</small></span>
-        <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>VOLUMEN</small></span>
+        <span class="vt-scoreboard"><span id="live-clock">${fmtClock((Date.now() - new Date(s.date).getTime()) / 1000)}</span><small>Tiempo</small></span>
+        <span class="vt-scoreboard"><span id="live-vol">${Math.round(vol).toLocaleString("es-CL")}</span> kg<small>Volumen</small></span>
       </div>
       <div class="vt-head-actions vt-live-actions">
         <button class="vt-more-btn" data-a="sheet-open" data-kind="live" aria-label="Opciones de la sesión">${icon("more", 20)}</button>
@@ -1452,7 +1455,7 @@ function trainActiveHTML() {
               ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
               <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
-                  <input type="number" inputmode="numeric" class="vt-input vt-mono" min="0" step="15"
+                  <input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
                     value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
                     data-i="ex-rest" data-ex="${exIdx}" aria-label="Descanso en segundos"
                     autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
@@ -1645,9 +1648,9 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
     if (c.x) return `<span class="vt-x vt-col-x">×</span>`;
     if (c.timer) return `<button class="vt-timer-btn vt-col-timer ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 22)}</button>`;
-    if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-mono vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds", "tiempo")}>`;
+    if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-num vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds", "tiempo")}>`;
     const value = c.f === "repsL" ? repsL(st) : c.f === "repsR" ? repsR(st) : num(st[c.f]);
-    return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-mono vt-set-input vt-col-val" value="${value}" ${attrs(c.f, c.f === "weight" && c.cap === "+kg" ? "lastre en kilos" : SET_FIELD_SPOKEN[c.f])}>`;
+    return `<input type="number" inputmode="${c.f === "weight" ? "decimal" : "numeric"}" class="vt-input vt-num vt-set-input vt-col-val" value="${value}" ${attrs(c.f, c.f === "weight" && c.cap === "+kg" ? "lastre en kilos" : SET_FIELD_SPOKEN[c.f])}>`;
   }).join("");
 
   return `
@@ -1663,7 +1666,7 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
     </div>
     ${openType ? typeSelectorHTML(exIdx, setIdx) : ""}
     ${open ? `<div class="vt-setline2">
-      <input type="number" inputmode="decimal" class="vt-input vt-mono vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
+      <input type="number" inputmode="decimal" class="vt-input vt-num vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
         value="${st.rpe ?? ""}" ${attrs("rpe", "RPE")}>
     </div>` : ""}`;
 }
@@ -1708,7 +1711,7 @@ function fmtVolume(v, tons = false) {
 }
 
 // Fila de sesión del historial: mismo patrón que la fila de rutina (nombre en
-// Barlow + línea de datos), con chevron. Tocarla abre el detalle de la sesión.
+// grande + línea de datos), con chevron. Tocarla abre el detalle de la sesión.
 function sessionRowHTML(s) {
   const nPR = sessionPRs()[s.id]?.size || 0;
   // Sin volumen (pliometría, peso corporal): los saltos si hubo; si no, nada en vez de "0 kg".
@@ -2312,7 +2315,7 @@ function exerciseDetailHTML() {
       <p class="vt-section-eyebrow">1RM</p>
       <div class="vt-rows"><label class="vt-row vt-row-center">
         <span class="vt-row-name">Tu máximo a una repetición</span>
-        <span class="vt-row-input"><input type="number" inputmode="decimal" class="vt-input vt-mono vt-max-input" placeholder="—"
+        <span class="vt-row-input"><input type="number" inputmode="decimal" class="vt-input vt-num vt-max-input" placeholder="—"
           value="${num(ex.oneRM) > 0 ? num(ex.oneRM) : ""}" data-i="featured-rm" data-id="${exId}"
           autocomplete="off" autocorrect="off" spellcheck="false" name="f_maxrm_${exId}"> kg</span>
       </label></div>
@@ -2424,7 +2427,7 @@ function loadSectionHTML() {
 // yMin > 0 solo lo usa el gráfico de peso máx. del detalle de ejercicio: ahí
 // partir en 0 aplastaba la curva contra el techo.
 function chartScales(yFormat, yMin = 0) {
-  const tick = { color: "#8FA0AC", font: { family: "'IBM Plex Mono', monospace", size: 10 } };
+  const tick = { color: cssVar("--text-dim"), font: { family: cssVar("--font"), size: 10 } };
   return {
     x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8 } },
     y: {
@@ -2531,7 +2534,7 @@ function mountChart(animate = true) {
     data: { labels, datasets },
     options: {
       plugins: {
-        legend: { display: splitBySide, labels: { color: "#8FA0AC", boxWidth: 10, boxHeight: 10, font: { family: "'IBM Plex Mono', monospace", size: 10 } } },
+        legend: { display: splitBySide, labels: { color: cssVar("--text-dim"), boxWidth: 10, boxHeight: 10, font: { family: cssVar("--font"), size: 10 } } },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label ? c.dataset.label + ": " : ""}${yFormat(c.parsed.y)}` } },
       },
       scales: chartScales(yFormat, yMin),
@@ -3189,7 +3192,7 @@ function durationDialogHTML() {
         <div class="vt-modal-form">
           <p style="margin:0">${finish ? `La sesión duró ${hm} h. ¿Terminaste hace rato?` : "Duración de la sesión"}</p>
           <label>Duración real (minutos)
-            <input type="number" inputmode="numeric" class="vt-input vt-mono" id="dur-minutes" min="1" step="1" value="${d.minutes}"
+            <input type="number" inputmode="numeric" class="vt-input vt-num" id="dur-minutes" min="1" step="1" value="${d.minutes}"
               autocomplete="off" autocorrect="off" spellcheck="false" name="f_durmin">
           </label>
         </div>
@@ -3390,9 +3393,9 @@ function sessionSummaryHTML() {
 /* ----------------------------- Compartir como imagen ------------------------------ */
 // Tarjeta vertical (1080x1350) dibujada a mano con Canvas API — sin librería
 // nueva. Dos variantes: "session" (resumen de fin de sesión) y "pr" (un PR
-// puntual desde Progreso). Usa las mismas fuentes ya cargadas por la app
-// (Barlow Condensed para títulos, IBM Plex Mono para números) — espera
-// document.fonts.ready antes de dibujar para no caer al fallback del sistema.
+// puntual desde Progreso). Usa la fuente del sistema, igual que la app (sin
+// fuentes web que esperar); la jerarquía va en peso y tamaño.
+const SHARE_FONT = "system-ui, -apple-system, Roboto, sans-serif";
 
 const SHARE_W = 1080, SHARE_H = 1350;
 
@@ -3424,11 +3427,11 @@ async function drawSessionShareCard(ctx, sum) {
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#8FA0AC";
-  ctx.font = "600 30px 'IBM Plex Mono'";
+  ctx.font = `600 30px ${SHARE_FONT}`;
   ctx.fillText(fmtDate(sum.date).toUpperCase(), 64, 190);
 
   ctx.fillStyle = "#FFFFFF";
-  fitText(ctx, sum.routineName, 64, 300, SHARE_W - 128, 88, 700, "'Barlow Condensed'");
+  fitText(ctx, sum.routineName, 64, 300, SHARE_W - 128, 88, 700, SHARE_FONT);
 
   const stats = [
     { label: "DURACIÓN", value: fmtDurationMin(sum.durationSec) },
@@ -3440,10 +3443,10 @@ async function drawSessionShareCard(ctx, sum) {
     const x = 64 + i * colW;
     ctx.textAlign = "left";
     ctx.fillStyle = "#8FA0AC";
-    ctx.font = "600 24px 'IBM Plex Mono'";
+    ctx.font = `600 24px ${SHARE_FONT}`;
     ctx.fillText(s.label, x, 430);
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "600 54px 'IBM Plex Mono'";
+    ctx.font = `600 54px ${SHARE_FONT}`;
     ctx.fillText(s.value, x, 495);
   });
 
@@ -3453,15 +3456,15 @@ async function drawSessionShareCard(ctx, sum) {
   const prs = (sum.prHits || []).slice(0, 3);
   if (prs.length) {
     ctx.fillStyle = "#8FA0AC";
-    ctx.font = "600 28px 'IBM Plex Mono'";
+    ctx.font = `600 28px ${SHARE_FONT}`;
     ctx.fillText("PRs DE HOY", 64, 620);
     let y = 690;
     prs.forEach((hit) => {
       if (trophyImg) ctx.drawImage(trophyImg, 64, y - 34, 40, 40);
       ctx.fillStyle = "#E8A33D";
-      fitText(ctx, hit.exerciseName, 122, y, SHARE_W - 122 - 260, 42, 700, "'Barlow Condensed'");
+      fitText(ctx, hit.exerciseName, 122, y, SHARE_W - 122 - 260, 42, 700, SHARE_FONT);
       ctx.textAlign = "right";
-      ctx.font = "600 34px 'IBM Plex Mono'";
+      ctx.font = `600 34px ${SHARE_FONT}`;
       ctx.fillStyle = "#FFFFFF";
       ctx.fillText(fmtSet(hit.type, hit, exUnilateral(hit.exerciseId)), SHARE_W - 64, y);
       y += 72;
@@ -3470,7 +3473,7 @@ async function drawSessionShareCard(ctx, sum) {
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#8FA0AC";
-  ctx.font = "600 26px 'IBM Plex Mono'";
+  ctx.font = `600 26px ${SHARE_FONT}`;
   ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
 }
 
@@ -3480,25 +3483,24 @@ async function drawPRShareCard(ctx, p) {
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#E8A33D";
-  ctx.font = "700 40px 'Barlow Condensed'";
+  ctx.font = `700 40px ${SHARE_FONT}`;
   ctx.fillText("NUEVO PR", SHARE_W / 2, 470);
 
   ctx.fillStyle = "#FFFFFF";
-  fitText(ctx, p.exerciseName, SHARE_W / 2, 580, SHARE_W - 160, 72, 700, "'Barlow Condensed'", "center");
+  fitText(ctx, p.exerciseName, SHARE_W / 2, 580, SHARE_W - 160, 72, 700, SHARE_FONT, "center");
 
-  ctx.font = "700 150px 'IBM Plex Mono'";
+  ctx.font = `700 150px ${SHARE_FONT}`;
   ctx.fillText(fmtPRValue(p), SHARE_W / 2, 800);
 
   ctx.fillStyle = "#8FA0AC";
-  ctx.font = "600 32px 'IBM Plex Mono'";
+  ctx.font = `600 32px ${SHARE_FONT}`;
   ctx.fillText(fmtDate(p.date), SHARE_W / 2, 870);
 
-  ctx.font = "600 26px 'IBM Plex Mono'";
+  ctx.font = `600 26px ${SHARE_FONT}`;
   ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
 }
 
 async function buildShareBlob(kind, data) {
-  await document.fonts.ready;
   const canvas = document.createElement("canvas");
   canvas.width = SHARE_W;
   canvas.height = SHARE_H;
@@ -3509,7 +3511,7 @@ async function buildShareBlob(kind, data) {
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#3B6FE0";
-  ctx.font = "800 46px 'Barlow Condensed'";
+  ctx.font = `800 46px ${SHARE_FONT}`;
   ctx.fillText("GOAT", 64, 110);
 
   if (kind === "session") await drawSessionShareCard(ctx, data);
