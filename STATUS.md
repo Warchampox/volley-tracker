@@ -1488,3 +1488,14 @@ Entradas nuevas al final. No reescribir lo anterior.
   redondeados hacia abajo sin migrar; al importar, el RPE se limpia a
   enteros 1–10 (`cleanImportedRpe`: 7,5 → 7, fuera de rango → sin RPE).
   Verificado a 360 y 390 px en peso, unilateral, peso corporal y tiempo.
+
+## 2026-10-23 cont. — Menús, Fase 3 de 3: menús ⋯ como menú flotante
+- Los ⋯ de sesión en vivo, editor, rutina, carpeta, detalle de sesión y
+  detalle de ejercicio abren el menú flotante (`MENU_KINDS`,
+  `actionsMenuHTML`), sin título ni ✕, con divisor antes de la acción
+  destructiva. La sesión en vivo suma "Agregar ejercicio".
+- Exportar, Compartir rutina y Borrar datos personales siguen como hoja
+  (tienen subtítulo por opción), ahora sin ✕. Confirmaciones y duración
+  siguen como modal. Verificado a 360 y 390 px: posición pegada al botón,
+  abre hacia arriba si no cabe, foco a la primera fila, Escape devuelve el
+  foco al ⋯, y todas las acciones (Agregar ejercicio, Compartir, etc.).

@@ -1080,7 +1080,7 @@ function openPopover(el, popover) {
 
 function popoverHTML() {
   const p = ui.popover;
-  const body = { last: lastTimeMenuHTML, set: setMenuHTML }[p.kind]?.(p) || "";
+  const body = { last: lastTimeMenuHTML, set: setMenuHTML, actions: actionsMenuHTML }[p.kind]?.(p) || "";
   return `<div class="vt-popover-backdrop ${popoverShown ? "" : "is-entering"}" data-a="popover-close">
     <div class="vt-popover vt-popover-${p.kind}" data-stop="1">${body}</div>
   </div>`;
@@ -1370,21 +1370,38 @@ function routinesHTML() {
   return banner + html;
 }
 
-// Hoja inferior del botón ⋯ (rutina, carpeta, ejercicio o sesión): mismo estilo que los demás
-// modales. Cada fila dispara la acción de siempre (routine-edit, folder-del,
-// etc.); el click handler cierra la hoja antes de ejecutar cualquier acción.
+// Menús ⋯ que van como menú flotante (acciones cortas, sin subtítulo).
+// Exportar, Compartir rutina y Borrar datos personales siguen como hoja
+// inferior (actionSheetHTML): llevan un subtítulo por opción.
+const MENU_KINDS = new Set(["live", "editor", "routine", "folder", "session", "exercise"]);
+
+// Contenido del menú flotante de un ⋯. Cada fila dispara la acción de
+// siempre (routine-edit, folder-del, etc.); el click handler cierra el menú
+// antes. Antes de la primera acción destructiva va un divisor.
+function actionsMenuHTML(p) {
+  const id = p.id ?? "";
+  const r = (a, ic, label, danger, extra = "") => ({ html: popRowHTML(a, ic, label, `data-id="${id}" ${extra}`, danger), danger });
+  const rows = {
+    live: [r("exercise-editmode-toggle", "grip", "Organizar ejercicios"), r("picker-open", "plus", "Agregar ejercicio", false, 'data-ctx="session"'),
+      r("session-discard", "trash", "Descartar sesión", true)],
+    editor: [r("exercise-editmode-toggle", "grip", "Organizar ejercicios")],
+    routine: [r("routine-edit", "pencil", "Editar"), r("routine-dup", "copy", "Duplicar"), r("sheet-open", "share", "Compartir", false, 'data-kind="share"'),
+      r("routine-move", "folder", "Mover a carpeta"), r("routine-del", "trash", "Eliminar", true)],
+    folder: [r("folder-edit", "pencil", "Renombrar"), r("folder-del", "trash", "Eliminar", true)],
+    session: [r("hist-del", "trash", "Eliminar", true)],
+    exercise: [r("ex-edit", "pencil", "Editar"), r("ex-del", "trash", "Eliminar", true)],
+  }[p.sheet] || [];
+  const firstDanger = rows.findIndex((x) => x.danger);
+  return rows.map((x, i) => (i === firstDanger && i > 0 ? '<div class="vt-pop-sep"></div>' : "") + x.html).join("");
+}
+
+// Hoja inferior de los ⋯ que necesitan subtítulo por opción: Exportar,
+// Compartir una rutina y Borrar datos personales. Sin ✕: ya tienen barrita,
+// fondo y Escape para cerrar.
 function actionSheetHTML() {
   const { kind, id } = ui.actionSheet;
-  const row = (a, ic, label, danger) =>
-    `<button class="vt-modal-row ${danger ? "vt-modal-row-danger" : ""}" data-a="${a}" data-id="${id}">${icon(ic, 16)} ${label}</button>`;
   let title, rows;
-  if (kind === "live" || kind === "editor") {
-    // ⋯ del encabezado de la sesión en vivo / del editor de rutina. Organizar
-    // también se abre manteniendo presionado el nombre de un ejercicio.
-    title = kind === "live" ? (ui.activeSession?.routineName || "Sesión") : (ui.editingRoutine?.name || "Rutina");
-    rows = `<button class="vt-modal-row" data-a="exercise-editmode-toggle">${icon("grip", 16)} Organizar ejercicios</button>`
-      + (kind === "live" ? `<button class="vt-modal-row vt-modal-row-danger" data-a="session-discard">${icon("trash", 16)} Descartar sesión</button>` : "");
-  } else if (kind === "share") {
+  if (kind === "share") {
     // Compartir UNA rutina: como texto (mensaje para pegar) o como archivo.
     const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="routine-share" data-mode="${mode}" data-id="${id}">
       ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
@@ -1400,31 +1417,16 @@ function actionSheetHTML() {
     title = "Borrar datos personales";
     rows = opt("sessions", "Entrenamientos", nSes, `Las ${nSes} sesiones del historial, con sus récords y gráficos`)
       + opt("onerm", "1RM", nRM, `El 1RM guardado de ${nRM} ejercicio${nRM !== 1 ? "s" : ""}`);
-  } else if (kind === "export") {
+  } else {
     title = "Exportar";
     rows = EXPORT_KINDS.map((k) => `<button class="vt-modal-row" data-a="export-pick" data-kind="${k.id}">
       ${icon(k.ic, 16)}<span class="vt-modal-row-text">${k.label}<small>${k.sub}</small></span></button>`).join("");
-  } else if (kind === "folder") {
-    title = routineFolders.find((f) => f.id === id)?.name || "Carpeta";
-    rows = row("folder-edit", "pencil", "Renombrar") + row("folder-del", "trash", "Eliminar", true);
-  } else if (kind === "session") {
-    title = sessions.find((x) => x.id === id)?.routineName || "Sesión";
-    rows = row("hist-del", "trash", "Eliminar", true);
-  } else if (kind === "exercise") {
-    title = exName(id);
-    rows = row("ex-edit", "pencil", "Editar") + row("ex-del", "trash", "Eliminar", true);
-  } else {
-    title = routines.find((r) => r.id === id)?.name || "Rutina";
-    rows = row("routine-edit", "pencil", "Editar") + row("routine-dup", "copy", "Duplicar")
-      + `<button class="vt-modal-row" data-a="sheet-open" data-kind="share" data-id="${id}">${icon("share", 16)} Compartir</button>`
-      + row("routine-move", "folder", "Mover a carpeta") + row("routine-del", "trash", "Eliminar", true);
   }
   return `
     <div class="vt-modal-backdrop" data-a="sheet-close">
       <div class="vt-modal" data-stop="1">
         <div class="vt-modal-head">
           <h2 class="vt-modal-title vt-modal-title-free">${esc(title)}</h2>
-          <button class="vt-btn-ghost" data-a="sheet-close" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
         <div class="vt-modal-body">${rows}</div>
       </div>
@@ -4467,7 +4469,10 @@ document.addEventListener("click", (e) => {
   if (a !== "sheet-open") ui.actionSheet = null;
 
   switch (a) {
-    case "sheet-open": ui.actionSheet = { kind: el.dataset.kind, id }; render(); break;
+    case "sheet-open":
+      if (MENU_KINDS.has(el.dataset.kind)) openPopover(el, { kind: "actions", sheet: el.dataset.kind, id });
+      else { ui.actionSheet = { kind: el.dataset.kind, id }; render(); }
+      break;
     case "popover-close": closePopover(); break;
     case "last-open": openPopover(el, { kind: "last", ex: +el.dataset.ex }); break;
     case "last-use": useLastValues(+el.dataset.ex); break;
