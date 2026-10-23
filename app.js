@@ -305,6 +305,10 @@ const PATHS = {
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
 };
 
+// Une partes de una línea de datos con el separador "·" en tinta terciaria.
+// Las partes ya vienen escapadas (pueden traer HTML propio, como <b>).
+const sepJoin = (parts) => parts.join(' <span class="vt-sep">·</span> ');
+
 // Valor de un token de estilos.css, para lo que no lee CSS (Chart.js, canvas).
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -1090,15 +1094,15 @@ function mountSortables() {
 function routineRowHTML(r, map, lastUsed) {
   const last = lastUsed(r.id);
   const n = r.exercises.length;
-  const names = r.exercises.map((re) => map[re.exerciseId]?.name || "Ejercicio").join(" · ");
+  const names = r.exercises.map((re) => map[re.exerciseId]?.name || "Ejercicio");
   return `<div class="vt-routine-row">
     <div class="vt-routine-text">
       <div class="vt-routine-head">
         <h2 class="vt-routine-name">${esc(r.name) || "Sin nombre"}</h2>
         <button class="vt-more-btn" data-a="sheet-open" data-kind="routine" data-id="${r.id}" aria-label="Más opciones">${icon("more", 18)}</button>
       </div>
-      <p class="vt-routine-meta">${n} ejercicio${n !== 1 ? "s" : ""}${last ? ` · última vez ${fmtDateShort(last)}` : " · sin usar"}</p>
-      ${names ? `<p class="vt-routine-exs">${esc(names)}</p>` : ""}
+      <p class="vt-routine-meta">${sepJoin([`${n} ejercicio${n !== 1 ? "s" : ""}`, last ? `última vez ${fmtDateShort(last)}` : "sin usar"])}</p>
+      ${names.length ? `<p class="vt-routine-exs">${sepJoin(names.map(esc))}</p>` : ""}
     </div>
     <button class="vt-play-btn" data-a="routine-start" data-id="${r.id}" aria-label="Iniciar">${icon("playFill", 18)}</button>
   </div>`;
@@ -1452,7 +1456,7 @@ function trainActiveHTML() {
             </div>
             ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
             <div class="vt-ex-meta">
-              ${last ? `<p class="vt-lasttime">Última vez: ${last.map((x) => fmtSet(t, x, uni)).join(", ")}</p>` : ""}
+              ${last ? `<p class="vt-lasttime"><span class="vt-lasttime-label">Última vez</span> ${sepJoin(last.map((x) => esc(fmtSet(t, x, uni))))}</p>` : ""}
               <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
@@ -1717,11 +1721,11 @@ function sessionRowHTML(s) {
   // Sin volumen (pliometría, peso corporal): los saltos si hubo; si no, nada en vez de "0 kg".
   const vol = sessionVolume(s, false), jumps = vol > 0 ? 0 : sessionJumps(s);
   const amount = vol > 0 ? fmtVolume(vol) : jumps > 0 ? `${fmtNum(jumps)} saltos` : "";
-  const meta = [fmtDateShort(s.date), s.durationSec ? fmtDurationMin(s.durationSec) : "", amount].filter(Boolean).join(" · ");
+  const meta = sepJoin([fmtDateShort(s.date), s.durationSec ? fmtDurationMin(s.durationSec) : "", amount].filter(Boolean));
   return `<button class="vt-hist-row" data-a="session-detail-open" data-id="${s.id}">
     <span class="vt-hist-text">
       <span class="vt-routine-name">${esc(s.routineName)}</span>
-      <span class="vt-routine-meta">${meta}${nPR ? ` · <span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span> ${nPR}` : ""}</span>
+      <span class="vt-routine-meta">${meta}${nPR ? ` <span class="vt-sep">·</span> <span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span> ${nPR}` : ""}</span>
     </span>
     <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
   </button>`;
@@ -2429,12 +2433,13 @@ function loadSectionHTML() {
 function chartScales(yFormat, yMin = 0) {
   const tick = { color: cssVar("--text-dim"), font: { family: cssVar("--font"), size: 10 } };
   return {
-    x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8 } },
+    // align "inner": la primera y la última fecha se alinean hacia adentro (si no, la última se corta a 360px).
+    x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 8, align: "inner" } },
     y: {
       // yMin > 0 va como suggestedMin (no min): Chart.js redondea el piso a
       // una marca pareja (60, 80, 100) en vez de poner una marca suelta en 55.
       beginAtZero: yMin === 0, ...(yMin > 0 ? { suggestedMin: yMin } : { min: 0 }), grace: "8%", // aire arriba: sin esto el punto/barra más alto queda cortado contra el borde
-      grid: { color: "#1B1B1F" }, border: { display: false },
+      grid: { color: cssVar("--line") }, border: { display: false },
       ticks: { ...tick, maxTicksLimit: 4, callback: yFormat },
     },
   };
@@ -2468,7 +2473,7 @@ function mountBars(canvasId, buckets, values, yFormat, tooltipFormat, title) {
     type: "bar",
     data: {
       labels: buckets.map((b) => b.label),
-      datasets: [{ data: values, backgroundColor: buckets.map((b) => b.isCurrent ? "#3B6FE0" : "#2A2A2F"), borderRadius: 4 }],
+      datasets: [{ data: values, backgroundColor: buckets.map((b) => cssVar(b.isCurrent ? "--blue" : "--surface-2")), borderRadius: 4 }],
     },
     options: {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => tooltipFormat(c.parsed.y) } } },
@@ -2516,11 +2521,11 @@ function mountChart(animate = true) {
   if (splitBySide) {
     const dataL = progressDataSide(exId, "repsL"), dataR = progressDataSide(exId, "repsR");
     labels = (dataL.length >= dataR.length ? dataL : dataR).map((p) => p.date);
-    datasets = [line("Izquierda", dataL, "#3B6FE0"), line("Derecha", dataR, "#FFFFFF")];
+    datasets = [line("Izquierda", dataL, cssVar("--blue")), line("Derecha", dataR, cssVar("--text"))];
   } else {
     const data = progressData(exId, metric);
     labels = data.map((p) => p.date);
-    datasets = [line("", data, "#3B6FE0")];
+    datasets = [line("", data, cssVar("--blue"))];
     // Peso máx.: el eje parte cerca del valor más bajo del rango (un 15%
     // abajo; Chart.js lo baja a la marca pareja más cercana). El resto de las
     // métricas (volumen, reps, tiempo) sigue partiendo en 0.
@@ -2599,7 +2604,7 @@ function catalogRowHTML(e, st) {
   // Sin historial en toda la app (primer uso) no se atenúa nada: el catálogo
   // de fábrica no debe leerse como deshabilitado.
   return `<button class="vt-cat-row ${st || !sessions.length ? "" : "is-empty"}" data-a="prog-detail-open" data-id="${e.id}">
-    <span class="vt-cat-text"><span class="vt-cat-name">${esc(e.name)}</span><span class="vt-cat-sub">${parts.join(" · ")}</span></span>
+    <span class="vt-cat-text"><span class="vt-cat-name">${esc(e.name)}</span><span class="vt-cat-sub">${sepJoin(parts)}</span></span>
     ${curve}
     <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
   </button>`;
@@ -3423,14 +3428,14 @@ function fitText(ctx, text, x, y, maxWidth, maxSize, weight, family, align = "le
 }
 
 async function drawSessionShareCard(ctx, sum) {
-  const trophyImg = sum.prHits?.length ? await svgIconImage(PATHS.trophy, "#E8A33D", 200) : null;
+  const trophyImg = sum.prHits?.length ? await svgIconImage(PATHS.trophy, cssVar("--amber"), 200) : null;
 
   ctx.textAlign = "left";
-  ctx.fillStyle = "#8FA0AC";
+  ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 30px ${SHARE_FONT}`;
   ctx.fillText(fmtDate(sum.date).toUpperCase(), 64, 190);
 
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = cssVar("--text");
   fitText(ctx, sum.routineName, 64, 300, SHARE_W - 128, 88, 700, SHARE_FONT);
 
   const stats = [
@@ -3442,57 +3447,57 @@ async function drawSessionShareCard(ctx, sum) {
   stats.forEach((s, i) => {
     const x = 64 + i * colW;
     ctx.textAlign = "left";
-    ctx.fillStyle = "#8FA0AC";
+    ctx.fillStyle = cssVar("--text-dim");
     ctx.font = `600 24px ${SHARE_FONT}`;
     ctx.fillText(s.label, x, 430);
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = cssVar("--text");
     ctx.font = `600 54px ${SHARE_FONT}`;
     ctx.fillText(s.value, x, 495);
   });
 
-  ctx.strokeStyle = "#2A2A2F";
+  ctx.strokeStyle = cssVar("--line");
   ctx.beginPath(); ctx.moveTo(64, 550); ctx.lineTo(SHARE_W - 64, 550); ctx.stroke();
 
   const prs = (sum.prHits || []).slice(0, 3);
   if (prs.length) {
-    ctx.fillStyle = "#8FA0AC";
+    ctx.fillStyle = cssVar("--text-dim");
     ctx.font = `600 28px ${SHARE_FONT}`;
     ctx.fillText("PRs DE HOY", 64, 620);
     let y = 690;
     prs.forEach((hit) => {
       if (trophyImg) ctx.drawImage(trophyImg, 64, y - 34, 40, 40);
-      ctx.fillStyle = "#E8A33D";
+      ctx.fillStyle = cssVar("--amber");
       fitText(ctx, hit.exerciseName, 122, y, SHARE_W - 122 - 260, 42, 700, SHARE_FONT);
       ctx.textAlign = "right";
       ctx.font = `600 34px ${SHARE_FONT}`;
-      ctx.fillStyle = "#FFFFFF";
+      ctx.fillStyle = cssVar("--text");
       ctx.fillText(fmtSet(hit.type, hit, exUnilateral(hit.exerciseId)), SHARE_W - 64, y);
       y += 72;
     });
   }
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#8FA0AC";
+  ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 26px ${SHARE_FONT}`;
   ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
 }
 
 async function drawPRShareCard(ctx, p) {
-  const trophyImg = await svgIconImage(PATHS.trophy, "#E8A33D", 400);
+  const trophyImg = await svgIconImage(PATHS.trophy, cssVar("--amber"), 400);
   ctx.drawImage(trophyImg, SHARE_W / 2 - 80, 220, 160, 160);
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#E8A33D";
+  ctx.fillStyle = cssVar("--amber");
   ctx.font = `700 40px ${SHARE_FONT}`;
   ctx.fillText("NUEVO PR", SHARE_W / 2, 470);
 
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = cssVar("--text");
   fitText(ctx, p.exerciseName, SHARE_W / 2, 580, SHARE_W - 160, 72, 700, SHARE_FONT, "center");
 
   ctx.font = `700 150px ${SHARE_FONT}`;
   ctx.fillText(fmtPRValue(p), SHARE_W / 2, 800);
 
-  ctx.fillStyle = "#8FA0AC";
+  ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 32px ${SHARE_FONT}`;
   ctx.fillText(fmtDate(p.date), SHARE_W / 2, 870);
 
@@ -3506,11 +3511,11 @@ async function buildShareBlob(kind, data) {
   canvas.height = SHARE_H;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#0A0A0C";
+  ctx.fillStyle = cssVar("--bg");
   ctx.fillRect(0, 0, SHARE_W, SHARE_H);
 
   ctx.textAlign = "left";
-  ctx.fillStyle = "#3B6FE0";
+  ctx.fillStyle = cssVar("--blue");
   ctx.font = `800 46px ${SHARE_FONT}`;
   ctx.fillText("GOAT", 64, 110);
 

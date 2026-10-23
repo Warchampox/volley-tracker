@@ -1,12 +1,17 @@
 /* ============================ Volley Tracker ============================ */
 
 :root {
-  --bg: #0A0A0C;
-  --surface: #131316;
-  --surface-2: #1B1B1F;
-  --line: #2A2A2F;
-  --text: #FFFFFF;
-  --text-dim: #8FA0AC;
+  /* Neutros de plataforma (modelo de etiquetas de iOS en modo oscuro): el
+     gris de texto es el mismo blanco con opacidad, no otro color.
+     --bg tiene que ser IDÉNTICO a background_color / theme_color de
+     manifest.json y al meta theme-color (si no, la splash muestra un marco). */
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --surface-2: #2C2C2E;
+  --line: rgba(84, 84, 88, 0.55);          /* divisores */
+  --text: #FFFFFF;                         /* tinta principal: datos e identidad */
+  --text-dim: rgba(235, 235, 245, 0.60);   /* secundario: etiquetas, unidades, fechas, subtítulos (6,4:1 sobre --bg) */
+  --text-faint: rgba(235, 235, 245, 0.30); /* terciario: placeholders, deshabilitado, "×" y "·" */
   --amber: #E8A33D; /* reservado para PR */
   --blue: #3B6FE0;  /* acento de marca: SOLO rellenos y bordes (botones, ▶, barras, interruptores, foco) */
   --blue-text: #5A8BEE; /* todo texto o ícono azul sobre fondo oscuro: 6:1 sobre --bg (el #3B6FE0 da 4,3:1) */
@@ -238,13 +243,13 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .vt-settings-row > .vt-btn-icon { margin-right: calc(-1 * var(--sp-2)); }
 /* "Volver": el ícono (no su área de 44px) es el que calza con el borde izquierdo. */
 .vt-header-brand > .vt-btn-icon { margin: 0 calc(-1 * var(--sp-1)) 0 calc(-1 * var(--sp-2)); }
-.vt-btn-ghost { color: var(--text-dim); padding: var(--sp-2); font-weight: 600; }
+.vt-btn-ghost { color: var(--text); padding: var(--sp-2); font-weight: 600; }
 .vt-btn-ghost:hover { color: var(--text); background: var(--surface); }
 .vt-danger:hover { color: var(--red-text) !important; }
 
 .vt-btn-primary {
   background: var(--blue);
-  color: #FFFFFF;
+  color: var(--text);
   border: none;
   font-weight: 600;
   font-size: var(--fs-md);
@@ -258,7 +263,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   transition: filter 100ms ease, transform 100ms ease;
 }
 .vt-btn-primary:active { filter: brightness(0.85); transform: scale(0.96); }
-.vt-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.vt-btn-primary:disabled { background: var(--surface-2); color: var(--text-faint); cursor: not-allowed; }
 /* Botón secundario de ancho completo (Sesión libre, Agregar ejercicio,
    Compartir): borde SÓLIDO. El punteado ya no se usa en botones — se leía
    como un espacio sin terminar. */
@@ -285,9 +290,9 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 /* "+ Agregar serie": botón de texto, sin caja. */
 .vt-add-set {
   display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0;
-  background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: var(--fs-sm); font-weight: 600;
+  background: transparent; border: none; color: var(--text); cursor: pointer; font-size: var(--fs-sm); font-weight: 600;
 }
-.vt-add-set:active { color: var(--text); }
+.vt-add-set:active { color: var(--text-dim); }
 
 .vt-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-list:has(.vt-block) { gap: 0; }
@@ -350,9 +355,9 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 /* Acciones de texto del modo (Cancelar / Guardar y las de la barra inferior). */
 .vt-mode-btn {
   justify-self: start; min-height: 44px; padding: 0;
-  background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: var(--fs-md); font-weight: 600;
+  background: transparent; border: none; color: var(--text); cursor: pointer; font-size: var(--fs-md); font-weight: 600;
 }
-.vt-mode-btn:active { color: var(--text); }
+.vt-mode-btn:active { color: var(--text-dim); }
 .vt-mode-primary { justify-self: end; color: var(--blue-text); }
 .vt-mode-danger { color: var(--red-text); }
 
@@ -373,7 +378,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   flex-shrink: 0; width: 28px; height: 28px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: none;
-  color: var(--text-dim); opacity: 0.6;
+  color: var(--text-faint);
   cursor: grab;
   touch-action: none; /* evita que el navegador scrollee mientras se arrastra desde acá */
 }
@@ -389,7 +394,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   transition: transform 100ms ease, background-color 180ms ease, border-color 180ms ease;
 }
 .vt-select-circle:active { transform: scale(0.92); }
-.vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.vt-select-circle.is-on { background: var(--blue); border-color: var(--blue); color: var(--text); }
 .vt-select-circle.is-on::after { content: "✓"; font-size: var(--fs-sm); line-height: 1; }
 
 /* Pulso breve al entrar a Organizar por mantener presionado (~180ms, sobre la
@@ -428,7 +433,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 .vt-collapsed-check {
   width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%;
-  background: var(--green); color: #0E1512;
+  background: var(--green); color: var(--bg);
   display: inline-flex; align-items: center; justify-content: center;
 }
 
@@ -440,7 +445,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .vt-ex-tools { display: flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; margin-left: auto; margin-right: calc(-1 * var(--sp-2)); }
 .vt-muted { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
 .vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); }
-.vt-lasttime { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-2) 0 var(--sp-3); }
+/* "Última vez": la etiqueta en gris, los valores en tinta (son datos). */
+.vt-lasttime { color: var(--text); font-size: var(--fs-sm); margin: var(--sp-2) 0 var(--sp-3); }
+.vt-lasttime-label { color: var(--text-dim); }
+/* Separador "·" entre datos de una línea: terciario, para que no compita. */
+.vt-sep { color: var(--text-faint); }
+::placeholder { color: var(--text-faint); opacity: 1; }
 
 /* ------------------------------ Lista de rutinas ------------------------------
    Cada rutina es una fila [texto 1fr] [Iniciar 44px] separada por divisor
@@ -472,7 +482,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .vt-play-btn {
   width: 44px; height: 44px; padding: 0;
   border-radius: 50%; border: none;
-  background: var(--blue); color: #FFFFFF; cursor: pointer;
+  background: var(--blue); color: var(--text); cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: filter 100ms ease, transform 100ms ease;
 }
@@ -520,7 +530,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 select.vt-input {
   appearance: none; -webkit-appearance: none;
   padding-right: var(--sp-8);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238FA0AC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(235,235,245,0.6)' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right var(--sp-3) center; background-size: 16px;
 }
 
@@ -570,7 +580,7 @@ select.vt-input {
   background: var(--red-fill);
   display: flex; align-items: center; justify-content: flex-end;
   padding-right: var(--sp-6);
-  color: #fff;
+  color: var(--text);
   opacity: 0;
   pointer-events: none;
 }
@@ -609,7 +619,7 @@ select.vt-input {
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-.vt-x { color: var(--text-dim); font-size: var(--fs-sm); }
+.vt-x { color: var(--text-faint); font-size: var(--fs-sm); }
 
 /* Trofeo de PR: entrada con pop (scale 0.5→1) en vez de aparecer de golpe. */
 @keyframes vt-pop-in {
@@ -643,7 +653,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   transition: filter 100ms ease, transform 100ms ease, background-color 180ms ease, border-color 180ms ease;
 }
 .vt-check:active { transform: scale(0.96); }
-.vt-set-row.is-done .vt-check { background: var(--green); border-color: var(--green); color: #0E1512; }
+.vt-set-row.is-done .vt-check { background: var(--green); border-color: var(--green); color: var(--bg); }
 .vt-set-row.is-done .vt-check:active { filter: brightness(0.85); }
 
 /* Nº/tipo de serie: texto suelto, sin caja ni borde. Muestra el número en
@@ -667,11 +677,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    tiene un RPE anotado (.has-value). */
 .vt-rpe-btn {
   height: var(--col-check); padding: 0;
-  border: none; background: transparent; color: var(--text-dim);
-  cursor: pointer; opacity: 0.4;
+  border: none; background: transparent; color: var(--text-faint);
+  cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.vt-rpe-btn.has-value { opacity: 1; color: var(--text); }
+.vt-rpe-btn.has-value { color: var(--text); }
 
 .vt-type-picker { display: flex; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2) var(--sp-2); }
 .vt-type-picker-opt {
@@ -696,7 +706,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-input-clock.is-running { color: var(--blue-text); }
 /* Una serie de calentamiento hecha pesa menos visualmente que una efectiva (misma
    técnica de dos capas que is-done/is-pr para quedar opaca detrás del swipe). */
-.vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(143, 160, 172, 0.08), rgba(143, 160, 172, 0.08)), var(--bg); border-left-color: var(--text-dim); }
+.vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(235, 235, 245, 0.08), rgba(235, 235, 245, 0.08)), var(--bg); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
 
 /* Línea de RPE bajo la fila: arranca alineada con la primera columna de valor
@@ -803,7 +813,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-modal-row:hover { background: var(--surface-2); }
 .vt-modal-row-danger { color: var(--red-text); }
-.vt-modal-row:disabled { color: var(--text-dim); cursor: default; opacity: 0.6; }
+.vt-modal-row:disabled { color: var(--text-faint); cursor: default; }
 .vt-modal-row:disabled:hover { background: transparent; }
 /* Fila de hoja con título + explicación debajo (menú de exportar). */
 .vt-modal-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -978,7 +988,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .vt-rpe-scale button:first-child { margin-left: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); }
 .vt-rpe-scale button:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
-.vt-rpe-scale button.is-active { position: relative; background: var(--blue); border-color: var(--blue); color: #FFFFFF; }
+.vt-rpe-scale button.is-active { position: relative; background: var(--blue); border-color: var(--blue); color: var(--text); }
 
 /* Selector de rango ÚNICO de Progreso (gobierna volumen, saltos, carga,
    reparto y las mini curvas): se queda pegado arriba al hacer scroll. */
@@ -1014,7 +1024,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Línea de sugerencia bajo una fila (ej. 1RM estimado + "Usar"). */
 .vt-hint-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--text-dim); }
 .vt-hint-row b { color: var(--text); font-weight: 600; }
-.vt-hint-dim { opacity: 0.7; }
+.vt-hint-dim { color: var(--text-dim); }
 .vt-detail-empty { margin: 0; padding: var(--sp-6) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .vt-row-center { align-items: center; }
 .vt-row-input .vt-max-input { text-align: right; background-position: right bottom; } /* subrayado bajo el número, que va a la derecha */
@@ -1202,7 +1212,7 @@ label.vt-settings-row { cursor: pointer; }
 .vt-switch::after {
   content: ""; position: absolute; top: 2px; left: 2px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: #FFFFFF; transition: transform 150ms ease;
+  background: var(--text); transition: transform 150ms ease;
 }
 .vt-switch:checked { background: var(--blue); border-color: var(--blue); }
 .vt-switch:checked::after { transform: translateX(18px); }

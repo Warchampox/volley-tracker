@@ -1386,3 +1386,17 @@ Entradas nuevas al final. No reescribir lo anterior.
   filas 15/500, valores 18/600, botones 600. Mayúscula solo en columnas
   (11/600) y labels de sección (13/600); `--track` 0.02em. Bajo 380px el
   título de la sesión baja a 20px. Verificado a 390 y 360 px.
+
+## 2026-10-23 cont. — Tipografía del sistema, Fase 2 de 2: grises de plataforma y regla de tinta
+- Neutros nuevos: `--bg` #000 (igual en manifest y meta theme-color; el
+  ícono maskable pasó de #0A0A0C a #000), `--surface` #1C1C1E,
+  `--surface-2` #2C2C2E, `--line` rgba(84,84,88,.55), `--text-dim`
+  rgba(235,235,245,.60) (6,4 / 5,9 / 5,3:1 sobre bg / surface / surface-2) y
+  `--text-faint` rgba(235,235,245,.30). Sin grises hex propios (Chart.js y el
+  canvas de compartir leen los tokens con `cssVar`).
+- Regla de tinta: "Última vez" en gris + valores en blanco; botones en
+  blanco; "×", "·", placeholders, RPE vacío y deshabilitados en terciario.
+  Texto en `--text-dim` (por caracteres visibles, 390px): Sesión 69% → 27%,
+  Rutinas 72% → 67% (sus subtítulos son secundarios por regla), Progreso
+  61% → 58%. Las cifras "antes" son las del pedido; las "después", medidas
+  así. Verificado a 390 y 360 px; eje X con fechas alineadas hacia adentro.
