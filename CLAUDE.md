@@ -74,20 +74,50 @@
   4,5:1). Ámbar EXCLUSIVO para
   PR/trofeo, verde EXCLUSIVO para serie completada — no reasignar esos
   colores a nada más. Sin marca de agua, sin tinte de fondo en bloques.
-- Reglas de mayúsculas (2026-10-22). En MAYÚSCULA con `--track`:
-  encabezados de columna (KG, REPS, SERIES, TIEMPO, DESC., también el
-  KG / %1RM del editor) en mono `--fs-xs`; labels de sección (ESTA SEMANA,
-  RÉCORDS, LO QUE HICISTE, nombres de grupo y de carpeta, labels de la
-  franja de stats) en IBM Plex Sans 600 `--fs-xs`; el `h1` Barlow de cada
-  pestaña; el titular del resumen. En formato normal (solo la primera
-  letra): todos los botones (incluidos los primarios y las píldoras), en
-  IBM Plex Sans 600 sin tracking; títulos de ventanas y hojas en Barlow
-  `--fs-xl`; etiquetas de la nav; labels de formulario; el encabezado de
-  Organizar. Nombres de ejercicio, de rutina y notas libres nunca en
-  mayúscula.
+- Tipografía (2026-10-23): UNA familia, la del sistema (SF en iPhone,
+  Roboto en Android), en una sola variable `--font`
+  (`system-ui, -apple-system, "Roboto", "Segoe UI", sans-serif`). Sin
+  fuentes web (ni Google Fonts ni archivos propios). La jerarquía se hace
+  con peso y tamaño: título de pestaña 32/700 (`letter-spacing: -0.01em`),
+  titular del resumen 32/700, número héroe 88/800 (-0.02em), nombres de
+  rutina y ejercicio en bloques 20/600, nombres en filas de lista 15/500,
+  valores de series 18/600, botones 600, texto normal 400. Los números en
+  columnas (series, reloj, stats, "Última vez", ejes, fechas) llevan
+  `font-variant-numeric: tabular-nums` (utilidad `.vt-num`). El canvas de
+  compartir y Chart.js usan la misma familia del sistema.
+  Barlow Condensed e IBM Plex Sans/Mono se DESCARTARON el 2026-10-23 por
+  pedido de Martín ("se ve hecha por IA"; tampoco convencieron Archivo ni
+  Saira como familia única): no volver a proponerlas ni proponer otra
+  fuente web.
+- Reglas de mayúsculas (2026-10-23). En MAYÚSCULA solo: encabezados de
+  columna (KG, REPS, SERIES, TIEMPO, DESC., también KG / %1RM del editor)
+  en `--fs-xs` 600, y labels de sección (ESTA SEMANA, RÉCORDS, LO QUE
+  HICISTE, nombres de grupo y de carpeta) en `--fs-sm` 600; los dos con
+  `--track` 0.02em. Todo lo demás en formato normal: títulos de pestaña,
+  botones, títulos de hojas, nav, labels de stats y formularios, el
+  encabezado de Organizar. Nombres de ejercicio, de rutina y notas libres
+  nunca en mayúscula.
+- Neutros de plataforma (2026-10-23, modelo de etiquetas de iOS en modo
+  oscuro: el gris es el mismo blanco con opacidad). `--bg` #000 (tiene que
+  ser IDÉNTICO a `background_color` / `theme_color` de manifest.json, al
+  meta theme-color y al fondo del ícono maskable, o la splash muestra un
+  marco), `--surface` #1C1C1E, `--surface-2` #2C2C2E, `--line`
+  rgba(84,84,88,.55). Texto: `--text` #FFF (tinta principal),
+  `--text-dim` rgba(235,235,245,.60) (secundario, ≥ 5,3:1 sobre los tres
+  fondos), `--text-faint` rgba(235,235,245,.30) (terciario). NUNCA un gris
+  hexadecimal propio, en CSS ni en JS: Chart.js y el canvas leen los
+  tokens con `cssVar()`.
+- Regla de tinta: en `--text` va lo que se lee como dato o identidad
+  (nombres de rutina, ejercicio y sesión; valores de series y objetivos;
+  los valores de "Última vez"; mejor marca y números de stats; texto de
+  botones). En `--text-dim`: etiquetas, unidades, fechas, subtítulos, la
+  lista de ejercicios bajo cada rutina, labels de sección y encabezados de
+  columna. En `--text-faint`: placeholders, el "×" entre kg y reps, los
+  "·" separadores (`sepJoin`), íconos de RPE sin valor y controles
+  deshabilitados (en vez de bajar la opacidad).
 - Eyebrows: solo los que informan (fecha de sesión, grupo en el detalle de
   ejercicio, "Sesión nº N · fecha", "Editar rutina / Nueva rutina"), en
-  mono `--fs-xs`, sin mayúscula forzada, en `--blue-text`. Los encabezados
+  `--fs-xs`, sin mayúscula forzada, en `--blue-text`. Los encabezados
   de pestaña van solo con el título (sin "SET 0X · …").
 - Ícono-acción SIN recuadro: un ícono que es una acción (volver,
   nuevo, exportar, ⋯, cronometrar, etc.) va sin fondo ni borde, con
@@ -120,7 +150,7 @@ tracking; siempre tokens** (definidos en `:root` de estilos.css). Vale
 también para los `style=""` inline de app.js. Se quedan en px solo 0,
 1px y 2px (ajustes ópticos), los `calc()`, el 100px de holgura de la
 nav y los anchos/altos de elementos (columnas, botones, círculos).
-- Tipografía: `--fs-xs` 11px (labels en mayúscula) · `--fs-sm` 13px
+- Tamaños: `--fs-xs` 11px (encabezados de columna) · `--fs-sm` 13px
   (texto secundario) · `--fs-md` 15px (texto base) · `--fs-lg` 18px
   (valores) · `--fs-xl` 20px (títulos de bloque/rutina/modal) ·
   `--fs-2xl` 24px (header chico, nombre de sesión) · `--fs-3xl` 32px
@@ -132,7 +162,8 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
 - Radios: `--r-sm` 8px (controles chicos) · `--r-md` 12px (botones,
   barras, hoja de modal) · `--r-full` 999px (píldoras). `50%` solo
   para círculos.
-- Tracking: `--track` 0.06em para todo lo que va en mayúscula.
+- Tracking: `--track` 0.02em para lo que va en mayúscula (el 0.06em de
+  antes era para la mono, que ya no existe).
 - Colores de contraste (2026-10-22, medidos contra WCAG AA): `--blue-text`
   #5A8BEE (texto azul, 6:1 sobre `--bg`), `--red-fill` #B24A40 (blanco
   encima 5,3:1), `--red-text` #D46A60 (5,3:1 sobre `--surface`),
@@ -177,7 +208,7 @@ Patrones (reutilizar, no inventar variantes):
   encabezado que el detalle de ejercicio (volver + eyebrow + título +
   ⋯), franja de stats, "Lo que hiciste" con notas (`doneListHTML`,
   compartido con el resumen), carga/RPE, saltos y botón Repetir.
-- Fila de historial (`sessionRowHTML`): nombre en Barlow + "fecha ·
+- Fila de historial (`sessionRowHTML`): nombre de rutina + "fecha ·
   duración · volumen" + trofeo con la cantidad de récords + chevron;
   sesiones agrupadas por mes con el total del mes en el label.
 - Selector compacto de filtros = `.vt-pills` (rango de Progreso,

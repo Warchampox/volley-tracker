@@ -1400,3 +1400,10 @@ Entradas nuevas al final. No reescribir lo anterior.
   Rutinas 72% → 67% (sus subtítulos son secundarios por regla), Progreso
   61% → 58%. Las cifras "antes" son las del pedido; las "después", medidas
   así. Verificado a 390 y 360 px; eje X con fechas alineadas hacia adentro.
+- Cierre de tipografía: CLAUDE.md con la fuente del sistema (`--font`,
+  `tabular-nums`, sin fuentes web), reglas de mayúsculas, neutros con sus
+  roles, regla de tinta y `--bg` #000 = manifest. Barlow e IBM Plex quedan
+  registradas como descartadas (2026-10-23). Regresiones revisadas: imagen
+  de compartir (sesión y PR), encabezado a 360px, columnas KG/REPS
+  alineadas, gráficos, hojas y Organizar. La splash no se puede ver en el
+  navegador: manifest, meta y fondo del ícono maskable quedaron en #000.
