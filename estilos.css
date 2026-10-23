@@ -87,7 +87,7 @@ button, input, select, textarea { font-family: var(--font); }
    utilidad para usar en el HTML; el resto son los componentes que antes
    iban en mono. */
 .vt-num, .vt-eyebrow, .vt-scoreboard, .vt-ss-badge, .vt-muted-sm, .vt-last-table,
-.vt-folder-count, .vt-cap, .vt-settype-btn, .vt-type-picker-opt, .vt-week-day, .vt-strip-value,
+.vt-folder-count, .vt-cap, .vt-settype-btn, .vt-type-opt, .vt-rpe-grid button, .vt-week-day, .vt-strip-value,
 .vt-record-value, .vt-row-value, .vt-reparto-n, .vt-pills button, .vt-jumps-line b, .vt-load-line b,
 .vt-big-stat, .vt-rpe-scale button, .vt-exrow-value, .vt-hint-row b, .vt-row-input, .vt-rest-btn,
 .vt-rest-time, .vt-minibar-stats, .vt-badge, .vt-group-count, .vt-cat-sub b, .vt-recent-value,
@@ -562,7 +562,6 @@ select.vt-input {
   --col-num: 24px;    /* nº de serie / letra C·D·F */
   --col-x: 12px;      /* el "×" entre kg y reps */
   --col-timer: 36px;  /* botón de cronómetro (solo filas de tiempo) */
-  --col-rpe: 26px;
   --col-check: 34px;
   display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-1);
 }
@@ -570,7 +569,6 @@ select.vt-input {
 .vt-col-val { flex: 1 1 0; min-width: 0; width: 0; }
 .vt-col-x { width: var(--col-x); flex: 0 0 var(--col-x); text-align: center; }
 .vt-col-timer { width: var(--col-timer); flex: 0 0 var(--col-timer); }
-.vt-col-rpe { width: var(--col-rpe); flex: 0 0 var(--col-rpe); }
 .vt-col-check { width: var(--col-check); flex: 0 0 var(--col-check); }
 
 /* border-left transparente: calza con el acento de estado (is-done/is-pr/is-warmup)
@@ -650,10 +648,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    demás. --pr-right = todo lo que hay a su derecha (padding + check + RPE y
    sus gaps); la fila de tiempo suma además el botón de cronómetro. */
 .vt-set-row {
-  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-rpe) + var(--sp-1));
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1));
 }
 .vt-set-row-time {
-  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-rpe) + var(--sp-1) + var(--col-timer) + var(--sp-1));
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-timer) + var(--sp-1));
 }
 .vt-set-row .vt-pr {
   position: absolute; top: 0; bottom: 0; right: var(--pr-right);
@@ -675,40 +673,24 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-done .vt-check:active { filter: brightness(0.85); }
 
 /* Nº/tipo de serie: texto suelto, sin caja ni borde. Muestra el número en
-   reposo (Normal) o la letra C/D/F con el color de ese estado; un tap abre
-   el selector chico (.vt-type-picker) de las 4 opciones. El alto calza con el
-   del check para conservar el área táctil aunque visualmente sea solo texto. */
+   reposo (Normal) o la letra C/D/F con el color de ese estado y, si la serie
+   tiene RPE, "@8" chico debajo (ya no hay columna de RPE). Un tap abre el
+   menú de serie (setMenuHTML); mientras está abierto lleva un anillo azul.
+   El alto calza con el del check para conservar el área táctil. */
 .vt-settype-btn {
   height: var(--col-check); padding: 0;
-  border: none; background: transparent;
-  color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600;
+  border: none; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; line-height: 1.1;
   cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
   transition: filter 100ms ease, transform 100ms ease, color 180ms ease;
 }
+.vt-settype-btn small { font-size: var(--fs-xs); font-weight: 500; color: var(--text-dim); }
 .vt-settype-btn:active { transform: scale(0.96); }
+.vt-settype-btn.is-open { box-shadow: 0 0 0 2px var(--blue); }
 .vt-settype-btn.is-warmup { color: var(--blue-text); }
 .vt-settype-btn.is-dropset { color: var(--dropset); }
 .vt-settype-btn.is-failed { color: var(--red-text); }
-
-/* RPE: ícono apagado en su columna fija; se enciende solo cuando la serie
-   tiene un RPE anotado (.has-value). */
-.vt-rpe-btn {
-  height: var(--col-check); padding: 0;
-  border: none; background: transparent; color: var(--text-faint);
-  cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.vt-rpe-btn.has-value { color: var(--text); }
-
-.vt-type-picker { display: flex; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2) var(--sp-2); }
-.vt-type-picker-opt {
-  flex: 1; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600;
-  padding: var(--sp-2); border-radius: var(--r-sm); cursor: pointer;
-}
-.vt-type-picker-opt.is-warmup { color: var(--blue-text); border-color: var(--blue); }
-.vt-type-picker-opt.is-dropset { color: var(--dropset); border-color: var(--dropset); }
-.vt-type-picker-opt.is-failed { color: var(--red-text); border-color: var(--red-text); }
 
 .vt-timer-btn {
   width: var(--col-timer); height: var(--col-timer); flex-shrink: 0; padding: 0;
@@ -727,14 +709,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-set-row.is-warmup.is-done { background: linear-gradient(rgba(235, 235, 245, 0.08), rgba(235, 235, 245, 0.08)), var(--bg); border-left-color: var(--text-dim); }
 .vt-set-row.is-warmup.is-done .vt-check { background: var(--text-dim); border-color: var(--text-dim); }
 
-/* Línea de RPE bajo la fila: arranca alineada con la primera columna de valor
-   (borde de estado 2px + padding de la fila + columna del nº + gap). */
-.vt-setline2 { display: flex; gap: var(--sp-2); padding: 2px var(--sp-2) var(--sp-2) calc(2px + var(--sp-1) + var(--col-num) + var(--sp-1)); align-items: center; }
-.vt-rpe-input {
-  width: 64px; text-align: center; padding: var(--sp-3) var(--sp-1);
-  background: var(--editable-line); border: none; border-radius: 0; font-weight: 600;
-}
-.vt-rpe-input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--blue); background: transparent; }
 .vt-note-line { color: var(--text-dim); font-size: var(--fs-sm); margin-top: 2px; }
 /* Nota de entrenador por ejercicio (instrucción, sin comillas) */
 .vt-coach-note { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-2) 0 2px; }
@@ -1372,11 +1346,11 @@ input[type="file"] { display: none; }
    botones de texto) conservan su tamaño VISUAL, pero un ::before invisible
    centrado les da un área de toque de al menos 44×44. Si dos áreas vecinas se
    solapan, gana la del elemento que viene después en el HTML. */
-.vt-more-btn, .vt-btn-ghost, .vt-btn-icon, .vt-check, .vt-rpe-btn, .vt-settype-btn,
+.vt-more-btn, .vt-btn-ghost, .vt-btn-icon, .vt-check, .vt-settype-btn,
 .vt-timer-btn, .vt-select-circle, .vt-drag-handle, .vt-pills button, .vt-text-btn, .vt-tabs button, .vt-add-set {
   position: relative;
 }
-.vt-more-btn::before, .vt-btn-ghost::before, .vt-btn-icon::before, .vt-check::before, .vt-rpe-btn::before,
+.vt-more-btn::before, .vt-btn-ghost::before, .vt-btn-icon::before, .vt-check::before,
 .vt-settype-btn::before, .vt-timer-btn::before, .vt-select-circle::before, .vt-drag-handle::before,
 .vt-pills button::before, .vt-text-btn::before, .vt-tabs button::before, .vt-add-set::before {
   content: ""; position: absolute; top: 50%; left: 50%;
@@ -1447,3 +1421,26 @@ input[type="file"] { display: none; }
   background: var(--surface-3); color: var(--text); font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
 }
 .vt-pop-btn:active { filter: brightness(1.2); }
+
+/* Menú de serie: tipo (4 botones iguales) + RPE entero 1–10 (2 × 5) + Eliminar. */
+.vt-popover-set { width: min(320px, calc(100vw - 32px)); padding: var(--sp-3) var(--sp-4) var(--sp-1); }
+.vt-pop-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.vt-type-opt {
+  min-height: 52px; padding: var(--sp-1) 2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: var(--surface-3); border: none; border-radius: var(--r-md); color: var(--text); cursor: pointer;
+}
+.vt-type-opt b { font-size: var(--fs-lg); font-weight: 700; line-height: 1; }
+.vt-type-opt span { font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }
+.vt-type-opt.is-warmup b { color: var(--blue-text); }
+.vt-type-opt.is-dropset b { color: var(--dropset); }
+.vt-type-opt.is-failed b { color: var(--red-text); }
+.vt-type-opt.is-active, .vt-type-opt.is-active b, .vt-type-opt.is-active span { background: var(--text); color: var(--bg); }
+.vt-rpe-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.vt-rpe-grid button {
+  height: 44px; border: none; border-radius: var(--r-full); background: var(--surface-3);
+  color: var(--text); font-size: var(--fs-menu); font-weight: 600; cursor: pointer;
+}
+.vt-rpe-grid button.is-active { background: var(--blue); }
+.vt-popover-set .vt-pop-row { margin: 0 calc(-1 * var(--sp-4)); width: calc(100% + 2 * var(--sp-4)); }

@@ -1476,3 +1476,15 @@ Entradas nuevas al final. No reescribir lo anterior.
   "Valores copiados · Deshacer"). El deshacer pasó a ser genérico
   (`showUndoToast(texto, undo)`). Verificado a 360 y 390 px en peso,
   unilateral, peso corporal y tiempo.
+
+## 2026-10-23 cont. — Menús, Fase 2 de 3: menú de serie con RPE entero
+- Tocar el nº de serie abre el menú flotante (anillo azul en el número):
+  tipo con 4 botones grandes con nombre (Normal / C Calentamiento / D Drop
+  set / F Fallida; el menú sigue abierto), RPE entero 1–10 en 2 × 5 (guarda
+  y cierra; tocar el elegido lo quita) y "Eliminar serie" con el deshacer
+  del swipe. Se fueron la fila de 4 cajas, la fila de RPE y su input.
+- Sin columna de RPE: si hay, va "@8" bajo el número y las columnas de
+  valores ganan ese ancho. `setRpe()` muestra los decimales viejos
+  redondeados hacia abajo sin migrar; al importar, el RPE se limpia a
+  enteros 1–10 (`cleanImportedRpe`: 7,5 → 7, fuera de rango → sin RPE).
+  Verificado a 360 y 390 px en peso, unilateral, peso corporal y tiempo.

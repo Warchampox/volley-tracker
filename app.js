@@ -213,9 +213,7 @@ const ui = {
   manageGroups: false,
   exerciseModal: null,    // null | {id|null, name, group, type, pickerCtx?}
   groupModal: null,       // null | {originalName|null, name, color}
-  openNotes: new Set(),   // "exIdx:setIdx" con línea RPE abierta
   openExNotes: new Set(), // exIdx con la nota de ejercicio (sessionNote) abierta
-  openTypeSelector: null, // "exIdx:setIdx" con el selector de tipo de serie abierto, o null
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, label, danger, onYes, onNo, cancelLabel} — ver askConfirm
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
@@ -269,6 +267,10 @@ const repsR = (st) => num(st.repsR ?? st.reps);
 // lectura en runtime, nunca se migra el dato guardado. Los sets nuevos
 // siempre escriben setType (nunca warmup).
 const getSetType = (st) => st.setType ?? (st.warmup ? "warmup" : null);
+// RPE de una serie como entero 1–10, o null. Una sesión vieja puede traer
+// decimales (7,5): se conservan tal cual en los datos y se muestran
+// redondeados hacia abajo. Lo nuevo (menú de serie) solo guarda enteros.
+const setRpe = (st) => { const n = Math.floor(num(st.rpe)); return n >= 1 && n <= 10 ? n : null; };
 const typePrefix = (t) => t === "warmup" ? "C" : t === "dropset" ? "D" : t === "failed" ? "F" : "";
 
 /* ------------------------------------ Íconos ------------------------------------ */
@@ -1078,7 +1080,7 @@ function openPopover(el, popover) {
 
 function popoverHTML() {
   const p = ui.popover;
-  const body = { last: lastTimeMenuHTML }[p.kind]?.(p) || "";
+  const body = { last: lastTimeMenuHTML, set: setMenuHTML }[p.kind]?.(p) || "";
   return `<div class="vt-popover-backdrop ${popoverShown ? "" : "is-entering"}" data-a="popover-close">
     <div class="vt-popover vt-popover-${p.kind}" data-stop="1">${body}</div>
   </div>`;
@@ -1167,6 +1169,33 @@ function lastTimeMenuHTML(p) {
     </table>
     <p class="vt-last-best">Mejor serie: ${bestSetText(info.entry.sets, type, uni)}</p>
     <button class="vt-pop-btn" data-a="last-use" data-ex="${p.ex}">Usar estos valores</button>`;
+}
+
+/* -------------------------------- Menú de serie -------------------------------- */
+// Se abre al tocar el nº de serie: tipo (Normal / C / D / F; el menú sigue
+// abierto), esfuerzo RPE entero 1–10 (lo guarda y cierra) y Eliminar serie
+// (con el mismo deshacer del swipe).
+const SET_TYPES = [
+  { type: "", name: "Normal" }, { type: "warmup", big: "C", name: "Calentamiento" },
+  { type: "dropset", big: "D", name: "Drop set" }, { type: "failed", big: "F", name: "Fallida" },
+];
+
+function setMenuHTML(p) {
+  const sets = ui.activeSession?.exercises[p.ex]?.sets;
+  const st = sets?.[p.set];
+  if (!st) return "";
+  const t = getSetType(st) || "";
+  const normalNo = sets.slice(0, p.set).filter((x) => !getSetType(x)).length + 1; // el nº que tendría como normal
+  const rpe = setRpe(st);
+  const data = `data-ex="${p.ex}" data-set="${p.set}"`;
+  return `<p class="vt-pop-label">Serie ${t ? typePrefix(t) : normalNo} · tipo</p>
+    <div class="vt-type-grid">${SET_TYPES.map((o) => `<button class="vt-type-opt ${o.type ? `is-${o.type}` : ""} ${t === o.type ? "is-active" : ""}" data-a="settype-pick" data-keep="1" ${data} data-type="${o.type}" aria-pressed="${t === o.type}">
+      <b>${o.big || normalNo}</b><span>${o.name}</span></button>`).join("")}</div>
+    <p class="vt-pop-label">Esfuerzo (RPE)</p>
+    <div class="vt-rpe-grid">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
+      `<button class="${rpe === n ? "is-active" : ""}" data-a="set-rpe" ${data} data-value="${n}" aria-pressed="${rpe === n}" aria-label="RPE ${n}">${n}</button>`).join("")}</div>
+    <div class="vt-pop-sep"></div>
+    ${popRowHTML("set-del", "trash", "Eliminar serie", data, true)}`;
 }
 
 // Avisa a lectores de pantalla sin mover el foco (región aria-live="polite"
@@ -1676,7 +1705,7 @@ function trainActiveHTML() {
 // encabezado (setCapsHTML) y la fila (setRowHTML), así los dos quedan
 // alineados por construcción: mismas columnas, mismas clases .vt-col-*
 // (anchos en estilos.css, ver .vt-sets). Alrededor de estas columnas van
-// siempre, fijas: [nº] a la izquierda y [RPE] [✓] a la derecha.
+// siempre, fijas: [nº] a la izquierda (con el RPE "@8" debajo, si hay) y [✓] a la derecha.
 //   {cap, f}   → columna de valor (flex:1), f = campo de la serie
 //   {x: true}  → el "×" entre kg y reps
 //   {timer: true} → botón de cronómetro
@@ -1693,7 +1722,7 @@ function setCapsHTML(type, unilateral) {
     c.x ? `<span class="vt-col-x"></span>`
       : c.timer ? `<span class="vt-col-timer"></span>`
       : `<span class="vt-cap vt-col-val">${c.cap}</span>`).join("");
-  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-col-num"></span>${cols}<span class="vt-col-rpe"></span><span class="vt-col-check"></span></div>`;
+  return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-col-num"></span>${cols}<span class="vt-col-check"></span></div>`;
 }
 
 // "MM:SS" o "H:MM:SS" para el cronómetro de sesión.
@@ -1802,18 +1831,6 @@ setInterval(() => {
 
 // Selector chico de tipo de serie: se expande bajo la fila (mismo patrón que
 // la línea de RPE), un tap elige y cierra.
-function typeSelectorHTML(exIdx, setIdx) {
-  const opts = [
-    { type: "", label: "1", cls: "", aria: "Normal" },
-    { type: "warmup", label: "C", cls: "is-warmup", aria: "Calentamiento" },
-    { type: "dropset", label: "D", cls: "is-dropset", aria: "Drop set" },
-    { type: "failed", label: "F", cls: "is-failed", aria: "Fallida" },
-  ];
-  return `<div class="vt-type-picker">
-    ${opts.map((o) => `<button type="button" class="vt-type-picker-opt ${o.cls}" data-a="settype-pick" data-ex="${exIdx}" data-set="${setIdx}" data-type="${o.type}" aria-label="${o.aria}">${o.label}</button>`).join("")}
-  </div>`;
-}
-
 // Cómo se nombra cada columna para un lector de pantalla ("Serie 2, kilos").
 const SET_FIELD_SPOKEN = { weight: "kilos", reps: "repeticiones", seconds: "tiempo", repsL: "repeticiones izquierda", repsR: "repeticiones derecha" };
 
@@ -1821,9 +1838,8 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   const stype = getSetType(st);
   // Nombre de la serie para lectores de pantalla: "Serie 2", "Serie de calentamiento".
   const spoken = stype === "warmup" ? "Serie de calentamiento" : stype === "dropset" ? "Drop set" : stype === "failed" ? "Serie fallida" : `Serie ${label}`;
-  const open = ui.openNotes.has(`${exIdx}:${setIdx}`);
-  const typeKey = `${exIdx}:${setIdx}`;
-  const openType = ui.openTypeSelector === typeKey;
+  const menuOpen = ui.popover?.kind === "set" && ui.popover.ex === exIdx && ui.popover.set === setIdx;
+  const rpe = setRpe(st);
   const typeBtnClass = stype === "warmup" ? "is-warmup" : stype === "dropset" ? "is-dropset" : stype === "failed" ? "is-failed" : "";
   const attrs = (f, spokenField) =>
     `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}, ${spokenField}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
@@ -1842,18 +1858,12 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
     <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
       <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
-        <button class="vt-settype-btn vt-col-num ${typeBtnClass}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}: cambiar tipo" aria-expanded="${openType}">${label}</button>
+        <button class="vt-settype-btn vt-col-num ${typeBtnClass} ${menuOpen ? "is-open" : ""}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-haspopup="dialog" aria-label="${spoken}: tipo y esfuerzo${rpe ? `, RPE ${rpe}` : ""}">${label}${rpe ? `<small>@${rpe}</small>` : ""}</button>
         ${fields}
-        <button class="vt-rpe-btn vt-col-rpe ${st.rpe ? "has-value" : ""}" data-a="set-notes" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}: RPE${st.rpe ? ` ${fmtNum(st.rpe)}` : ""}" aria-expanded="${open}">${icon("gauge", 15)}</button>
         <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${st.done ? "Desmarcar" : "Marcar"} ${spoken.charAt(0).toLowerCase() + spoken.slice(1)}" aria-pressed="${!!st.done}">${icon("check", 15)}</button>
         ${pr ? `<span class="vt-pr" title="¡PR!" role="img" aria-label="Récord">${icon("trophy", 16)}</span>` : ""}
       </div>
-    </div>
-    ${openType ? typeSelectorHTML(exIdx, setIdx) : ""}
-    ${open ? `<div class="vt-setline2">
-      <input type="number" inputmode="decimal" class="vt-input vt-num vt-rpe-input" placeholder="RPE" min="1" max="10" step="0.5"
-        value="${st.rpe ?? ""}" ${attrs("rpe", "RPE")}>
-    </div>` : ""}`;
+    </div>`;
 }
 
 /* --------------------------------- Vista Historial ------------------------------- */
@@ -3424,7 +3434,6 @@ function finishSession() {
     };
     ui.activeSession = null;
     persistActiveSession(); // sesión ya finalizada y guardada en `sessions` — limpia el autoguardado
-    ui.openNotes.clear();
     ui.openExNotes.clear();
     ui.exerciseEditMode = false;
     ui.exerciseEditDraft = null;
@@ -4008,6 +4017,17 @@ function backupReminderText() {
   return `Hace ${days} días que no respaldas tus datos`;
 }
 
+// RPE al importar: solo enteros de 1 a 10 (por serie y de sesión). Un valor
+// con decimal se baja al entero (7,5 → 7); uno fuera de rango o que no es
+// número se descarta. Lo que ya está guardado en el dispositivo no se toca.
+function cleanImportedRpe(list) {
+  const fix = (v) => { const n = Math.floor(Number(v)); return n >= 1 && n <= 10 ? n : null; };
+  for (const ses of list || []) {
+    if (ses.rpe != null) { const n = fix(ses.rpe); if (n) ses.rpe = n; else delete ses.rpe; }
+    for (const e of ses.exercises || []) for (const st of e.sets || []) if (st.rpe != null) st.rpe = fix(st.rpe);
+  }
+}
+
 // Separado de importJSON(file) para poder reutilizarlo desde "Pegar JSON"
 // (que ya tiene el objeto parseado, sin pasar por FileReader).
 function processImportedData(data) {
@@ -4017,6 +4037,7 @@ function processImportedData(data) {
   // Respaldo completo = trae sesiones y NO viene marcado como parcial (los
   // archivos de antes de que existiera `kind` son todos completos).
   const isFull = Array.isArray(data.sessions) && (!data.kind || data.kind === "full");
+  if (Array.isArray(data.sessions)) cleanImportedRpe(data.sessions);
 
   if (isFull) {
     askConfirm("Este archivo es un respaldo completo: trae también entrenamientos y 1RM. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
@@ -4509,9 +4530,7 @@ document.addEventListener("click", (e) => {
           runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
           ui.activeSession = buildSessionFromRoutine(r);
           ui.sessionMinimized = false;
-          ui.openNotes.clear();
           ui.openExNotes.clear();
-          ui.openTypeSelector = null;
           ui.collapsedExercises.clear();
           ui.tab = "rutinas";
           render();
@@ -4724,13 +4743,6 @@ document.addEventListener("click", (e) => {
           }
           ui.collapsedExercises = remapIdxSet(ui.collapsedExercises);
           ui.openExNotes = remapIdxSet(ui.openExNotes);
-          const remappedOpenNotes = new Set();
-          ui.openNotes.forEach((key) => {
-            const [exIdxStr, setIdxStr] = key.split(":");
-            const n = ordToNewIdx.get(+exIdxStr);
-            if (n !== undefined) remappedOpenNotes.add(`${n}:${setIdxStr}`);
-          });
-          ui.openNotes = remappedOpenNotes;
           removed.forEach((ex) => {
             (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
           });
@@ -4790,9 +4802,7 @@ document.addEventListener("click", (e) => {
         runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
         ui.activeSession = { id: uid("ses"), routineId: null, routineName: `Sesión libre ${fmtDateShort(new Date())}`, date: new Date().toISOString(), explicitlyRemoved: [], exercises: [] };
         ui.sessionMinimized = false;
-        ui.openNotes.clear();
         ui.openExNotes.clear();
-        ui.openTypeSelector = null;
         ui.collapsedExercises.clear();
         render();
       };
@@ -4854,32 +4864,29 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "settype-toggle": {
-      const key = `${el.dataset.ex}:${el.dataset.set}`;
-      ui.openTypeSelector = ui.openTypeSelector === key ? null : key;
-      render();
-      break;
-    }
-    case "settype-pick": {
+    case "settype-toggle": openPopover(el, { kind: "set", ex: +el.dataset.ex, set: +el.dataset.set }); break;
+    case "settype-pick": { // dentro del menú de serie: aplica el tipo y el menú sigue abierto (data-keep)
       const st = ui.activeSession.exercises[+el.dataset.ex].sets[+el.dataset.set];
       st.setType = el.dataset.type || null;
       st.warmup = false; // limpia el campo viejo: el fallback de compatibilidad ya no debe mirarlo
-      ui.openTypeSelector = null;
       render();
       break;
     }
-    case "set-notes": {
-      const key = `${el.dataset.ex}:${el.dataset.set}`;
-      ui.openNotes.has(key) ? ui.openNotes.delete(key) : ui.openNotes.add(key);
+    case "set-rpe": { // RPE entero 1–10; tocar el elegido lo quita. El menú se cierra.
+      const st = ui.activeSession?.exercises[+el.dataset.ex]?.sets[+el.dataset.set];
+      if (!st) break;
+      const v = Math.round(num(el.dataset.value));
+      st.rpe = setRpe(st) === v ? null : v;
       render();
       break;
     }
+    case "set-del": deleteSet(+el.dataset.ex, +el.dataset.set); break;
     case "session-discard":
       askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;
         ui.activeSession = null;
         persistActiveSession(); // limpia el autoguardado, se descartó a propósito
-        ui.openNotes.clear(); ui.openExNotes.clear();
+        ui.openExNotes.clear();
         ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear(); ui.collapsedExercises.clear();
         stopRest(); render();
       }, { label: "Descartar sesión", danger: true });
@@ -5037,9 +5044,7 @@ document.addEventListener("click", (e) => {
           runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
           ui.activeSession = buildSessionFromPastSession(past);
           ui.sessionMinimized = false;
-          ui.openNotes.clear();
           ui.openExNotes.clear();
-          ui.openTypeSelector = null;
           ui.collapsedExercises.clear();
           ui.sessionDetail = null;
           ui.tab = "rutinas";
@@ -5365,8 +5370,7 @@ document.addEventListener("input", (e) => {
       const st = ui.activeSession?.exercises[+el.dataset.ex]?.sets[+el.dataset.set];
       if (!st) break;
       const f = el.dataset.f;
-      if (f === "rpe") st.rpe = el.value === "" ? null : num(el.value);
-      else if (f === "seconds") st.seconds = reformatClockInputLive(el);
+      if (f === "seconds") st.seconds = reformatClockInputLive(el);
       else st[f] = num(el.value);
       // Actualiza el contador de volumen en vivo sin re-dibujar (para no perder el foco).
       const live = document.getElementById("live-vol");
@@ -5453,7 +5457,7 @@ document.addEventListener("change", (e) => {
 // Tocar un input de VALOR selecciona su contenido completo (para reemplazarlo
 // de un tiro, sin borrar a mano). Nunca en campos de texto libre (nombre de
 // rutina/ejercicio, notas) — ahí molestaría. focusin (no focus) porque sí burbujea.
-const SELECT_ON_FOCUS = ".vt-set-input, .vt-rpe-input, .vt-rest-mini input, #exm-onerm, .vt-max-input";
+const SELECT_ON_FOCUS = ".vt-set-input, .vt-rest-mini input, #exm-onerm, .vt-max-input";
 document.addEventListener("focusin", (e) => {
   if (e.target.matches && e.target.matches(SELECT_ON_FOCUS)) e.target.select();
 });
