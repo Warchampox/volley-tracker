@@ -1407,3 +1407,14 @@ Entradas nuevas al final. No reescribir lo anterior.
   de compartir (sesión y PR), encabezado a 360px, columnas KG/REPS
   alineadas, gráficos, hojas y Organizar. La splash no se puede ver en el
   navegador: manifest, meta y fondo del ícono maskable quedaron en #000.
+
+## 2026-10-23 cont. — Selección y Organizar, Fase 1 de 3: selección de texto y long-press
+- Nada se selecciona salvo lo editable: `#app *` sin selección ni menú del
+  sistema; inputs, textareas (Pegar para importar, texto para compartir) y
+  contenteditable sí. Se fueron las reglas sueltas de `button, svg` y del h2.
+  Medido con getComputedStyle: 0 textos seleccionables en Sesión, Progreso
+  y Ajustes (antes 53 / 44 / 16).
+- Long-press de Organizar en todo el bloque (`[data-block-idx]`), salvo
+  campos, botones, check, nº de serie y cronómetro; vibración de 15 ms al
+  entrar. Verificado en sesión y editor: Última vez, encabezados, "×" de
+  la fila y espacios entran; check e input no; un swipe borra sin entrar.

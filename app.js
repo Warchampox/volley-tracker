@@ -4102,14 +4102,13 @@ document.addEventListener("touchend", endTabSwipe);
 document.addEventListener("touchcancel", endTabSwipe);
 
 /* ------------------- Mantener presionado: entra a Organizar ------------------- */
-// Mantener el dedo ~500ms sobre el NOMBRE de un ejercicio (fuera del modo
-// Organizar) entra al modo con ese ejercicio ya preseleccionado. Gesto de
-// temporizador, fuera del sistema de delegación de "click" — se cancela si
-// hay movimiento significativo antes de cumplirse (no compite con el scroll).
-// Se ata solo al <h2> del bloque (nombre/cabecera), nunca a sus controles:
-// en la sesión activa el <h2> convive con descanso/nota/colapsar pero es un
-// elemento propio sin acción de click encima, así que no hace falta excluir
-// nada explícitamente — inputs y botones quedan afuera del selector solo.
+// Mantener el dedo ~500ms en CUALQUIER punto del bloque de un ejercicio
+// (fuera del modo Organizar; sesión en vivo o editor) entra al modo con ese
+// ejercicio ya preseleccionado. Gesto de temporizador, fuera del sistema de
+// delegación de "click" — se cancela si el dedo se mueve más de 10 px, así
+// que no compite con el scroll ni con el swipe de borrar serie. No arranca
+// sobre controles con acción propia (campos, botones, check, nº de serie,
+// cronómetro).
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_TOLERANCE = 10; // px
 let longPressTimer = null;
@@ -4125,10 +4124,8 @@ document.addEventListener("pointerdown", (e) => {
   if (!e.isPrimary || pinch) { cancelLongPress(); return; } // un segundo dedo es un pellizco, no un long-press
   if (ui.exerciseEditMode) return; // el long-press solo sirve para ENTRAR, no hace nada ya adentro
   if (!ui.editingRoutine && !ui.activeSession) return;
-  const h2 = e.target.closest(".vt-block h2");
-  if (!h2) return;
-  const blockEl = h2.closest("[data-block-idx]");
-  if (!blockEl) return;
+  const blockEl = e.target.closest("[data-block-idx]");
+  if (!blockEl || e.target.closest("input, textarea, button, .vt-check, .vt-settype-btn, .vt-timer-btn")) return;
   // Bloquea selección de texto/menú contextual/zoom del navegador sobre este
   // gesto — si no, le gana la carrera al temporizador de long-press de abajo.
   e.preventDefault();
@@ -4138,6 +4135,7 @@ document.addEventListener("pointerdown", (e) => {
     longPressTimer = null;
     if (!longPressStart) return;
     longPressStart = null;
+    if (settings.vibrate) navigator.vibrate?.(15); // confirma el gesto
     enterOrganizeMode(idx);
     suppressClickUntil = Date.now() + 400;
   }, LONG_PRESS_MS);

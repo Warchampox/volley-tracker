@@ -76,8 +76,6 @@ body {
   min-height: 100vh;
 }
 
-/* Elementos interactivos no seleccionan texto (se siente como app, no como página web).
-   Los inputs de texto/número quedan afuera a propósito: ahí sí hace falta seleccionar. */
 /* Los controles no heredan la familia por defecto. */
 button, input, select, textarea { font-family: var(--font); }
 
@@ -92,10 +90,13 @@ button, input, select, textarea { font-family: var(--font); }
 .vt-rest-time, .vt-minibar-stats, .vt-badge, .vt-group-count, .vt-cat-sub b, .vt-recent-value,
 .vt-set-input, .vt-sum-hero-num { font-variant-numeric: tabular-nums; }
 
-button, svg {
-  user-select: none;
-  -webkit-user-select: none;
-}
+
+/* Nada se selecciona salvo lo editable: la app se siente como app y un
+   long-press (Organizar) no termina en selección de texto ni en el menú
+   del sistema. Inputs, textareas (incluidos "Pegar para importar" y el
+   texto para copiar al compartir) y contenteditable sí seleccionan. */
+#app, #app * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#app input, #app textarea, #app [contenteditable="true"] { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 
 /* Foco de teclado: un anillo azul en todo lo que se puede tocar. Solo con
    :focus-visible (teclado), así un toque con el dedo no deja anillo. */
@@ -323,13 +324,6 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   color: var(--text);
   margin: 0; letter-spacing: normal;
   text-transform: none;
-  /* Acá es donde escucha el long-press para entrar a Organizar (ver
-     pointerdown en app.js) — sin esto, el navegador dispara su propia
-     selección de texto o menú contextual al mantener presionado y le
-     gana la carrera al temporizador. No aplica a inputs/campos editables,
-     esos deben seguir permitiendo seleccionar texto con normalidad. */
-  user-select: none; -webkit-user-select: none;
-  -webkit-touch-callout: none;
   touch-action: manipulation;
 }
 .vt-block-body { flex: 1; min-width: 0; }
