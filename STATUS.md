@@ -1461,3 +1461,18 @@ Entradas nuevas al final. No reescribir lo anterior.
   desde la búsqueda y copiar el texto al compartir.
 - Pendiente en el teléfono: Roboto (el navegador de prueba muestra SF), la
   splash sobre #000, long-press, swipe y arrastre con el dedo.
+
+## 2026-10-23 cont. — Menús, Fase 1 de 3: menú flotante y "Última vez"
+- Componente único de menú flotante (`popoverHTML` / `positionPopover` /
+  `closePopover`, `ui.popover`): anclado al botón, abre hacia abajo o
+  arriba, alineado al borde según la mitad de pantalla, fondo atenuado 35%,
+  entra en 140 ms y sale en 100 ms (solo opacidad con movimiento reducido).
+  Usa setupDialogs (foco, Escape, Tab, retorno). Tokens nuevos: `--surface-3`
+  #3A3A3C, `--fs-menu` 16px, `--r-lg` 14px.
+- La línea "Última vez" se fue del bloque; ahora es un botón al inicio de la
+  línea de controles que abre la sesión anterior en tabla (columnas por
+  tipo, C/D/F en su color, RPE vacío "—"), "Mejor serie" y "Usar estos
+  valores" (copia sobre las series sin marcar, agrega las que faltan, aviso
+  "Valores copiados · Deshacer"). El deshacer pasó a ser genérico
+  (`showUndoToast(texto, undo)`). Verificado a 360 y 390 px en peso,
+  unilateral, peso corporal y tiempo.

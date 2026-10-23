@@ -229,6 +229,7 @@ const ui = {
   selectedExercises: new Set(), // índices (dentro del draft) seleccionados en modo Organizar
   replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
+  popover: null,          // null | {kind: "last"|"set"|"actions", anchor (controlKey del botón), ...} — ver popoverHTML
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
@@ -304,6 +305,7 @@ const PATHS = {
   more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
   playFill: '<polygon points="8 5 19 12 8 19 8 5" fill="currentColor"/>',
   timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
   unlink: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="2" y1="2" x2="22" y2="22"/>',
 };
@@ -626,13 +628,15 @@ function ungroupSuperset(list, indices) {
   }
 }
 
-function lastSetsFor(exId) {
+// La sesión guardada más reciente donde se hizo el ejercicio: {session, entry}, o null.
+function lastSessionFor(exId) {
   for (const s of sessions) {
-    const found = s.exercises.find((e) => e.exerciseId === exId && e.sets.length > 0);
-    if (found) return found.sets;
+    const entry = s.exercises.find((e) => e.exerciseId === exId && e.sets.length > 0);
+    if (entry) return { session: s, entry };
   }
   return null;
 }
+const lastSetsFor = (exId) => lastSessionFor(exId)?.entry.sets || null;
 
 // Reconstruye el target de un ítem de RUTINA (editorHTML) a partir del
 // historial real del ejercicio (mismo patrón que "Guardar como rutina" usa
@@ -868,7 +872,7 @@ function goToTab(tab) {
 }
 
 function render() {
-  if (lastDeletedSet && ui.activeSession?.id !== lastDeletedSet.sessionId) hideUndoToast();
+  if (undoState && ui.activeSession?.id !== undoState.sessionId) hideUndoToast();
   // Para el ayudante de diálogos (setupDialogs): ¿había uno abierto y qué
   // control tenía el foco antes de reconstruir el DOM?
   const dialogWasOpen = !!document.querySelector(DIALOG_SEL);
@@ -917,13 +921,15 @@ function render() {
     ${ui.featuredSheet && !ui.picker ? featuredSheetHTML() : ""}
     ${ui.groupModal ? groupModalHTML() : ""}
     ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}
-    ${ui.shareText ? shareTextModalHTML() : ""}`;
+    ${ui.shareText ? shareTextModalHTML() : ""}
+    ${ui.popover ? popoverHTML() : ""}`;
 
   updateRestBar();
   updateMinimizedBar();
   updateOrganizePad();
   if (ui.tab === "progreso" || ui.progressDetail) mountChart();
   mountSortables();
+  positionPopover();
   setupDialogs(dialogWasOpen, prevFocusKey);
   if (ui.activeSession) persistActiveSession();
 }
@@ -934,7 +940,7 @@ function render() {
 // render(): marca el de más arriba como diálogo, deja inerte todo lo de
 // atrás, mueve el foco adentro al abrir y lo devuelve al botón que lo abrió
 // al cerrar. Tab queda encerrado y Escape cierra (keydown, más abajo).
-const DIALOG_SEL = ".vt-modal-backdrop, .vt-summary-overlay";
+const DIALOG_SEL = ".vt-modal-backdrop, .vt-summary-overlay, .vt-popover-backdrop";
 const FOCUSABLE_SEL = 'button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 let dialogReturnKey = null; // controlKey del botón que abrió el diálogo
 let lastClickKey = null;    // controlKey del último control tocado (Safari no enfoca botones al tocarlos)
@@ -965,7 +971,7 @@ function setupDialogs(wasOpen, prevFocusKey) {
   if (!wasOpen) { dialogReturnKey = lastClickKey || prevFocusKey; lastClickKey = null; }
   // Toda hoja inferior lleva la barrita de arriba (se cierra arrastrándola, ver sheetDrag).
   layers.forEach((l) => l.querySelector(".vt-modal")?.insertAdjacentHTML("afterbegin", '<div class="vt-grabber" aria-hidden="true"></div>'));
-  const panel = top.querySelector(".vt-modal") || top;
+  const panel = top.querySelector(".vt-modal, .vt-popover") || top;
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
   if (!panel.hasAttribute("aria-label")) {
@@ -988,11 +994,11 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     // Misma acción que tocar el fondo (cancelar / cerrar). El resumen de
     // sesión no tiene fondo: se cierra solo con "Listo".
-    if (top.matches(".vt-modal-backdrop[data-a]")) { e.preventDefault(); top.click(); }
+    if (top.matches(".vt-modal-backdrop[data-a], .vt-popover-backdrop[data-a]")) { e.preventDefault(); top.click(); }
     return;
   }
   if (e.key !== "Tab") return;
-  const list = focusablesIn(top.querySelector(".vt-modal") || top);
+  const list = focusablesIn(top.querySelector(".vt-modal, .vt-popover") || top);
   if (!list.length) return;
   const first = list[0], last = list[list.length - 1], inside = top.contains(document.activeElement);
   if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
@@ -1054,6 +1060,114 @@ function endSheetDrag() {
 }
 document.addEventListener("touchend", endSheetDrag);
 document.addEventListener("touchcancel", endSheetDrag);
+
+/* ---------------------------------- Menú flotante ---------------------------------- */
+// Componente ÚNICO para menús chicos anclados a un botón (Última vez, menú de
+// serie, menús ⋯): panel en --surface-2 junto al botón que lo abrió, sobre un
+// fondo atenuado que lo cierra al tocarlo. Abre hacia abajo y, si no cabe,
+// hacia arriba; se alinea al borde izquierdo o derecho del botón según en qué
+// mitad de la pantalla esté. Es un diálogo más para setupDialogs (foco,
+// Escape, Tab, retorno del foco). `ui.popover.anchor` = controlKey del botón.
+let popoverShown = false; // ya se dibujó una vez: los redibujos no repiten la animación de entrada
+let popoverClosing = false;
+
+function openPopover(el, popover) {
+  ui.popover = { ...popover, anchor: controlKey(el) };
+  render();
+}
+
+function popoverHTML() {
+  const p = ui.popover;
+  const body = { last: lastTimeMenuHTML }[p.kind]?.(p) || "";
+  return `<div class="vt-popover-backdrop ${popoverShown ? "" : "is-entering"}" data-a="popover-close">
+    <div class="vt-popover vt-popover-${p.kind}" data-stop="1">${body}</div>
+  </div>`;
+}
+
+function positionPopover() {
+  const pop = document.querySelector(".vt-popover");
+  if (!pop) { popoverShown = false; return; }
+  const anchor = ui.popover.anchor && document.querySelector(ui.popover.anchor);
+  const r = anchor ? anchor.getBoundingClientRect() : { left: innerWidth / 2, right: innerWidth / 2, top: innerHeight / 2, bottom: innerHeight / 2 };
+  const GAP = 6, M = 16, w = pop.offsetWidth, h = pop.offsetHeight;
+  const below = r.bottom + GAP + h <= innerHeight - M || r.top - GAP - h < M;
+  const alignLeft = (r.left + r.right) / 2 < innerWidth / 2;
+  const left = Math.max(M, Math.min(alignLeft ? r.left : r.right - w, innerWidth - M - w));
+  const top = Math.max(M, Math.min(below ? r.bottom + GAP : r.top - GAP - h, innerHeight - M - h));
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+  pop.style.transformOrigin = `${alignLeft ? "left" : "right"} ${below ? "top" : "bottom"}`;
+  popoverShown = true;
+}
+
+// Cerrar sin elegir nada (fondo, Escape): animación de salida de 100 ms.
+function closePopover() {
+  if (popoverClosing) return;
+  popoverClosing = true;
+  document.querySelector(".vt-popover-backdrop")?.classList.add("is-closing");
+  setTimeout(() => { popoverClosing = false; ui.popover = null; render(); }, 100);
+}
+
+// Fila de acción de un menú: 48px, ícono 20 + texto. `danger` = rojo, con un
+// divisor antes (lo agrega actionsMenuHTML).
+const popRowHTML = (a, ic, label, extra = "", danger = false) =>
+  `<button class="vt-pop-row ${danger ? "is-danger" : ""}" data-a="${a}" ${extra}>${icon(ic, 20)}<span>${label}</span></button>`;
+
+/* ----------------------------- Menú de "Última vez" ----------------------------- */
+
+// Columnas de la tabla según el tipo (mismo orden que la fila de serie).
+function lastTimeColumns(type, uni) {
+  const kg = (st) => num(st.weight) > 0 ? fmtNum(st.weight) : "—";
+  if (type === "time") return [{ cap: "Tiempo", v: (st) => fmtClockInput(num(st.seconds)) }, { cap: "+kg", v: kg }];
+  if (uni) return [{ cap: "kg", v: kg }, { cap: "Izq", v: (st) => repsL(st) }, { cap: "Der", v: (st) => repsR(st) }];
+  if (type === "bodyweight") return [{ cap: "+kg", v: kg }, { cap: "Reps", v: (st) => num(st.reps) }];
+  return [{ cap: "kg", v: (st) => fmtNum(st.weight) }, { cap: "Reps", v: (st) => num(st.reps) }];
+}
+
+// "Mejor serie: 22,5 kg · 8/8" — con las series efectivas (sin C/D/F, mismo
+// criterio que los récords); si solo hubo de esas, con todas.
+function bestSetText(sets, type, uni) {
+  const eff = sets.filter((st) => !getSetType(st));
+  const pool = eff.length ? eff : sets;
+  const by = (f) => pool.reduce((b, st) => (f(st) > f(b) ? st : b), pool[0]);
+  const w = (st) => num(st.weight);
+  if (type === "time") { const b = by((st) => num(st.seconds)); return `${fmtClockInput(num(b.seconds))}${w(b) > 0 ? ` · +${fmtNum(w(b))} kg` : ""}`; }
+  if (uni) { const b = by((st) => w(st) * 1000 + Math.min(repsL(st), repsR(st))); return `${w(b) > 0 ? `${fmtNum(w(b))} kg · ` : ""}${repsL(b)}/${repsR(b)}`; }
+  if (type === "bodyweight") {
+    if (pool.some((st) => w(st) > 0)) { const b = by((st) => w(st) * 1000 + num(st.reps)); return `+${fmtNum(w(b))} kg × ${num(b.reps)}`; }
+    return `${num(by((st) => num(st.reps)).reps)} reps`;
+  }
+  const b = by((st) => w(st) * 1000 + num(st.reps));
+  return `${fmtNum(w(b))} kg × ${num(b.reps)}`;
+}
+
+// "jue 2 oct · hace 3 sem"
+function lastTimeDate(iso) {
+  const d = new Date(iso);
+  const part = (o) => d.toLocaleDateString("es-CL", o).replace(/\.$/, "");
+  return `${part({ weekday: "short" })} ${d.getDate()} ${part({ month: "short" })} · ${fmtRelDate(iso)}`;
+}
+
+function lastTimeMenuHTML(p) {
+  const ex = ui.activeSession?.exercises[p.ex];
+  const info = ex && lastSessionFor(ex.exerciseId);
+  if (!info) return "";
+  const type = exType(ex.exerciseId), uni = exUnilateral(ex.exerciseId);
+  const cols = lastTimeColumns(type, uni);
+  let n = 0;
+  const rows = info.entry.sets.map((st) => {
+    const t = getSetType(st);
+    const label = t ? `<span class="vt-set-letter is-${t}">${typePrefix(t)}</span>` : ++n;
+    return `<tr><td>${label}</td>${cols.map((c) => `<td>${c.v(st)}</td>`).join("")}<td>${st.rpe ? fmtNum(st.rpe) : '<span class="vt-faint">—</span>'}</td></tr>`;
+  }).join("");
+  return `<div class="vt-pop-head"><span class="vt-pop-title">Última vez</span><span class="vt-pop-date">${lastTimeDate(info.session.date)}</span></div>
+    <table class="vt-last-table">
+      <thead><tr><th>Serie</th>${cols.map((c) => `<th>${c.cap}</th>`).join("")}<th>RPE</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="vt-last-best">Mejor serie: ${bestSetText(info.entry.sets, type, uni)}</p>
+    <button class="vt-pop-btn" data-a="last-use" data-ex="${p.ex}">Usar estos valores</button>`;
+}
 
 // Avisa a lectores de pantalla sin mover el foco (región aria-live="polite"
 // de index.html): fin del descanso, serie eliminada, etc.
@@ -1523,7 +1637,7 @@ function trainActiveHTML() {
             </div>
             ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
             <div class="vt-ex-meta">
-              ${last ? `<p class="vt-lasttime"><span class="vt-lasttime-label">Última vez</span> ${sepJoin(last.map((x) => esc(fmtSet(t, x, uni))))}</p>` : ""}
+              ${last ? `<button class="vt-last-btn ${ui.popover?.kind === "last" && ui.popover.ex === exIdx ? "is-open" : ""}" data-a="last-open" data-ex="${exIdx}" aria-haspopup="dialog">${icon("history", 18)} Última vez</button>` : ""}
               <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
@@ -3046,48 +3160,76 @@ function deleteSet(exI, setI) {
   }
   const ex = ui.activeSession.exercises[exI];
   const [removed] = ex.sets.splice(setI, 1);
-  lastDeletedSet = { sessionId: ui.activeSession.id, exI, setI, exerciseId: ex.exerciseId, set: removed };
+  const d = { exI, setI, exerciseId: ex.exerciseId, set: removed };
   render();
-  showUndoToast();
+  showUndoToast("Serie eliminada", () => undoDeleteSet(d));
 }
 
-// Última serie borrada, mientras su aviso está a la vista; null después.
-let lastDeletedSet = null;
+// Aviso con Deshacer abierto ahora: { sessionId, undo }, o null.
+let undoState = null;
 let undoToastTimer = null;
 
 function hideUndoToast() {
   clearTimeout(undoToastTimer);
   document.getElementById("undo-toast")?.remove();
-  lastDeletedSet = null;
+  undoState = null;
 }
 
-// Aviso con botón Deshacer, mismo lenguaje que #recovered-toast. Elemento de
-// DOM aparte (no pasa por render()): sobrevive a los redibujos. Un borrado
-// nuevo reemplaza al anterior, que queda definitivo.
-function showUndoToast() {
-  clearTimeout(undoToastTimer);
-  document.getElementById("undo-toast")?.remove();
+// Aviso "Texto · Deshacer" de 5 s (borrar una serie, "Usar estos valores"),
+// mismo lenguaje que #recovered-toast. Elemento de DOM aparte (no pasa por
+// render()): sobrevive a los redibujos. Uno nuevo reemplaza al anterior,
+// que queda definitivo; si la sesión termina, se va.
+function showUndoToast(text, undo) {
+  hideUndoToast();
+  undoState = { sessionId: ui.activeSession?.id, undo };
   const bar = document.createElement("div");
   bar.id = "undo-toast";
   bar.setAttribute("role", "status");
-  bar.innerHTML = `<span>Serie eliminada</span><button type="button">Deshacer</button>`;
-  bar.querySelector("button").addEventListener("click", undoDeleteSet);
+  bar.innerHTML = `<span>${esc(text)}</span><button type="button">Deshacer</button>`;
+  bar.querySelector("button").addEventListener("click", () => { const u = undoState?.undo; hideUndoToast(); u?.(); });
   document.body.appendChild(bar);
   undoToastTimer = setTimeout(hideUndoToast, 5000);
 }
 
 // Devuelve la serie con sus valores a la misma posición, si la sesión y el
 // ejercicio siguen siendo los mismos (si no, ya no hay dónde ponerla).
-function undoDeleteSet() {
-  const d = lastDeletedSet;
-  hideUndoToast();
-  const ex = d && ui.activeSession?.id === d.sessionId ? ui.activeSession.exercises[d.exI] : null;
+function undoDeleteSet(d) {
+  const ex = ui.activeSession?.exercises[d.exI];
   if (!ex || ex.exerciseId !== d.exerciseId) return;
   const at = Math.min(d.setI, ex.sets.length);
   ex.sets.splice(at, 0, d.set);
   if (runningTimer && runningTimer.exIdx === d.exI && runningTimer.setIdx >= at) runningTimer.setIdx++;
   render();
   announce("Serie restaurada");
+}
+
+// "Usar estos valores" (menú de Última vez): copia la vez anterior serie por
+// serie sobre las series de hoy SIN marcar, con su mismo tipo; si la vez
+// anterior hubo más series, agrega las que faltan. Las marcadas no se tocan
+// y el RPE no se copia (es el esfuerzo de hoy). Se puede deshacer 5 s.
+function useLastValues(exI) {
+  const ex = ui.activeSession?.exercises[exI];
+  const prev = ex && lastSetsFor(ex.exerciseId);
+  if (!prev) return;
+  const type = exType(ex.exerciseId), uni = exUnilateral(ex.exerciseId);
+  const before = deepClone(ex.sets);
+  const copy = (dst, src) => {
+    dst.setType = getSetType(src);
+    dst.warmup = false;
+    dst.weight = num(src.weight);
+    if (type === "time") dst.seconds = num(src.seconds);
+    else if (uni) { dst.repsL = repsL(src); dst.repsR = repsR(src); }
+    else dst.reps = num(src.reps);
+  };
+  prev.forEach((src, i) => {
+    if (!ex.sets[i]) { const st = { done: false, rpe: null }; copy(st, src); ex.sets.push(st); }
+    else if (!ex.sets[i].done) copy(ex.sets[i], src);
+  });
+  render();
+  showUndoToast("Valores copiados", () => {
+    const e = ui.activeSession?.exercises[exI];
+    if (e && e.exerciseId === ex.exerciseId) { e.sets = before; render(); }
+  });
 }
 
 function buildSessionFromRoutine(r) {
@@ -4293,7 +4435,10 @@ document.addEventListener("click", (e) => {
   lastClickKey = controlKey(el);
   if (!el) return;
   // El fondo oscuro cierra el modal, pero un clic dentro del panel no debe cerrarlo.
-  if (el.classList.contains("vt-modal-backdrop") && e.target.closest(".vt-modal")) return;
+  if (el.matches(".vt-modal-backdrop, .vt-popover-backdrop") && e.target.closest(".vt-modal, .vt-popover")) return;
+  // Una acción elegida dentro de un menú flotante lo cierra (sin animar: la
+  // acción ya redibuja), salvo las marcadas con data-keep.
+  if (ui.popover && el.closest(".vt-popover") && !el.dataset.keep) ui.popover = null;
   const a = el.dataset.a;
   const id = el.dataset.id;
   // Cualquier acción cierra la hoja del ⋯ (las filas de la hoja disparan las
@@ -4302,6 +4447,9 @@ document.addEventListener("click", (e) => {
 
   switch (a) {
     case "sheet-open": ui.actionSheet = { kind: el.dataset.kind, id }; render(); break;
+    case "popover-close": closePopover(); break;
+    case "last-open": openPopover(el, { kind: "last", ex: +el.dataset.ex }); break;
+    case "last-use": useLastValues(+el.dataset.ex); break;
     case "sheet-close": render(); break;
     case "tab": {
       const go = () => goToTab(el.dataset.tab);

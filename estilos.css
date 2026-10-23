@@ -8,6 +8,7 @@
   --bg: #000000;
   --surface: #1C1C1E;
   --surface-2: #2C2C2E;
+  --surface-3: #3A3A3C;                    /* botón secundario dentro de un menú flotante (que ya es --surface-2) */
   --line: rgba(84, 84, 88, 0.55);          /* divisores */
   --text: #FFFFFF;                         /* tinta principal: datos e identidad */
   --text-dim: rgba(235, 235, 245, 0.60);   /* secundario: etiquetas, unidades, fechas, subtítulos (6,4:1 sobre --bg) */
@@ -36,6 +37,7 @@
   --fs-xs: 11px;   /* encabezados de columna, eyebrows, nav */
   --fs-sm: 13px;   /* texto secundario: notas, "última vez", subtítulos, muted */
   --fs-md: 15px;   /* texto base: nombres en listas, inputs, botones */
+  --fs-menu: 16px; /* SOLO menús flotantes: filas de acción, título y valores de la tabla */
   --fs-lg: 18px;   /* valores: stats, inputs de series, valores destacados */
   --fs-xl: 20px;   /* títulos de bloque/rutina, títulos de modal */
   --fs-2xl: 24px;  /* títulos de header chico, nombre de sesión */
@@ -48,7 +50,8 @@
 
   /* Radios: 3 */
   --r-sm: 8px;     /* controles chicos: icon buttons, inputs, check, buscador, filas de modal */
-  --r-md: 12px;    /* botones, barras, paneles, toasts, hoja de modal (12px 12px 0 0) */
+  --r-md: 12px;
+  --r-lg: 14px;    /* menú flotante */    /* botones, barras, paneles, toasts, hoja de modal (12px 12px 0 0) */
   --r-full: 999px; /* píldoras: tags, badges, chips de rango */
 
   /* Tracking: 1 */
@@ -83,7 +86,7 @@ button, input, select, textarea { font-family: var(--font); }
    en columnas): dígitos de ancho fijo para que no bailen. `.vt-num` es la
    utilidad para usar en el HTML; el resto son los componentes que antes
    iban en mono. */
-.vt-num, .vt-eyebrow, .vt-scoreboard, .vt-ss-badge, .vt-muted-sm, .vt-lasttime,
+.vt-num, .vt-eyebrow, .vt-scoreboard, .vt-ss-badge, .vt-muted-sm, .vt-last-table,
 .vt-folder-count, .vt-cap, .vt-settype-btn, .vt-type-picker-opt, .vt-week-day, .vt-strip-value,
 .vt-record-value, .vt-row-value, .vt-reparto-n, .vt-pills button, .vt-jumps-line b, .vt-load-line b,
 .vt-big-stat, .vt-rpe-scale button, .vt-exrow-value, .vt-hint-row b, .vt-row-input, .vt-rest-btn,
@@ -453,13 +456,16 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 /* Línea bajo el nombre del ejercicio: "Última vez" a la izquierda (se parte
    en líneas si hace falta) y descanso · nota · colapsar alineados a la derecha. */
 .vt-ex-meta { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-1) 0 var(--sp-2); }
-.vt-ex-meta .vt-lasttime { flex: 1; min-width: 0; margin: 0; }
+/* Botón "Última vez": abre el menú con la sesión anterior en tabla. */
+.vt-last-btn {
+  display: inline-flex; align-items: center; gap: var(--sp-1); min-height: 44px; padding: 0;
+  background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: var(--fs-sm); font-weight: 500;
+}
+.vt-last-btn.is-open, .vt-last-btn:active { color: var(--text); }
 .vt-ex-tools { display: flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; margin-left: auto; margin-right: calc(-1 * var(--sp-2)); }
 .vt-muted { color: var(--text-dim); font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
 .vt-muted-sm { color: var(--text-dim); font-size: var(--fs-sm); }
-/* "Última vez": la etiqueta en gris, los valores en tinta (son datos). */
-.vt-lasttime { color: var(--text); font-size: var(--fs-sm); margin: var(--sp-2) 0 var(--sp-3); }
-.vt-lasttime-label { color: var(--text-dim); }
 /* Separador "·" entre datos de una línea: terciario, para que no compita. */
 .vt-sep { color: var(--text-faint); }
 ::placeholder { color: var(--text-faint); opacity: 1; }
@@ -1385,3 +1391,59 @@ input[type="file"] { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .vt-pr, .vt-organize-pulse { animation: none; }
 }
+
+/* ---------------------------------- Menú flotante ----------------------------------
+   Componente único (popoverHTML en app.js): panel anclado al botón que lo
+   abrió, sobre un fondo atenuado al 35%. Entra desde la esquina del botón
+   (transform-origin lo pone positionPopover) en 140ms y sale en 100ms. */
+.vt-popover-backdrop { position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.35); touch-action: none; }
+.vt-popover {
+  position: fixed; min-width: 216px; max-width: calc(100vw - 32px); width: max-content;
+  max-height: calc(100vh - 32px); overflow-y: auto; touch-action: pan-y;
+  background: var(--surface-2); border-radius: var(--r-lg); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: var(--sp-1) 0;
+}
+@keyframes vt-popover-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes vt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.vt-popover-backdrop.is-entering { animation: vt-fade-in 140ms ease-out both; }
+.vt-popover-backdrop.is-entering .vt-popover { animation: vt-popover-in 140ms cubic-bezier(.2, .8, .2, 1) both; }
+.vt-popover-backdrop.is-closing { opacity: 0; transition: opacity 100ms ease-in; }
+.vt-popover-backdrop.is-closing .vt-popover { transform: scale(0.96); transition: transform 100ms ease-in; }
+@media (prefers-reduced-motion: reduce) {
+  .vt-popover-backdrop.is-entering .vt-popover { animation-name: vt-fade-in; }
+  .vt-popover-backdrop.is-closing .vt-popover { transform: none; }
+}
+/* Fila de acción: 48px, ícono 20px, texto 16px. Las destructivas van en rojo
+   con un divisor antes (.vt-pop-sep). */
+.vt-pop-row {
+  width: 100%; min-height: 48px; display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0 var(--sp-4); background: transparent; border: none; color: var(--text);
+  font-size: var(--fs-menu); text-align: left; cursor: pointer; white-space: nowrap;
+}
+.vt-pop-row:active { background: var(--surface-3); }
+.vt-pop-row.is-danger { color: var(--red-text); }
+.vt-pop-sep { height: 1px; margin: var(--sp-1) 0; background: var(--line); }
+.vt-faint { color: var(--text-faint); }
+
+/* Menú de "Última vez": encabezado, tabla de la sesión anterior, mejor serie
+   y "Usar estos valores". */
+.vt-popover-last { width: min(328px, calc(100vw - 32px)); padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+.vt-pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.vt-pop-title { font-size: var(--fs-menu); font-weight: 600; }
+.vt-pop-date { font-size: var(--fs-sm); color: var(--text-dim); white-space: nowrap; }
+.vt-last-table { width: 100%; border-collapse: collapse; }
+.vt-last-table th {
+  padding: var(--sp-1) 0; text-align: right; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: var(--track);
+}
+.vt-last-table td { padding: var(--sp-2) 0; text-align: right; font-size: var(--fs-menu); border-top: 1px solid var(--line); }
+.vt-last-table th:first-child, .vt-last-table td:first-child { text-align: left; }
+.vt-set-letter.is-warmup { color: var(--blue-text); }
+.vt-set-letter.is-dropset { color: var(--dropset); }
+.vt-set-letter.is-failed { color: var(--red-text); }
+.vt-last-best { margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-pop-btn {
+  width: 100%; height: 40px; border: none; border-radius: var(--r-md);
+  background: var(--surface-3); color: var(--text); font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+}
+.vt-pop-btn:active { filter: brightness(1.2); }
