@@ -1434,3 +1434,20 @@ Entradas nuevas al final. No reescribir lo anterior.
   reemplazar, cancelar, guardar y arrastrar. Nota: en este navegador
   SortableJS termina con mouseup/touchend (no pointerup); en el teléfono no
   cambia nada.
+
+## 2026-10-23 cont. — Selección y Organizar, Fase 3 de 3: selector de ejercicios
+- Hoja de 92vh con título según contexto ("Agregar / Reemplazar / Destacar
+  ejercicio"), buscador, chips de grupo (Todos + grupos con su punto; se
+  combinan con la búsqueda) y lista por secciones: RECIENTES (últimos 4
+  usados que no están en la sesión o rutina) + una por grupo con su barrita
+  de color; al buscar, una sola lista. Fila con "Mejor 53 kg · hace 4 días"
+  / "Sin marca" / "Sin registros" y etiqueta "En la sesión / En la rutina".
+- Selección múltiple en session/editor: círculo a la derecha y botón fijo
+  "Agregar N ejercicios" (se agregan en el orden elegido con
+  `addExerciseFromPicker`). Replace/featured/detail siguen con toque simple.
+  "+ Crear "texto"" al final en `--blue-text`; abre "Nuevo ejercicio" con el
+  nombre (y el grupo del chip) y vuelve al selector con el nuevo elegido.
+- El título va en la fuente del sistema y la etiqueta en formato normal
+  (manda el pedido de tipografía sobre Barlow/mono). `.vt-modal-add` dejó
+  de usar ámbar (reservado para PR). Verificado a 390 y 360 px en los 4
+  contextos y creando un ejercicio desde la búsqueda.

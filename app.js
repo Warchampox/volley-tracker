@@ -194,8 +194,10 @@ const ui = {
   editorOpenNotes: new Set(), // índices de ejercicio con la nota desplegada en el editor
   activeSession: null,    // sesión en curso, o null
   sessionMinimized: false, // sesión activa pero minimizada a la barra flotante
-  picker: null,           // null | "editor" | "session" | "featured" | "replace"
+  picker: null,           // null | "editor" | "session" | "featured" | "replace" | "detail"
   pickerQuery: "",
+  pickerGroup: null,      // chip de grupo activo en el selector (null = Todos)
+  pickerSelected: [],     // ids elegidos en el selector (session/editor), en el orden en que se tocaron
   sessionDetail: null,    // id de la sesión cuyo detalle está abierto (Historial), o null
   durationDialog: null,   // null | {mode: "finish"|"edit", rawSec, minutes, onSave} — ver durationDialogHTML
   sessionRpeEdit: false,  // en el detalle de sesión: mostrando los botones 1–10 para poner/cambiar el RPE
@@ -2841,19 +2843,70 @@ function exerciseModalHTML() {
 
 /* ------------------------------ Selector de ejercicio ----------------------------- */
 
+// Selector de ejercicios: hoja alta con buscador, chips de grupo y lista por
+// secciones. En "session" y "editor" se eligen varios (círculo a la derecha)
+// y se agregan juntos con el botón de abajo; en "replace", "featured" y
+// "detail" tocar elige y cierra.
+const PICKER_TITLES = { replace: "Reemplazar ejercicio", featured: "Destacar ejercicio", detail: "Ver ejercicio" };
+const pickerIsMulti = () => ui.picker === "session" || ui.picker === "editor";
+
+// Ejercicios que ya están en la sesión o rutina abierta (o en su borrador de Organizar).
+function pickerCurrentIds() {
+  if (ui.picker === "featured" || ui.picker === "detail") return new Set();
+  const list = ui.exerciseEditMode && ui.exerciseEditDraft ? ui.exerciseEditDraft
+    : ui.picker === "editor" || (ui.picker === "replace" && ui.editingRoutine) ? ui.editingRoutine?.exercises
+    : ui.activeSession?.exercises;
+  return new Set((list || []).map((x) => x.exerciseId));
+}
+
 function pickerHTML() {
   return `
     <div class="vt-modal-backdrop" data-a="picker-close">
-      <div class="vt-modal" data-stop="1" aria-label="Elegir ejercicio">
+      <div class="vt-modal vt-picker" data-stop="1">
         <div class="vt-modal-head">
-          <div class="vt-search">${icon("search", 16)}
-            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" aria-label="Buscar ejercicio" autofocus autocomplete="off">
-          </div>
+          <h2 class="vt-modal-title">${PICKER_TITLES[ui.picker] || "Agregar ejercicio"}</h2>
           <button class="vt-btn-ghost" data-a="picker-close" aria-label="Cerrar">${icon("x", 18)}</button>
         </div>
-        <div class="vt-modal-body" id="picker-list">${pickerListHTML()}</div>
+        <div class="vt-picker-search">
+          <div class="vt-search">${icon("search", 16)}
+            <input placeholder="Buscar ejercicio…" value="${esc(ui.pickerQuery)}" data-i="picker-q" aria-label="Buscar ejercicio" autocomplete="off">
+          </div>
+        </div>
+        <div class="vt-chips" id="picker-chips">${pickerChipsHTML()}</div>
+        <div class="vt-modal-body vt-picker-list" id="picker-list">${pickerListHTML()}</div>
+        <div id="picker-footer">${pickerFooterHTML()}</div>
       </div>
     </div>`;
+}
+
+function pickerChipsHTML() {
+  const chip = (g, label, color) => `<button class="vt-chip ${ui.pickerGroup === g ? "is-active" : ""}" data-a="picker-group" data-group="${esc(g ?? "")}" aria-pressed="${ui.pickerGroup === g}">
+    ${color ? `<span class="vt-dotgroup" style="background:${color}"></span>` : ""}${esc(label)}</button>`;
+  return chip(null, "Todos") + exerciseGroups.map((g) => chip(g.name, g.name, g.color)).join("");
+}
+
+function pickerFooterHTML() {
+  const n = ui.pickerSelected.length;
+  if (!pickerIsMulti() || !n) return "";
+  return `<div class="vt-picker-footer"><button class="vt-btn-primary vt-full" data-a="picker-add">Agregar ${n} ejercicio${n !== 1 ? "s" : ""}</button></div>`;
+}
+
+// Fila: nombre + "Mejor 53 kg · hace 4 días" / "Sin marca · ayer" / "Sin
+// registros". Si ya está en la sesión o rutina, el nombre va en gris con una
+// etiqueta (igual se puede agregar). En selección múltiple, círculo a la derecha.
+function pickerRowHTML(ex, stats, current) {
+  const st = stats[ex.id];
+  const sub = !st ? "Sin registros"
+    : sepJoin([st.best !== null ? `Mejor <b>${fmtMark(ex.id, st.best, st.metric)}</b>` : "Sin marca", fmtRelDate(st.lastDate)]);
+  const inIt = current.has(ex.id);
+  const selected = ui.pickerSelected.includes(ex.id);
+  return `<button class="vt-pick-row ${inIt ? "is-in" : ""} ${selected ? "is-selected" : ""}" data-a="picker-pick" data-id="${ex.id}" ${pickerIsMulti() ? `aria-pressed="${selected}"` : ""}>
+    <span class="vt-pick-text">
+      <span class="vt-pick-name">${esc(ex.name)}${inIt ? ` <span class="vt-badge">${ui.picker === "editor" || ui.editingRoutine ? "En la rutina" : "En la sesión"}</span>` : ""}</span>
+      <span class="vt-pick-sub">${sub}</span>
+    </span>
+    ${pickerIsMulti() ? `<span class="vt-select-circle ${selected ? "is-on" : ""}" aria-hidden="true"></span>` : "<span></span>"}
+  </button>`;
 }
 
 function pickerListHTML() {
@@ -2867,19 +2920,35 @@ function pickerListHTML() {
     const withHistory = new Set(exercisesWithHistory());
     pool = exercises.filter((e) => withHistory.has(e.id));
   }
-  const filtered = pool.filter((e) => e.name.toLowerCase().includes(q));
-  let html = filtered.map((ex) => `
-    <button class="vt-modal-row" data-a="picker-pick" data-id="${ex.id}">
-      <span class="vt-dotgroup" style="background:${groupColor(ex.group) || "var(--text-dim)"}"></span>
-      ${esc(ex.name)}
-      <span class="vt-muted-sm">${esc(ex.group)}</span>
-    </button>`).join("");
-  if (q && ui.picker !== "detail" && !filtered.some((e) => e.name.toLowerCase() === q)) {
-    html += `<button class="vt-modal-row vt-modal-add" data-a="picker-create">
-      ${icon("plus", 16)} Crear "${esc(ui.pickerQuery.trim())}" (peso × reps — edítalo en Ajustes)
-    </button>`;
+  if (ui.pickerGroup) pool = pool.filter((e) => e.group === ui.pickerGroup);
+  const stats = exerciseStats(), current = pickerCurrentIds();
+  const rows = (list) => list.map((e) => pickerRowHTML(e, stats, current)).join("");
+  const section = (label, color, list) => !list.length ? "" : `<section>
+    <p class="vt-picker-sec" style="--sec-color:${color || "var(--line-strong)"}">${esc(label)}</p>${rows(list)}</section>`;
+
+  // Buscando: una sola lista de resultados, y al final "+ Crear" si no hay uno igual.
+  if (q) {
+    const found = pool.filter((e) => e.name.toLowerCase().includes(q));
+    let html = rows(found) || `<p class="vt-muted vt-modal-note">Sin resultados.</p>`;
+    if (ui.picker !== "detail" && !found.some((e) => e.name.toLowerCase() === q))
+      html += `<button class="vt-pick-create" data-a="picker-create">+ Crear "${esc(ui.pickerQuery.trim())}"</button>`;
+    return html;
   }
-  return html;
+  // Sin buscar: Recientes (solo con "Todos") y una sección por grupo.
+  const recent = ui.pickerGroup ? [] : pool.filter((e) => stats[e.id] && !current.has(e.id))
+    .sort((a, b) => stats[b.id].lastDate.localeCompare(stats[a.id].lastDate)).slice(0, 4);
+  return section("Recientes", "var(--text-dim)", recent)
+    + exerciseGroups.map((g) => section(g.name, g.color, pool.filter((e) => e.group === g.name))).join("")
+    + section("Otros", null, pool.filter((e) => !exerciseGroups.some((g) => g.name === e.group)));
+}
+
+// Redibuja solo las partes del selector (chips, lista, botón de abajo), sin
+// render(): no se pierde el scroll de la lista ni el foco del buscador.
+function refreshPicker() {
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set("picker-chips", pickerChipsHTML());
+  set("picker-list", pickerListHTML());
+  set("picker-footer", pickerFooterHTML());
 }
 
 /* ----------------------------------- Compartido ---------------------------------- */
@@ -4534,16 +4603,33 @@ document.addEventListener("click", (e) => {
     }
 
     /* Selector de ejercicios */
-    case "picker-open": ui.picker = el.dataset.ctx; ui.pickerQuery = ""; render(); break;
-    case "picker-close": ui.picker = null; render(); break; // si venía de la hoja de destacados, esa sigue abierta debajo
-    case "picker-pick": pickExercise(id); break;
+    case "picker-open": ui.picker = el.dataset.ctx; ui.pickerQuery = ""; ui.pickerGroup = null; ui.pickerSelected = []; render(); break;
+    case "picker-close": ui.picker = null; ui.pickerSelected = []; render(); break; // si venía de la hoja de destacados, esa sigue abierta debajo
+    case "picker-pick":
+      if (pickerIsMulti()) { // marca / desmarca, en el orden en que se toca
+        const i = ui.pickerSelected.indexOf(id);
+        i >= 0 ? ui.pickerSelected.splice(i, 1) : ui.pickerSelected.push(id);
+        refreshPicker();
+      } else pickExercise(id);
+      break;
+    case "picker-group": ui.pickerGroup = el.dataset.group || null; refreshPicker(); break;
+    case "picker-add": {
+      const ids = ui.pickerSelected;
+      ids.forEach(addExerciseFromPicker);
+      ui.picker = null; ui.pickerQuery = ""; ui.pickerSelected = [];
+      render();
+      announce(`${ids.length} ejercicio${ids.length !== 1 ? "s" : ""} agregado${ids.length !== 1 ? "s" : ""}`);
+      break;
+    }
     case "picker-create": {
       const name = ui.pickerQuery.trim();
       if (!name) break;
       // Personalización completa: abre el modal de ejercicio precargado en vez
       // de crearlo directo. pickerCtx recuerda desde qué picker se abrió, para
       // que ex-modal-save lo agregue automáticamente ahí al guardar.
-      ui.exerciseModal = { id: null, name, group: "Custom", type: "weight", pickerCtx: ui.picker };
+      // Con un chip de grupo activo, el ejercicio nuevo parte en ese grupo.
+      // Lo ya elegido en el selector (ui.pickerSelected) se conserva.
+      ui.exerciseModal = { id: null, name, group: ui.pickerGroup || "Custom", type: "weight", pickerCtx: ui.picker };
       ui.picker = null;
       ui.pickerQuery = "";
       render();
@@ -4912,7 +4998,9 @@ document.addEventListener("click", (e) => {
       // contexto: editor, sesión, destacados o "reemplazar".
       if (m.pickerCtx) {
         ui.picker = m.pickerCtx;
-        pickExercise(exId);
+        // Selección múltiple: vuelve al selector con el nuevo ya elegido.
+        if (pickerIsMulti()) { ui.pickerSelected.push(exId); render(); }
+        else pickExercise(exId);
       } else {
         render();
       }
@@ -5024,6 +5112,23 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// Agrega un ejercicio a la rutina en edición o a la sesión activa (contextos
+// "editor" y "session" del selector). Lo usan la selección simple y la
+// múltiple ("Agregar N ejercicios", uno por uno en el orden elegido).
+function addExerciseFromPicker(id) {
+  const t = exType(id);
+  let newItem;
+  if (ui.picker === "editor" && ui.editingRoutine)
+    newItem = { exerciseId: id, targetSets: 3, targetReps: 8, targetWeight: 0, targetSeconds: t === "time" ? 30 : undefined };
+  else if (ui.picker === "session" && ui.activeSession)
+    newItem = { exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] };
+  else return;
+  // Si el selector se abrió estando en modo Organizar, agrega al BORRADOR
+  // (no al array real) — si no, quedaba fuera de lo que se ve/guarda ahí.
+  if (ui.exerciseEditMode && ui.exerciseEditDraft) ui.exerciseEditDraft.push({ ...newItem, __ord: nextDraftOrd-- });
+  else (ui.editingRoutine && ui.picker === "editor" ? ui.editingRoutine.exercises : ui.activeSession.exercises).push(newItem);
+}
+
 function pickExercise(id) {
   if (ui.picker === "featured") {
     settings.featuredExercises = settings.featuredExercises || [];
@@ -5037,21 +5142,8 @@ function pickExercise(id) {
     ui.progressDetail = id;
     ui.progressMetric = null;
     window.scrollTo(0, 0);
-  } else if (ui.picker === "editor" && ui.editingRoutine) {
-    const t = exType(id);
-    const newItem = {
-      exerciseId: id, targetSets: 3, targetReps: 8, targetWeight: 0,
-      targetSeconds: t === "time" ? 30 : undefined,
-    };
-    // Si el picker se abrió estando en modo Organizar, agrega al BORRADOR
-    // (no al array real) — si no, quedaba fuera de lo que se ve/guarda ahí.
-    if (ui.exerciseEditMode && ui.exerciseEditDraft) ui.exerciseEditDraft.push({ ...newItem, __ord: nextDraftOrd-- });
-    else ui.editingRoutine.exercises.push(newItem);
-  } else if (ui.picker === "session" && ui.activeSession) {
-    const t = exType(id);
-    const newItem = { exerciseId: id, target: null, sets: [defaultSet(t, null, null, exUnilateral(id))] };
-    if (ui.exerciseEditMode && ui.exerciseEditDraft) ui.exerciseEditDraft.push({ ...newItem, __ord: nextDraftOrd-- });
-    else ui.activeSession.exercises.push(newItem);
+  } else if (ui.picker === "editor" || ui.picker === "session") {
+    addExerciseFromPicker(id);
   } else if (ui.picker === "replace") {
     const idx = ui.replaceExerciseIdx;
     const newType = exType(id);

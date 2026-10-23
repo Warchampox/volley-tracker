@@ -839,8 +839,57 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Título de hoja con texto libre del usuario (nombre de rutina/carpeta). */
 .vt-modal-title-free { text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-modal-row .vt-muted-sm { margin-left: auto; }
-.vt-modal-add { color: var(--amber); }
+.vt-modal-add { color: var(--blue-text); } /* ámbar es solo de PR */
 .vt-dotgroup { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ------------------------- Selector de ejercicios -------------------------
+   Hoja alta: título + ✕, buscador, chips de grupo, lista por secciones y,
+   con algo elegido (session / editor), el botón "Agregar N" fijo abajo. */
+.vt-picker { height: 92vh; max-height: 92vh; }
+.vt-picker .vt-modal-head { border-bottom: none; padding-bottom: var(--sp-2); }
+.vt-picker-search { padding: 0 var(--sp-4); }
+/* Chips de grupo: fila deslizable sin barra de scroll. */
+.vt-chips {
+  flex-shrink: 0; display: flex; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4); overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+}
+.vt-chips::-webkit-scrollbar { display: none; }
+.vt-chip {
+  flex-shrink: 0; height: 32px; padding: 0 var(--sp-3);
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  background: var(--surface-2); border: none; border-radius: var(--r-full);
+  color: var(--text-dim); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.vt-chip.is-active { background: var(--text); color: var(--bg); }
+.vt-picker-list { flex: 1; padding: 0 var(--sp-4) var(--sp-4); }
+/* Encabezado de sección: label en mayúscula con una barrita del color del grupo. */
+.vt-picker-sec {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: var(--sp-4) 0 var(--sp-1);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: var(--track);
+}
+.vt-picker-sec::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--sec-color); }
+/* Fila [nombre + marca 1fr] [24px]: el círculo de selección múltiple, si aplica. */
+.vt-pick-row {
+  width: 100%; min-height: 56px; display: grid; grid-template-columns: minmax(0, 1fr) 24px; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) 0; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.vt-pick-row:active { background: var(--surface-2); }
+.vt-pick-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vt-pick-name { font-size: var(--fs-md); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-pick-row.is-in .vt-pick-name { color: var(--text-dim); }
+.vt-pick-name .vt-badge { margin-left: var(--sp-1); vertical-align: 1px; }
+.vt-pick-sub { font-size: var(--fs-sm); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-pick-sub b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.vt-pick-row .vt-select-circle { pointer-events: none; }
+.vt-pick-create {
+  width: 100%; min-height: 56px; padding: 0; border: none; background: transparent; text-align: left; cursor: pointer;
+  color: var(--blue-text); font-size: var(--fs-md); font-weight: 600;
+}
+.vt-picker-footer { flex-shrink: 0; padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
 .vt-modal-form { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
 .vt-modal-form label { font-size: var(--fs-xs); color: var(--text-dim); display: flex; flex-direction: column; gap: var(--sp-1); }
 .vt-textarea { font-size: var(--fs-sm); resize: vertical; min-height: 160px; }
