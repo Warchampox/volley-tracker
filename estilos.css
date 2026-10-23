@@ -83,7 +83,7 @@ button, input, select, textarea { font-family: var(--font); }
    en columnas): dígitos de ancho fijo para que no bailen. `.vt-num` es la
    utilidad para usar en el HTML; el resto son los componentes que antes
    iban en mono. */
-.vt-num, .vt-eyebrow, .vt-scoreboard, .vt-ss-badge, .vt-organize-count, .vt-muted-sm, .vt-lasttime,
+.vt-num, .vt-eyebrow, .vt-scoreboard, .vt-ss-badge, .vt-muted-sm, .vt-lasttime,
 .vt-folder-count, .vt-cap, .vt-settype-btn, .vt-type-picker-opt, .vt-week-day, .vt-strip-value,
 .vt-record-value, .vt-row-value, .vt-reparto-n, .vt-pills button, .vt-jumps-line b, .vt-load-line b,
 .vt-big-stat, .vt-rpe-scale button, .vt-exrow-value, .vt-hint-row b, .vt-row-input, .vt-rest-btn,
@@ -353,23 +353,28 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 .vt-mode-btn:active { color: var(--text-dim); }
 .vt-mode-primary { justify-self: end; color: var(--blue-text); }
-.vt-mode-danger { color: var(--red-text); }
 
-/* Filas: mínimo 56px, sin márgenes entre ellas (la barra de color del grupo
-   queda continua), divisor fino. */
+/* Filas [○] [texto] [⠿]: mínimo 56px, sin márgenes entre ellas (la barra
+   de color del grupo, o la morada continua de una superserie, queda
+   continua), divisor fino. */
 .vt-org-row {
   display: flex; align-items: center; gap: var(--sp-3);
-  min-height: 56px; padding: var(--sp-2) 0 var(--sp-2) var(--sp-2);
+  min-height: 56px; padding: var(--sp-2) 0 var(--sp-2) var(--sp-3);
   border-left: 3px solid var(--line); border-bottom: 1px solid var(--line);
   background: var(--bg); /* opaco: es lo que se ve mientras se arrastra */
 }
+/* Elegida: tinte azul en toda la fila (es un estado, como el tinte de serie
+   completada), en dos capas para seguir opaca. */
+.vt-org-row.is-selected { background: linear-gradient(rgba(59, 111, 224, 0.10), rgba(59, 111, 224, 0.10)), var(--bg); }
+/* Etiqueta A1/A2 de superserie: texto morado (su color reservado), sin caja. */
+.vt-org-ss { margin-right: var(--sp-2); font-size: var(--fs-xs); font-weight: 600; color: var(--superset); }
 .vt-org-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 /* Nombre en tamaño de lista (no de título de bloque). */
 .vt-org-name { font-size: var(--fs-md); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-org-sub { font-size: var(--fs-sm); color: var(--text-dim); }
 /* Manija de arrastre: solo existe en este modo. */
 .vt-drag-handle {
-  flex-shrink: 0; width: 28px; height: 28px; padding: 0;
+  flex-shrink: 0; width: 44px; height: 44px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: none;
   color: var(--text-faint);
@@ -377,7 +382,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
   touch-action: none; /* evita que el navegador scrollee mientras se arrastra desde acá */
 }
 .vt-drag-handle:active { cursor: grabbing; }
-.sortable-ghost { opacity: 0.35; }
+/* Arrastre (clases de SORTABLE_LOOK en app.js): la copia que sigue al dedo
+   se levanta (sombra, --surface-2, escala; `scale` y no transform, que lo
+   escribe SortableJS) y el hueco donde va a caer es una línea azul de 2px. */
+.vt-org-lifted { background: var(--surface-2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); scale: 1.02; }
+.vt-org-ghost { background: linear-gradient(var(--blue), var(--blue)) center / 100% 2px no-repeat transparent; border-bottom-color: transparent; }
+.vt-org-ghost > * { visibility: hidden; }
 /* Círculo de selección: vacío se tiene que leer como "tocable", no como
    deshabilitado — transparente con borde marcado; elegido, azul con ✓. */
 .vt-select-circle {
@@ -399,23 +409,31 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 .vt-organize-pulse { animation: vt-organize-pulse 180ms ease-out; }
 
-/* Barra inferior única: pegada al borde de abajo (no flota), con divisor
-   arriba y respetando el área segura. updateOrganizePad() mide su alto para
-   que la última fila no quede tapada. */
+/* Barra de herramientas del modo: fija abajo con área segura, divisor
+   arriba, 3 botones iguales (ícono 22px arriba, texto abajo). Siempre los
+   mismos: los que no aplican quedan visibles y desactivados, en tinta
+   terciaria. updateOrganizePad() mide su alto para que la última fila no
+   quede tapada. */
 .vt-organize-footer-wrap {
   position: fixed;
   left: 50%; transform: translateX(-50%);
   bottom: 0;
   width: 100%; max-width: 480px;
   z-index: 45;
-  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
-  min-height: 64px;
-  padding: var(--sp-2) var(--sp-4) calc(var(--sp-2) + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  padding: 0 var(--sp-2) env(safe-area-inset-bottom);
   background: var(--surface); border-top: 1px solid var(--line);
 }
-.vt-org-guide { flex: 1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
-.vt-organize-count { font-size: var(--fs-sm); color: var(--text-dim); white-space: nowrap; }
-.vt-organize-actions { display: flex; flex-shrink: 0; gap: var(--sp-4); }
+.vt-tool {
+  min-height: 56px; padding: var(--sp-2) 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-1);
+  background: transparent; border: none; color: var(--text); cursor: pointer;
+  font-size: var(--fs-xs); font-weight: 500;
+}
+.vt-tool:active:not(:disabled) { background: var(--surface-2); }
+.vt-tool-danger { color: var(--red-text); }
+.vt-tool-superset { color: var(--superset); }
+.vt-tool:disabled { color: var(--text-faint); cursor: default; }
 
 /* ------------------- Ejercicio colapsado (sesión activa) ----------------- */
 .vt-collapsed-row {

@@ -1418,3 +1418,19 @@ Entradas nuevas al final. No reescribir lo anterior.
   campos, botones, check, nº de serie y cronómetro; vibración de 15 ms al
   entrar. Verificado en sesión y editor: Última vez, encabezados, "×" de
   la fila y espacios entran; check e input no; un swipe borra sin entrar.
+
+## 2026-10-23 cont. — Selección y Organizar, Fase 2 de 3: rediseño de Organizar
+- Fila `[○] [nombre + resumen] [⠿]` (asa de 44px a la derecha), fila elegida
+  con tinte azul, resumen real de series (`organizeSummary`: "4 × 6 · 65 kg",
+  "3 × 6 reps", "3 × 8/8 · 20 kg", "…" si difieren; sin calentamientos).
+  Encabezado: guía sin selección o "N elegidos". Superseries: barra morada
+  continua + "A1" morado; elegir una superserie cambia Superserie → Separar
+  (`ungroupSuperset`).
+- Barra de herramientas fija con Eliminar / Superserie / Reemplazar, siempre
+  visibles; los que no aplican quedan `disabled` en `--text-faint` (manda el
+  pedido de tipografía sobre la opacidad 0.3). Arrastre: copia levantada con
+  sombra y escala, hueco como línea azul, vibración de 10 ms al soltar.
+- Verificado a 390 y 360 px: elegir, eliminar, superserie, separar,
+  reemplazar, cancelar, guardar y arrastrar. Nota: en este navegador
+  SortableJS termina con mouseup/touchend (no pointerup); en el teléfono no
+  cambia nada.

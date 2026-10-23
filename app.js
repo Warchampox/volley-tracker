@@ -303,6 +303,7 @@ const PATHS = {
   playFill: '<polygon points="8 5 19 12 8 19 8 5" fill="currentColor"/>',
   timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  unlink: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="2" y1="2" x2="22" y2="22"/>',
 };
 
 // Une partes de una línea de datos con el separador "·" en tinta terciaria.
@@ -502,34 +503,75 @@ function enterOrganizeMode(preselectIdx) {
 // Fila compacta del modo Organizar: manija + nombre y cantidad de series +
 // círculo de selección. Sin márgenes entre filas, así la barra de color del
 // grupo (o el morado de la superserie) queda continua.
+// Resumen de las series de un ítem para el modo Organizar: "3 × 20 · 10 kg",
+// "3 × 1:00", "3 × 10 reps · +10 kg", "3 × 8/8 · 20 kg". En sesión mira sus
+// series (sin las de calentamiento, si hay otras); en el editor, el objetivo.
+// Si las series no son todas iguales muestra la primera y agrega "…".
+function organizeSummary(item, ex) {
+  const type = ex?.type || "weight", uni = !!ex?.unilateral;
+  let sets;
+  if (item.sets) {
+    const eff = item.sets.filter((st) => getSetType(st) !== "warmup");
+    sets = eff.length ? eff : item.sets;
+  } else {
+    const n = Math.max(1, Math.round(num(item.targetSets)) || 3);
+    const pct = type !== "time" && item.loadMode === "percent";
+    sets = Array.from({ length: n }, () => ({ reps: item.targetReps, repsL: item.targetReps, repsR: item.targetReps,
+      seconds: item.targetSeconds, weight: pct ? null : item.targetWeight, pct: pct ? num(item.targetPercent ?? 70) : null }));
+  }
+  if (!sets.length) return "Sin series";
+  const one = (st) => {
+    const w = num(st.weight);
+    const load = st.pct ? `${st.pct}%1RM` : w > 0 ? `${type === "weight" ? "" : "+"}${fmtNum(w)} kg` : "";
+    const base = type === "time" ? fmtClockInput(num(st.seconds))
+      : uni ? `${repsL(st)}/${repsR(st)}`
+      : type === "bodyweight" ? `${num(st.reps)} reps` : String(num(st.reps));
+    return load ? `${base} · ${load}` : base;
+  };
+  const all = sets.map(one);
+  return `${sets.length} × ${all[0]}${all.every((x) => x === all[0]) ? "" : "…"}`;
+}
+
+// Fila del modo Organizar: [○ selección] [nombre + resumen] [⠿ arrastrar].
+// El asa va a la derecha, donde llega el pulgar. Sin márgenes entre filas:
+// la barra de color del grupo (o la morada de la superserie) queda continua.
 function exerciseOrganizeRowHTML(idx, ex, lbl, item) {
   const selected = ui.selectedExercises.has(idx);
   const pulse = idx === justEnteredOrganizeIdx;
-  // En sesión son las series que hay; en el editor, las series objetivo.
-  const n = item.sets ? item.sets.length : Math.max(1, Math.round(num(item.targetSets)) || 3);
-  return `<div class="vt-org-row ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
-    <button type="button" class="vt-drag-handle" aria-label="Reordenar ejercicio">${icon("grip", 16)}</button>
-    <span class="vt-org-text">
-      <span class="vt-org-name">${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
-      <span class="vt-org-sub">${n} serie${n !== 1 ? "s" : ""}</span>
-    </span>
+  return `<div class="vt-org-row ${selected ? "is-selected" : ""} ${pulse ? "vt-organize-pulse" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}">
     <button type="button" class="vt-select-circle ${selected ? "is-on" : ""}" data-a="exercise-select-toggle" data-idx="${idx}" aria-label="Seleccionar ${esc(ex?.name || "ejercicio")}" aria-pressed="${selected}"></button>
+    <span class="vt-org-text">
+      <span class="vt-org-name">${lbl ? `<span class="vt-org-ss vt-num">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</span>
+      <span class="vt-org-sub vt-num">${esc(organizeSummary(item, ex))}</span>
+    </span>
+    <button type="button" class="vt-drag-handle" aria-label="Reordenar ${esc(ex?.name || "ejercicio")}">${icon("grip", 18)}</button>
   </div>`;
 }
 
-// Barra inferior ÚNICA del modo Organizar, pegada al borde de abajo (la nav
-// se oculta mientras el modo está activo): una guía si no hay nada elegido,
-// o la cuenta + las acciones sobre la selección.
+// ¿Lo elegido es (parte de) UNA misma superserie? Entonces el botón de la
+// barra dice "Separar" en vez de "Superserie".
+function selectionIsOneSuperset() {
+  const sel = [...ui.selectedExercises];
+  if (!sel.length) return false;
+  const labels = computeSupersetLabels(ui.exerciseEditDraft);
+  return sel.every((i) => labels[i] && labels[i].letter === labels[sel[0]].letter);
+}
+
+// Barra de herramientas del modo Organizar: fija abajo, SIEMPRE con los
+// mismos 3 botones (ícono + texto). Los que no aplican a la selección
+// quedan visibles pero desactivados, así la barra no cambia de forma.
 function organizeFooterHTML() {
   const n = ui.selectedExercises.size;
-  return `<div class="vt-organize-footer-wrap">${n === 0
-    ? `<p class="vt-org-guide">Elige ejercicios para eliminar, agrupar en superserie o reemplazar</p>`
-    : `<span class="vt-organize-count">${n} elegido${n !== 1 ? "s" : ""}</span>
-      <div class="vt-organize-actions">
-        <button class="vt-mode-btn vt-mode-danger" data-a="organize-delete">Eliminar</button>
-        ${n >= 2 ? `<button class="vt-mode-btn" data-a="organize-group">Agrupar</button>` : ""}
-        ${n === 1 ? `<button class="vt-mode-btn" data-a="organize-replace">Reemplazar</button>` : ""}
-      </div>`}</div>`;
+  const split = selectionIsOneSuperset();
+  const tool = (a, ic, label, cls, enabled) =>
+    `<button class="vt-tool ${cls}" data-a="${a}" ${enabled ? "" : "disabled"}>${icon(ic, 22)}<span>${label}</span></button>`;
+  return `<div class="vt-organize-footer-wrap">
+    ${tool("organize-delete", "trash", "Eliminar", "vt-tool-danger", n >= 1)}
+    ${split
+      ? tool("organize-ungroup", "unlink", "Separar", "vt-tool-superset", true)
+      : tool("organize-group", "link", "Superserie", "vt-tool-superset", n >= 2)}
+    ${tool("organize-replace", "repeat", "Reemplazar", "", n === 1)}
+  </div>`;
 }
 
 // Pantalla del modo Organizar (sesión en vivo o editor de rutina). Es un
@@ -545,7 +587,9 @@ function organizeViewHTML(listId) {
   return `
     <header class="vt-mode-head">
       <button class="vt-mode-btn" data-a="exercise-editmode-cancel">Cancelar</button>
-      <div class="vt-mode-title"><p>Organizar</p><small>Arrastra ${icon("grip", 10)} · toca ○ para elegir</small></div>
+      <div class="vt-mode-title"><p>Organizar</p><small>${ui.selectedExercises.size
+        ? `${ui.selectedExercises.size} elegido${ui.selectedExercises.size !== 1 ? "s" : ""}`
+        : `Toca ○ para elegir · arrastra ${icon("grip", 10)} para mover`}</small></div>
       <button class="vt-mode-btn vt-mode-primary" data-a="exercise-editmode-save">Guardar</button>
     </header>
     <div class="vt-org-list" id="${listId}">
@@ -568,6 +612,16 @@ function groupAsSuperset(list, indices) {
   for (let k = sortedSel.length - 1; k >= 0; k--) list.splice(sortedSel[k], 1);
   list.splice(insertAt, 0, ...items);
   items.forEach((it, k) => { it.linkPrev = k > 0; });
+}
+
+// Saca de su superserie a los índices elegidos: cada uno queda suelto, y el
+// que venía justo después de uno de ellos deja de engancharse (su anterior
+// se fue). Un grupo que queda con un solo ejercicio deja de ser superserie.
+function ungroupSuperset(list, indices) {
+  for (const i of indices) {
+    list[i].linkPrev = false;
+    if (list[i + 1]) list[i + 1].linkPrev = false;
+  }
 }
 
 function lastSetsFor(exId) {
@@ -1042,6 +1096,17 @@ function stopGhostLock() {
   document.removeEventListener("mousemove", lockGhostVerticalOnce);
 }
 
+// Aspecto del arrastre en Organizar: la fila levantada (copia que sigue al
+// dedo) lleva sombra y escala; el hueco donde va a caer es una línea azul.
+const SORTABLE_LOOK = {
+  handle: ".vt-drag-handle",
+  animation: 150,
+  ghostClass: "vt-org-ghost",     // el hueco en la lista
+  chosenClass: "vt-org-chosen",   // la fila mientras se mantiene tomada
+  dragClass: "vt-org-lifted",     // la copia que sigue al dedo
+  fallbackClass: "vt-org-lifted",
+};
+
 function mountSortables() {
   if (sortableEditor) { sortableEditor.destroy(); sortableEditor = null; }
   if (sortableSession) { sortableSession.destroy(); sortableSession = null; }
@@ -1050,12 +1115,12 @@ function mountSortables() {
   const editorList = document.getElementById("editor-exercise-list");
   if (editorList) {
     sortableEditor = Sortable.create(editorList, {
-      handle: ".vt-drag-handle",
-      animation: 150,
+      ...SORTABLE_LOOK,
       forceFallback: true, // evita drag-and-drop nativo HTML5 (poco fiable en touch/PWA instalada)
       onStart: startGhostLock,
       onEnd: (evt) => {
         stopGhostLock();
+        if (settings.vibrate) navigator.vibrate?.(10); // confirma que se soltó
         if (pinchCancelledDrag) { pinchCancelledDrag = false; render(); return; } // cortado por un pellizco: vuelve al orden de antes
         if (evt.oldIndex === evt.newIndex) return;
         // La manija (y por lo tanto el drag) solo existe en modo Organizar —
@@ -1070,12 +1135,12 @@ function mountSortables() {
   const sessionList = document.getElementById("session-exercise-list");
   if (sessionList) {
     sortableSession = Sortable.create(sessionList, {
-      handle: ".vt-drag-handle",
-      animation: 150,
+      ...SORTABLE_LOOK,
       forceFallback: true,
       onStart: startGhostLock,
       onEnd: (evt) => {
         stopGhostLock();
+        if (settings.vibrate) navigator.vibrate?.(10); // confirma que se soltó
         if (pinchCancelledDrag) { pinchCancelledDrag = false; render(); return; }
         if (evt.oldIndex === evt.newIndex) return;
         const [moved] = ui.exerciseEditDraft.splice(evt.oldIndex, 1);
@@ -4372,6 +4437,12 @@ document.addEventListener("click", (e) => {
     }
     case "organize-group": {
       groupAsSuperset(ui.exerciseEditDraft, [...ui.selectedExercises]);
+      ui.selectedExercises.clear();
+      render();
+      break;
+    }
+    case "organize-ungroup": {
+      ungroupSuperset(ui.exerciseEditDraft, [...ui.selectedExercises]);
       ui.selectedExercises.clear();
       render();
       break;
