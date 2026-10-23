@@ -225,11 +225,42 @@ Patrones (reutilizar, no inventar variantes):
 - Fin del descanso: bocina de marcador sintetizada (`beep()`), un solo
   toque, sin cuenta regresiva. La barra tiene −15 s / +15 s.
 - Encabezado de modo (`.vt-mode-head`, hoy solo Organizar): un modo
-  modal reemplaza el encabezado normal por Cancelar · Organizar + guía ·
-  Guardar, oculta la nav y las barras flotantes, y usa UNA barra
-  inferior pegada al borde (`organizeViewHTML`, `organizeFooterHTML`).
-  Se entra por el ⋯ del encabezado (sesión en vivo o editor) o
-  manteniendo presionado el nombre de un ejercicio.
+  modal reemplaza el encabezado normal por Cancelar · Organizar + guía
+  (o "N elegidos") · Guardar, oculta la nav y las barras flotantes, y usa
+  UNA barra de herramientas pegada abajo (`organizeViewHTML`,
+  `organizeFooterHTML`). Se entra por el ⋯ del encabezado (sesión en vivo
+  o editor) o manteniendo presionado CUALQUIER punto del bloque de un
+  ejercicio (salvo campos, botones, check, nº de serie y cronómetro; el
+  movimiento de más de 10 px lo cancela, así no compite con el swipe ni
+  con el scroll), con una vibración de 15 ms al entrar.
+- Barra de herramientas de modo (`.vt-tool`): fija abajo con área segura,
+  fondo `--surface`, divisor arriba, botones iguales de 56px (ícono 22px
+  arriba, texto `--fs-xs` 500 abajo). SIEMPRE los mismos botones: los que
+  no aplican a la selección quedan visibles, `disabled` y en
+  `--text-faint`, para que la barra no cambie de forma. En Organizar:
+  Eliminar (`--red-text`, 1+), Superserie (`--superset`, 2+; dice Separar
+  si lo elegido ya es una superserie) y Reemplazar (exactamente 1).
+- Fila de Organizar: `[○ selección] [nombre + resumen de series] [⠿ asa]`,
+  el asa a la derecha para el pulgar. Elegida = tinte azul en toda la fila.
+  El resumen sale de `organizeSummary` ("3 × 20 · 10 kg", "3 × 1:00",
+  "3 × 10 reps · +10 kg", "3 × 8/8 · 20 kg", "…" si las series difieren).
+  Superseries: barra morada continua de 3px que une las filas y etiqueta
+  A1/A2 morada antes del nombre. Arrastre: la copia levantada lleva sombra,
+  `--surface-2` y `scale: 1.02`; el hueco es una línea azul de 2px; 10 ms
+  de vibración al soltar.
+- Selector de ejercicios (`pickerHTML`): hoja de 92vh con título por
+  contexto (Agregar / Reemplazar / Destacar ejercicio), buscador, chips de
+  grupo deslizables (Todos + grupos; activo = fondo `--text`) y lista por
+  secciones: RECIENTES (4 últimos usados que no están en la sesión o
+  rutina) y una por grupo con su barrita de color; al buscar, una sola
+  lista sin secciones. Fila: nombre 15/500 + "Mejor 53 kg · hace 4 días" /
+  "Sin marca" / "Sin registros"; si ya está en la sesión o rutina, nombre
+  en gris + etiqueta (se puede agregar igual). En "session" y "editor" se
+  eligen varios (círculo a la derecha) y "Agregar N ejercicios" los suma
+  en el orden elegido (`addExerciseFromPicker`); en "replace", "featured"
+  y "detail" tocar elige y cierra. "+ Crear "texto"" al final abre "Nuevo
+  ejercicio" con el nombre. Se redibuja por partes (`refreshPicker`) para
+  no perder el scroll ni el foco.
 - ⋯ en encabezados: las acciones secundarias de una pantalla (Organizar,
   Descartar sesión, Editar/Eliminar) viven en una hoja desde el ⋯, no
   como botones sueltos que ocupan una fila.
@@ -290,6 +321,12 @@ Patrones (reutilizar, no inventar variantes):
   como máximo, nunca toca el reloj; bajo 380px tiempo y volumen bajan a
   una segunda fila. Encabezado de ejercicio en sesión: el nombre ocupa la
   fila; descanso, nota y colapsar van en la línea de "Última vez".
+- Selección de texto: solo lo editable se selecciona. `#app` y todo lo que
+  contiene van con `user-select: none` y sin menú del sistema
+  (`-webkit-touch-callout: none`); las únicas excepciones son `input`,
+  `textarea` (incluidos "Pegar para importar" y el texto para copiar al
+  compartir) y `[contenteditable="true"]`. No agregar reglas sueltas de
+  `user-select` por componente.
 - Accesibilidad: cada control sin texto lleva `aria-label`; los que
   tienen estado, `aria-pressed` (check, píldoras, RPE) o `aria-current`
   (nav). Avisos sin mover el foco por `announce()` (región `#sr-live`,

@@ -1451,3 +1451,13 @@ Entradas nuevas al final. No reescribir lo anterior.
   (manda el pedido de tipografía sobre Barlow/mono). `.vt-modal-add` dejó
   de usar ámbar (reservado para PR). Verificado a 390 y 360 px en los 4
   contextos y creando un ejercicio desde la búsqueda.
+- Cierre de ambos pedidos: CLAUDE.md con la regla de selección de texto, el
+  long-press en todo el bloque, la barra de herramientas de modo con
+  botones desactivados visibles, las superseries en Organizar y el selector
+  con chips, secciones y selección múltiple. sw.js goat-v34 → goat-v35 (una
+  sola subida para los dos pedidos). Regresiones verificadas: swipe +
+  deshacer sin entrar a Organizar, long-press en distintas partes del
+  bloque, pellizco, Organizar completo, selector en sus 4 contextos, crear
+  desde la búsqueda y copiar el texto al compartir.
+- Pendiente en el teléfono: Roboto (el navegador de prueba muestra SF), la
+  splash sobre #000, long-press, swipe y arrastre con el dedo.
