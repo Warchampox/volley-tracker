@@ -1473,7 +1473,23 @@ input[type="file"] { display: none; }
 .vt-swipe-wrap.anim-enter { animation: vt-fade 220ms var(--ease); }
 #undo-toast { animation: vt-toast-up 240ms var(--ease) both; }
 
+/* 4 · Ejercicio completado: el bloque se cierra con FLIP (toggleBlock); la
+   fila resumida aparece después. */
+.anim-collapse .vt-collapsed-row { animation: vt-fade 220ms var(--ease) 160ms both; }
+
+/* 5 · Resumen (solo al abrirse): el número cuenta (startSummaryCount), hoy se
+   llena en "Esta semana" y los récords suben escalonados (delay inline). */
+@keyframes vt-dot-fill {
+  0% { background: transparent; border-color: var(--line); transform: scale(1); }
+  60% { background: var(--blue); border-color: var(--blue); transform: scale(1.18); }
+  100% { background: var(--blue); border-color: var(--blue); transform: scale(1); }
+}
+@keyframes vt-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.vt-week-day i.anim-fill { animation: vt-dot-fill 420ms var(--ease) 500ms both; }
+.vt-record.anim-up { animation: vt-fade-up 280ms var(--ease) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .anim-check, .anim-check .vt-check, .anim-check .vt-check polyline, .anim-check .vt-pr,
-  .vt-swipe-wrap.anim-enter, #undo-toast { animation: none !important; }
+  .vt-swipe-wrap.anim-enter, #undo-toast, .anim-collapse .vt-collapsed-row,
+  .vt-week-day i.anim-fill, .vt-record.anim-up { animation: none !important; }
 }

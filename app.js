@@ -973,7 +973,8 @@ function runAnimHooks() {
     const el = document.querySelector(`.vt-swipe-wrap[data-ex="${a.key.split(":")[0]}"][data-set="${a.key.split(":")[1]}"]`);
     if (el) animateHeight(el, 0, el.offsetHeight, 220);
   }
-  if (a.from !== undefined) { // colapsar / expandir un bloque: de su alto anterior al nuevo
+  if (a.kind === "summary") startSummaryCount();
+  if (a.from) { // colapsar / expandir un bloque: de su alto anterior al nuevo
     const el = document.querySelector(`[data-ex-block="${a.key}"]`);
     if (el) animateHeight(el, a.from, el.offsetHeight, a.ms);
   }
@@ -982,6 +983,43 @@ function runAnimHooks() {
   const clear = () => { if (ui.anim === a) ui.anim = null; };
   requestAnimationFrame(clear);
   setTimeout(clear, 100);
+}
+
+// Resumen de fin de sesión (solo al abrirse): el número héroe cuenta desde 0
+// hasta el total en 700 ms con ease-out cúbico — kilos, o los minutos si el
+// héroe es la duración. Termina en el valor real aunque no haya cuadros.
+function startSummaryCount() {
+  const el = document.getElementById("sum-hero-val"), sum = ui.sessionSummary;
+  if (!el || !sum || reducedMotion()) return;
+  const hasVol = sum.volume > 0;
+  const target = hasVol ? Math.round(sum.volume) : Math.max(1, Math.round(num(sum.durationSec) / 60));
+  // Duración: "42" (min) o "1:05" (h) según el total, igual que durationParts, pero desde 0.
+  const fmt = (v) => {
+    if (hasVol) return Math.round(v).toLocaleString("es-CL");
+    const m = Math.round(v);
+    return target >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}` : String(m);
+  };
+  const final = el.textContent, t0 = performance.now(), DUR = 700;
+  el.textContent = fmt(0);
+  const step = (t) => {
+    if (!el.isConnected) return;
+    const k = Math.min(1, (t - t0) / DUR);
+    el.textContent = k < 1 ? fmt(target * (1 - Math.pow(1 - k, 3))) : final;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  setTimeout(() => { if (el.isConnected) el.textContent = final; }, DUR + 200);
+}
+
+// Colapsa o expande el bloque de un ejercicio de la sesión con FLIP: de su
+// alto actual al nuevo (cerrar 320 ms, abrir 280 ms). Al cerrar, la fila
+// resumida aparece con opacidad (.anim-collapse).
+function toggleBlock(exI) {
+  const from = document.querySelector(`[data-ex-block="${exI}"]`)?.offsetHeight;
+  const closing = !ui.collapsedExercises.has(exI);
+  closing ? ui.collapsedExercises.add(exI) : ui.collapsedExercises.delete(exI);
+  ui.anim = { kind: closing ? "collapse" : "expand", key: exI, from, ms: closing ? 320 : 280 };
+  render();
 }
 
 // Borrar una serie con animación (swipe o menú de serie): la fila se desliza
@@ -1712,7 +1750,7 @@ function trainActiveHTML() {
         const accent = blockAccentColor(ex, lbl);
 
         if (ui.collapsedExercises.has(exIdx)) {
-          return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}">
+          return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""} ${isAnim("collapse", exIdx) ? "anim-collapse" : ""}" style="border-left-color:${accent}" data-ex-block="${exIdx}">
             <button type="button" class="vt-collapsed-row" data-a="ex-toggle-collapse" data-ex="${exIdx}">
               <span class="vt-collapsed-name">${esc(ex?.name || "(eliminado)")}</span>
               ${complete ? `<span class="vt-collapsed-check">${icon("check", 12)}</span>` : ""}
@@ -1723,7 +1761,7 @@ function trainActiveHTML() {
         }
 
         const last = lastSetsFor(e.exerciseId);
-        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}">
+        return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}" data-ex-block="${exIdx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
               <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h2>
@@ -3509,6 +3547,7 @@ function finishSession() {
     ui.selectedExercises.clear();
     ui.collapsedExercises.clear();
     stopRest();
+    ui.anim = { kind: "summary" }; // el resumen anima solo al abrirse
     render();
   };
 
@@ -3580,7 +3619,8 @@ function durationParts(sec) {
 
 // "Esta semana": 7 círculos de lunes a domingo, relleno azul si hubo sesión
 // ese día. La letra de hoy va en blanco.
-function weekDotsHTML() {
+// `animateToday`: el círculo de hoy se llena con un leve rebote (solo al abrir el resumen).
+function weekDotsHTML(animateToday = false) {
   const monday = mondayOf(new Date());
   const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const trained = new Set(sessions.map((s) => dayKey(new Date(s.date))));
@@ -3589,7 +3629,7 @@ function weekDotsHTML() {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     const k = dayKey(d);
-    return `<div class="vt-week-day ${k === today ? "is-today" : ""}"><span>${letter}</span><i class="${trained.has(k) ? "is-on" : ""}"></i></div>`;
+    return `<div class="vt-week-day ${k === today ? "is-today" : ""}"><span>${letter}</span><i class="${trained.has(k) ? "is-on" : ""} ${animateToday && k === today ? "anim-fill" : ""}"></i></div>`;
   }).join("")}</div>`;
 }
 
@@ -3689,8 +3729,9 @@ function sessionSummaryHTML() {
   const goats = Math.round(sum.volume / 60); // una cabra ≈ 60 kg
   if (hasVol && goats > 0) subParts.push(`como levantar <b>${goats.toLocaleString("es-CL")} cabra${goats !== 1 ? "s" : ""}</b>`);
 
-  const recordsSection = nPR === 0 ? "" : section("Récords", `<div class="vt-records">${sum.prHits.map((hit) => `
-    <div class="vt-record">
+  // Al abrirse, los récords entran escalonados (80 ms entre filas, desde 700 ms).
+  const recordsSection = nPR === 0 ? "" : section("Récords", `<div class="vt-records">${sum.prHits.map((hit, i) => `
+    <div class="vt-record ${isAnim("summary") ? "anim-up" : ""}" ${isAnim("summary") ? `style="animation-delay:${700 + 80 * i}ms"` : ""}>
       <span class="vt-pr">${icon("trophy", 16)}</span>
       <div class="vt-record-main">
         <span class="vt-record-name">${esc(hit.exerciseName)}</span>
@@ -3725,7 +3766,7 @@ function sessionSummaryHTML() {
           <p class="vt-sum-routine">${esc(sum.routineName)}</p>
         </div>
         <div class="vt-sum-hero">
-          <p class="vt-sum-hero-num">${hero.value}<small>${hero.unit}</small></p>
+          <p class="vt-sum-hero-num"><span id="sum-hero-val">${hero.value}</span><small>${hero.unit}</small></p>
           ${subParts.length ? `<p class="vt-sum-hero-sub">${subParts.join(" · ")}</p>` : ""}
         </div>
         ${statStripHTML([
@@ -3734,7 +3775,7 @@ function sessionSummaryHTML() {
           { label: "Ejercicios", value: done.length },
         ])}
         ${jumpsLineHTML(sum.jumps)}
-        ${section("Esta semana", weekDotsHTML())}
+        ${section("Esta semana", weekDotsHTML(isAnim("summary")))}
         ${recordsSection}
         ${doneSection}
         ${section("Reparto", repartoHTML(groupSetCounts(done)))}
@@ -4886,12 +4927,7 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "ex-toggle-collapse": {
-      const exI = +el.dataset.ex;
-      ui.collapsedExercises.has(exI) ? ui.collapsedExercises.delete(exI) : ui.collapsedExercises.add(exI);
-      render();
-      break;
-    }
+    case "ex-toggle-collapse": toggleBlock(+el.dataset.ex); break;
     case "set-add": {
       const ex = ui.activeSession.exercises[+el.dataset.ex];
       const t = exType(ex.exerciseId);
@@ -4922,10 +4958,17 @@ document.addEventListener("click", (e) => {
         const pr = prFlags(exType(ex.exerciseId), ex.sets, priorStats(ex.exerciseId), exUnilateral(ex.exerciseId))[setI];
         if (settings.vibrate) navigator.vibrate?.(pr ? [12, 60, 24] : 12);
       }
-      // Colapso automático solo cuando este click deja el ejercicio recién
-      // completo — si lo rompe, no se fuerza a expandir de vuelta.
-      if (!wasComplete && isExerciseComplete(ex)) ui.collapsedExercises.add(exI);
       render();
+      // Colapso automático solo cuando este click deja el ejercicio recién
+      // completo — si lo rompe, no se fuerza a expandir de vuelta. Espera
+      // 350 ms para que se vea el check y se cierra con animación.
+      if (!wasComplete && isExerciseComplete(ex)) {
+        const sid = ui.activeSession.id;
+        setTimeout(() => {
+          if (ui.activeSession?.id === sid && ui.activeSession.exercises[exI] === ex && isExerciseComplete(ex)
+            && !ui.collapsedExercises.has(exI) && !ui.exerciseEditMode) toggleBlock(exI);
+        }, reducedMotion() ? 0 : 350);
+      }
       break;
     }
     case "set-timer": {

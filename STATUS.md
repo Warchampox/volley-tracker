@@ -1525,3 +1525,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   vuelve a entrar como fila nueva.
 - Verificado (390px): las animaciones corren una vez y no se repiten al
   escribir ni al redibujar; swipe y deshacer.
+
+## 2026-10-24 cont. — Animaciones, Fase 2 de 3: bloque y resumen (4 y 5)
+- Ejercicio completado: espera 350 ms y el bloque se cierra con FLIP
+  (`toggleBlock`, 320 ms) hasta la fila resumida, que aparece con opacidad
+  (220 ms +160). Expandir: 280 ms. Colapsar a mano: misma animación sin
+  espera. Desmarcar antes de los 350 ms cancela el colapso. Los bloques
+  llevan `data-ex-block` para medir.
+- Resumen (solo al abrirse, `ui.anim = {kind: "summary"}`): el número héroe
+  cuenta desde 0 en 700 ms con ease-out cúbico (kilos en es-CL, o la
+  duración en min / h:mm), el círculo de hoy se llena con rebote (420 ms
+  +500) y los récords suben escalonados (280 ms, desde 700 ms cada 80 ms).
+  Redibujar el resumen (elegir RPE) no repite nada. Verificado con y sin
+  volumen y en una superserie.
