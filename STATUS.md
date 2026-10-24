@@ -1509,3 +1509,19 @@ Entradas nuevas al final. No reescribir lo anterior.
   resumen, JSON exportado (rpe numérico y setType sin cambios), foco y
   Escape en los menús. Pendiente en el teléfono: menú de serie y Usar
   estos valores con el dedo.
+
+## 2026-10-24 — Animaciones, Fase 1 de 3: serie (1, 2 y 3)
+- Base: token `--ease`, `ui.anim = {kind, key}` fijado antes del render de
+  la acción (solo ese elemento lleva `.anim-*`; se limpia al cuadro
+  siguiente o a los 100 ms si la página está en segundo plano),
+  `runAnimHooks()` y el ayudante FLIP `animateHeight(el, from, to, ms)`.
+- Marcar: pop del check 220 ms, visto dibujado (180 ms +60), tinte verde y
+  borde en 240 ms, vibración 12 ms. Récord: destello ámbar 900 ms y trofeo
+  (escala .4 → 1,2 → 1 con giro, 360 ms +80), vibración [12, 60, 24]; se fue
+  el rebote viejo del trofeo, que se repetía en cada render. Agregar: la
+  fila abre su altura en 220 ms; borrar (swipe o menú): se desliza 24 px
+  desde donde quedó el dedo mientras se cierra (200 ms) y recién ahí sale
+  del modelo; el aviso de deshacer va abajo y sube en 240 ms; deshacer
+  vuelve a entrar como fila nueva.
+- Verificado (390px): las animaciones corren una vez y no se repiten al
+  escribir ni al redibujar; swipe y deshacer.

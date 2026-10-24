@@ -228,6 +228,7 @@ const ui = {
   replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
   popover: null,          // null | {kind: "last"|"set"|"actions", anchor (controlKey del botón), ...} — ver popoverHTML
+  anim: null,             // null | {kind, key}: animación de UNA acción, solo para el render que la sigue — ver "Animaciones"
 };
 
 // Reemplaza confirm() nativo por un modal propio (mismo lenguaje visual que
@@ -933,7 +934,68 @@ function render() {
   mountSortables();
   positionPopover();
   setupDialogs(dialogWasOpen, prevFocusKey);
+  runAnimHooks();
   if (ui.activeSession) persistActiveSession();
+}
+
+/* ---------------------------------- Animaciones ----------------------------------
+   render() reconstruye el DOM en cada acción: una animación atada solo a una
+   clase de estado (.is-done) se repetiría en cada render (al escribir, al
+   pasar un segundo). Por eso cada acción que anima fija `ui.anim = {kind,
+   key}` justo antes de su render; solo el elemento con esa key recibe la
+   clase .anim-* y, al cuadro siguiente, ui.anim vuelve a null. Las alturas
+   (filas que entran o salen, colapso) se animan con FLIP (animateHeight).
+   Todo respeta prefers-reduced-motion: el estado final aparece sin movimiento. */
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const isAnim = (kind, key) => ui.anim?.kind === kind && (key === undefined || ui.anim.key === key);
+
+// FLIP de altura: fija `from`, deja que el navegador lo pinte y pasa a `to`
+// con transición; al terminar limpia los estilos. Devuelve una promesa.
+function animateHeight(el, from, to, ms) {
+  return new Promise((resolve) => {
+    if (!el || reducedMotion() || from === to) { resolve(); return; }
+    const clear = () => { el.style.height = el.style.overflow = el.style.transition = ""; resolve(); };
+    el.style.overflow = "hidden";
+    el.style.height = `${from}px`;
+    void el.offsetHeight;
+    el.style.transition = `height ${ms}ms var(--ease)`;
+    el.style.height = `${to}px`;
+    setTimeout(clear, ms + 30);
+  });
+}
+
+// Lo que corre después del render que siguió a una acción animada, y suelta
+// ui.anim al cuadro siguiente para que nada se repita.
+function runAnimHooks() {
+  const a = ui.anim;
+  if (!a) return;
+  if (a.kind === "enter") { // fila de serie nueva o restaurada: abre su altura
+    const el = document.querySelector(`.vt-swipe-wrap[data-ex="${a.key.split(":")[0]}"][data-set="${a.key.split(":")[1]}"]`);
+    if (el) animateHeight(el, 0, el.offsetHeight, 220);
+  }
+  if (a.from !== undefined) { // colapsar / expandir un bloque: de su alto anterior al nuevo
+    const el = document.querySelector(`[data-ex-block="${a.key}"]`);
+    if (el) animateHeight(el, a.from, el.offsetHeight, a.ms);
+  }
+  // Al cuadro siguiente (o a los 100 ms si la página está en segundo plano y
+  // no hay cuadros), salvo que otra acción ya haya fijado una animación nueva.
+  const clear = () => { if (ui.anim === a) ui.anim = null; };
+  requestAnimationFrame(clear);
+  setTimeout(clear, 100);
+}
+
+// Borrar una serie con animación (swipe o menú de serie): la fila se desliza
+// 24 px a la izquierda desde donde la dejó el dedo mientras su altura baja a
+// 0 (200 ms); recién entonces se quita del modelo y se redibuja.
+function removeSetAnimated(exI, setI) {
+  const wrap = document.querySelector(`.vt-swipe-wrap[data-ex="${exI}"][data-set="${setI}"]`);
+  const row = wrap?.querySelector(".vt-set-row");
+  if (!wrap || reducedMotion()) { deleteSet(exI, setI); return; }
+  const dx = new DOMMatrix(getComputedStyle(row).transform).m41 || 0;
+  row.style.transition = "transform 200ms var(--ease), opacity 200ms var(--ease)";
+  row.style.transform = `translateX(${dx - 24}px)`;
+  row.style.opacity = "0";
+  animateHeight(wrap, wrap.offsetHeight, 0, 200).then(() => deleteSet(exI, setI));
 }
 
 /* ------------------------------- Diálogos accesibles ------------------------------- */
@@ -1857,9 +1919,9 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   }).join("");
 
   return `
-    <div class="vt-swipe-wrap" data-ex="${exIdx}" data-set="${setIdx}">
+    <div class="vt-swipe-wrap ${isAnim("enter", `${exIdx}:${setIdx}`) ? "anim-enter" : ""}" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""}">
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""} ${isAnim("check", `${exIdx}:${setIdx}`) ? "anim-check" : ""}">
         <button class="vt-settype-btn vt-col-num ${typeBtnClass} ${menuOpen ? "is-open" : ""}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-haspopup="dialog" aria-label="${spoken}: tipo y esfuerzo${rpe ? `, RPE ${rpe}` : ""}">${label}${rpe ? `<small>@${rpe}</small>` : ""}</button>
         ${fields}
         <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${st.done ? "Desmarcar" : "Marcar"} ${spoken.charAt(0).toLowerCase() + spoken.slice(1)}" aria-pressed="${!!st.done}">${icon("check", 15)}</button>
@@ -3199,6 +3261,10 @@ function showUndoToast(text, undo) {
   bar.setAttribute("role", "status");
   bar.innerHTML = `<span>${esc(text)}</span><button type="button">Deshacer</button>`;
   bar.querySelector("button").addEventListener("click", () => { const u = undoState?.undo; hideUndoToast(); u?.(); });
+  // Abajo, justo sobre lo que esté fijo al fondo (barras flotantes o nav).
+  const stack = document.getElementById("floating-stack"), nav = document.querySelector(".vt-nav");
+  const floor = stack?.offsetHeight ? stack.getBoundingClientRect().top : nav?.getBoundingClientRect().top ?? innerHeight;
+  bar.style.bottom = `${Math.max(16, innerHeight - floor + 12)}px`;
   document.body.appendChild(bar);
   undoToastTimer = setTimeout(hideUndoToast, 5000);
 }
@@ -3211,6 +3277,7 @@ function undoDeleteSet(d) {
   const at = Math.min(d.setI, ex.sets.length);
   ex.sets.splice(at, 0, d.set);
   if (runningTimer && runningTimer.exIdx === d.exI && runningTimer.setIdx >= at) runningTimer.setIdx++;
+  ui.anim = { kind: "enter", key: `${d.exI}:${at}` }; // vuelve a entrar como una serie nueva
   render();
   announce("Serie restaurada");
 }
@@ -4194,10 +4261,8 @@ function endSwipe() {
   rowEl.style.transition = ""; // vuelve a la transición suave definida en CSS
 
   if (Math.abs(dx) > SWIPE_MAX * 0.4) {
-    // Pasado el umbral: fade + slide de salida, luego se elimina de verdad.
-    wrapEl.classList.add("is-removing");
-    rowEl.style.transform = `translateX(-100%)`;
-    setTimeout(() => deleteSet(exI, setI), 180);
+    // Pasado el umbral: sale desde donde quedó el arrastre, luego se elimina de verdad.
+    removeSetAnimated(exI, setI);
   } else {
     wrapEl.classList.remove("is-swiping");
     rowEl.style.transform = "translateX(0)";
@@ -4831,6 +4896,7 @@ document.addEventListener("click", (e) => {
       const ex = ui.activeSession.exercises[+el.dataset.ex];
       const t = exType(ex.exerciseId);
       ex.sets.push(defaultSet(t, ex.target, ex.sets[ex.sets.length - 1], exUnilateral(ex.exerciseId)));
+      ui.anim = { kind: "enter", key: `${el.dataset.ex}:${ex.sets.length - 1}` };
       render();
       break;
     }
@@ -4849,6 +4915,12 @@ document.addEventListener("click", (e) => {
         // En superserie, solo el último ejercicio del grupo dispara el descanso.
         const lbl = computeSupersetLabels(ui.activeSession.exercises)[exI];
         if (!lbl || lbl.isLast) startRest(ex.restSeconds);
+      }
+      if (st.done) {
+        // Animación de marcar (y de récord, si la serie quedó como PR) solo en esta fila.
+        ui.anim = { kind: "check", key: `${exI}:${setI}` };
+        const pr = prFlags(exType(ex.exerciseId), ex.sets, priorStats(ex.exerciseId), exUnilateral(ex.exerciseId))[setI];
+        if (settings.vibrate) navigator.vibrate?.(pr ? [12, 60, 24] : 12);
       }
       // Colapso automático solo cuando este click deja el ejercicio recién
       // completo — si lo rompe, no se fuerza a expandir de vuelta.
@@ -4885,7 +4957,7 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "set-del": deleteSet(+el.dataset.ex, +el.dataset.set); break;
+    case "set-del": removeSetAnimated(+el.dataset.ex, +el.dataset.set); break;
     case "session-discard":
       askConfirm("¿Descartar la sesión completa? No se guardará nada.", () => {
         runningTimer = null;

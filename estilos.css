@@ -57,6 +57,9 @@
   /* Tracking: 1 */
   --track: 0.02em; /* todo lo que va en mayúscula (encabezados de columna y labels de sección) */
 
+  /* Curva ÚNICA de las animaciones (ver "Animaciones" al final del archivo). */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
   /* Valor editable sin caja (series, objetivos, 1RM, descanso): un
      subrayado tenue permanente del 60% del ancho, centrado (un input no
      puede medir su texto). Al enfocar pasa al subrayado azul de 2px. */
@@ -601,7 +604,6 @@ select.vt-input {
   pointer-events: none;
 }
 .vt-swipe-wrap.is-swiping .vt-swipe-bg { opacity: 1; }
-.vt-swipe-wrap.is-removing { transition: opacity 180ms ease; opacity: 0; }
 
 /* Filas de serie como filas de tabla: divisor fino abajo, acento izquierdo por estado. */
 .vt-set-row {
@@ -637,12 +639,8 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-x { color: var(--text-faint); font-size: var(--fs-sm); }
 
-/* Trofeo de PR: entrada con pop (scale 0.5→1) en vez de aparecer de golpe. */
-@keyframes vt-pop-in {
-  from { transform: scale(0.5); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-.vt-pr { color: var(--amber); flex-shrink: 0; display: inline-flex; animation: vt-pop-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* Trofeo de PR. Su entrada animada (solo al marcar la serie) está en "Animaciones". */
+.vt-pr { color: var(--amber); flex-shrink: 0; display: inline-flex; }
 /* Dentro de la fila de serie el trofeo NO es una columna: va absoluto, pegado
    a la izquierda del RPE, así una fila con PR no se desalinea respecto de las
    demás. --pr-right = todo lo que hay a su derecha (padding + check + RPE y
@@ -979,7 +977,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vt-row-wrap > .vt-row + p { margin-top: calc(-1 * var(--sp-2)); }
 .vt-row-name { font-size: var(--fs-md); font-weight: 500; min-width: 0; }
 .vt-row-value { font-size: var(--fs-sm); color: var(--text-dim); text-align: right; flex-shrink: 0; max-width: 58%; }
-.vt-pr-inline { margin-left: var(--sp-1); vertical-align: -1px; animation: none; }
+.vt-pr-inline { margin-left: var(--sp-1); vertical-align: -1px; }
 .vt-diff-added { color: var(--blue-text); }
 .vt-diff-removed { color: var(--red-text); }
 
@@ -1134,10 +1132,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   animation: vt-toast-fade 3.5s ease forwards;
 }
 /* "Serie eliminada · Deshacer" (showUndoToast): misma píldora que
-   #recovered-toast, con un botón de texto; dura 5 s. */
+   #recovered-toast, con un botón de texto, abajo; dura 5 s y sube al aparecer. */
 #undo-toast {
   position: fixed;
-  top: 12px; left: 50%; transform: translateX(-50%);
+  bottom: 96px; left: 50%; transform: translateX(-50%); /* bottom lo ajusta showUndoToast sobre las barras fijas */
   display: flex; align-items: center; gap: var(--sp-2);
   white-space: nowrap;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-full);
@@ -1363,7 +1361,7 @@ input[type="file"] { display: none; }
    el pulso de Organizar (aparecen directo). Los gráficos tampoco se animan
    (ver Chart.defaults.animation en app.js). */
 @media (prefers-reduced-motion: reduce) {
-  .vt-pr, .vt-organize-pulse { animation: none; }
+  .vt-organize-pulse { animation: none; }
 }
 
 /* ---------------------------------- Menú flotante ----------------------------------
@@ -1444,3 +1442,38 @@ input[type="file"] { display: none; }
 }
 .vt-rpe-grid button.is-active { background: var(--blue); }
 .vt-popover-set .vt-pop-row { margin: 0 calc(-1 * var(--sp-4)); width: calc(100% + 2 * var(--sp-4)); }
+
+/* ---------------------------------- Animaciones ----------------------------------
+   Solo las de la lista de CLAUDE.md ("Animaciones"). Las clases .anim-* las
+   pone UNA vez el render que sigue a la acción (ui.anim en app.js), así nada
+   se repite al redibujar. Todas con --ease; ninguna con "reducir movimiento". */
+
+/* 1 · Marcar una serie: el check rebota, el visto se dibuja y la fila entra
+   a su tinte verde y borde izquierdo. */
+@keyframes vt-check-pop { 0% { transform: scale(.86); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes vt-check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+/* El tinte es un degradado (no interpola): se "destapa" con una sombra
+   interior del color del fondo que se vuelve transparente. */
+@keyframes vt-row-done { from { box-shadow: inset 0 0 0 999px var(--bg); border-left-color: transparent; } to { box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0); } }
+.vt-set-row.anim-check { animation: vt-row-done 240ms var(--ease); }
+.anim-check .vt-check { animation: vt-check-pop 220ms var(--ease); }
+.anim-check .vt-check polyline { stroke-dasharray: 24; animation: vt-check-draw 180ms var(--ease) 60ms both; }
+
+/* 2 · Récord en vivo: la fila destella una vez en ámbar (de .12 a ~.32 y de
+   vuelta) y el trofeo entra con un giro leve. */
+@keyframes vt-pr-flash { 0%, 100% { box-shadow: inset 0 0 0 999px rgba(232, 163, 61, 0); } 25% { box-shadow: inset 0 0 0 999px rgba(232, 163, 61, 0.22); } }
+@keyframes vt-trophy-in { 0% { opacity: 0; transform: scale(.4) rotate(-12deg); } 60% { opacity: 1; transform: scale(1.2) rotate(4deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+.vt-set-row.anim-check.is-pr { animation: vt-pr-flash 900ms var(--ease); }
+.anim-check .vt-pr { animation: vt-trophy-in 360ms var(--ease) 80ms both; }
+
+/* 3 · Agregar y borrar series: la nueva abre su altura (animateHeight) con
+   opacidad; la borrada sale con removeSetAnimated. El aviso sube desde abajo. */
+@keyframes vt-fade { from { opacity: 0; } }
+@keyframes vt-toast-up { from { opacity: 0; transform: translate(-50%, 70px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.vt-swipe-wrap.anim-enter { animation: vt-fade 220ms var(--ease); }
+#undo-toast { animation: vt-toast-up 240ms var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-check, .anim-check .vt-check, .anim-check .vt-check polyline, .anim-check .vt-pr,
+  .vt-swipe-wrap.anim-enter, #undo-toast { animation: none !important; }
+}
