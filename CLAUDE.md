@@ -372,6 +372,43 @@ Patrones (reutilizar, no inventar variantes):
   polite). Con `prefers-reduced-motion` no hay pop del trofeo, pulso de
   Organizar ni animación de gráficos.
 
+## Animaciones (2026-10-24, no agregar otras sin pedido explícito)
+- Curva ÚNICA: token `--ease` = cubic-bezier(.2, .8, .2, 1). Solo CSS más
+  JS mínimo para disparar clases; sin librerías.
+- Regla `ui.anim`: render() reconstruye el DOM en cada acción, así que una
+  animación NUNCA se ata solo a una clase de estado (`.is-done`, `.is-pr`):
+  se repetiría al escribir o al redibujar. La acción fija
+  `ui.anim = { kind, key }` justo antes de su render(); solo el elemento
+  con esa key recibe la clase `.anim-*`, y `runAnimHooks()` suelta
+  ui.anim al cuadro siguiente (o a los 100 ms si no hay cuadros).
+- Alturas (filas que entran o salen, colapso): FLIP con
+  `animateHeight(el, from, to, ms)` (height + overflow hidden).
+- Las 7 animaciones:
+  1. Marcar serie (solo al marcar): pop del check 220 ms (.86 → 1,06 → 1),
+     visto dibujado 180 ms (+60), tinte verde y borde 240 ms, vibración 12 ms.
+  2. Récord en vivo: destello ámbar de la fila 900 ms y trofeo .4 → 1,2 → 1
+     con giro leve, 360 ms (+80); vibración [12, 60, 24].
+  3. Agregar serie: abre su altura 220 ms con opacidad. Borrar (swipe o
+     menú): se desliza 24 px desde donde quedó el dedo mientras se cierra,
+     200 ms, y recién ahí sale del modelo (`removeSetAnimated`). El aviso
+     de deshacer va abajo y sube en 240 ms; deshacer vuelve a entrar.
+  4. Ejercicio completado: espera 350 ms, el bloque se cierra con FLIP en
+     320 ms y la fila resumida aparece (220 ms, +160). Expandir: 280 ms.
+     Colapsar a mano: igual, sin espera (`toggleBlock`).
+  5. Resumen de fin de sesión (solo al abrirse): el número héroe cuenta
+     desde 0 en 700 ms con ease-out cúbico (kilos, o la duración); el
+     círculo de hoy se llena con rebote 420 ms (+500); los récords suben 8
+     px en 280 ms, escalonados 80 ms desde 700 ms.
+  6. Menú flotante: entra 140 ms desde el botón, sale en 100 ms.
+  7. Final del descanso: en los últimos 3 s el número late una vez por
+     segundo (1 → 1,08 → 1 en 150 ms); al llegar a 0 la barra destella en
+     azul 700 ms antes de ocultarse.
+- Todas respetan `prefers-reduced-motion: reduce`: el estado final aparece
+  sin movimiento (reglas en estilos.css y `reducedMotion()` en app.js).
+- No se agregan animaciones a la carga de listas o pantallas, ni confeti,
+  ni rebotes en otras partes. El rebote viejo del trofeo (`vt-pop-in`) se
+  quitó.
+
 ## Reglas de compactación
 Al compactar (automático o manual), preserva siempre:
 - Las rutas de archivo que se estén editando

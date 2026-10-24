@@ -1548,3 +1548,11 @@ Entradas nuevas al final. No reescribir lo anterior.
   nuevo) corta el destello y oculta al tiro.
 - Verificado: 3 latidos (3, 2, 1), destello y ocultamiento a los 700 ms, y
   cancelar a mitad del latido.
+- Cierre de animaciones: CLAUDE.md con la sección "Animaciones" (`--ease`,
+  regla `ui.anim`, FLIP, las 7 con sus tiempos, movimiento reducido y lo que
+  no se agrega). sw.js goat-v36 → goat-v37. Regresiones: escribir después de
+  marcar no repite el pop, el reloj no redibuja, swipe + deshacer,
+  long-press, pellizco, colapso en superserie, resumen con y sin volumen,
+  descanso cancelado a mitad del latido. Movimiento reducido: reglas CSS y
+  `reducedMotion()` comprobados; no se pudo emular en el navegador.
+  Pendiente en el teléfono: ritmo, vibraciones y "reducir movimiento".
