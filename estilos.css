@@ -1488,7 +1488,16 @@ input[type="file"] { display: none; }
 .vt-week-day i.anim-fill { animation: vt-dot-fill 420ms var(--ease) 500ms both; }
 .vt-record.anim-up { animation: vt-fade-up 280ms var(--ease) both; }
 
+/* 7 · Final del descanso: el número late en los últimos 3 s (una vez por
+   segundo, clase .is-beat de updateRestBar) y la barra destella en azul al
+   llegar a 0 (.is-ending, 700 ms antes de ocultarse). */
+@keyframes vt-rest-beat { 0% { transform: scale(1); } 15% { transform: scale(1.08); } 40% { transform: scale(1); } }
+@keyframes vt-rest-flash { 0%, 100% { background: var(--surface-2); } 30% { background: rgba(59, 111, 224, 0.35); } }
+.vt-rest-time.is-beat { animation: vt-rest-beat 1000ms var(--ease); }
+#restbar.is-ending { animation: vt-rest-flash 700ms var(--ease); }
+
 @media (prefers-reduced-motion: reduce) {
+  .vt-rest-time.is-beat, #restbar.is-ending,
   .anim-check, .anim-check .vt-check, .anim-check .vt-check polyline, .anim-check .vt-pr,
   .vt-swipe-wrap.anim-enter, #undo-toast, .anim-collapse .vt-collapsed-row,
   .vt-week-day i.anim-fill, .vt-record.anim-up { animation: none !important; }

@@ -1538,3 +1538,13 @@ Entradas nuevas al final. No reescribir lo anterior.
   +500) y los récords suben escalonados (280 ms, desde 700 ms cada 80 ms).
   Redibujar el resumen (elegir RPE) no repite nada. Verificado con y sin
   volumen y en una superserie.
+
+## 2026-10-24 cont. — Animaciones, Fase 3 de 3: final del descanso (7)
+- En los últimos 3 s el número late una vez por segundo (1 → 1,08 → 1 en
+  los primeros 150 ms): `updateRestBar` pone `.is-beat` una sola vez al
+  cambiar de segundo (`restBeatSecond`). Al llegar a 0, junto con la bocina
+  y la vibración, la barra destella en azul 700 ms (`.is-ending`,
+  `restEnding`) antes de ocultarse. −15/+15 no animan; la ✕ (o un descanso
+  nuevo) corta el destello y oculta al tiro.
+- Verificado: 3 latidos (3, 2, 1), destello y ocultamiento a los 700 ms, y
+  cancelar a mitad del latido.

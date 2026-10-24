@@ -699,8 +699,17 @@ function startRest(seconds) {
 
 function stopRest() {
   if (rest) { clearInterval(rest.timer); rest = null; }
+  clearTimeout(restEndTimer); restEnding = false; // corta también el destello final, si estaba
+  restBeatSecond = null;
   updateRestBar();
 }
+
+// Final del descanso: en los últimos 3 s el número late una vez por segundo
+// (la clase se pone UNA vez al cambiar de segundo, no en cada tick de 250 ms)
+// y, al llegar a 0, la barra destella en azul 700 ms antes de ocultarse.
+let restBeatSecond = null; // último segundo que ya latió
+let restEnding = false;    // destello final en curso (rest ya es null)
+let restEndTimer = null;
 
 // Botones −15 s / +15 s de la barra: mueven el final del descanso. Nunca
 // baja de 0 (si queda menos de 15 s, termina ya). `total` se estira si el
@@ -721,6 +730,8 @@ function tickRest() {
     beep();
     if (settings.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
     announce("Terminó el descanso");
+    restEnding = true;
+    restEndTimer = setTimeout(() => { restEnding = false; restBeatSecond = null; updateRestBar(); }, reducedMotion() ? 0 : 700);
     updateRestBar();
     return;
   }
@@ -734,11 +745,11 @@ function tickRest() {
 function updateRestBar() {
   const el = document.getElementById("restbar");
   if (!el) return;
-  if (!rest) { el.className = "is-hidden"; el.innerHTML = ""; return; }
-  const leftMs = Math.max(0, rest.ends - Date.now());
+  if (!rest && !restEnding) { el.className = "is-hidden"; el.innerHTML = ""; return; }
+  const leftMs = rest ? Math.max(0, rest.ends - Date.now()) : 0;
   const left = Math.ceil(leftMs / 1000);
-  const pct = Math.max(0, Math.min(100, (leftMs / (rest.total * 1000)) * 100));
-  el.className = "";
+  const pct = rest ? Math.max(0, Math.min(100, (leftMs / (rest.total * 1000)) * 100)) : 0;
+  el.className = restEnding ? "is-ending" : "";
   el.style.setProperty("--rest-pct", pct + "%");
   let time = el.querySelector(".vt-rest-time");
   if (!time) {
@@ -753,6 +764,12 @@ function updateRestBar() {
     time = el.querySelector(".vt-rest-time");
   }
   time.textContent = fmtClock(left);
+  if (left <= 3 && left > 0 && left !== restBeatSecond) {
+    restBeatSecond = left;
+    time.classList.remove("is-beat");
+    void time.offsetWidth; // reinicia la animación
+    time.classList.add("is-beat");
+  }
 }
 
 // Barra flotante de sesión minimizada — mismo nivel visual que #restbar
