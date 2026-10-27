@@ -2543,7 +2543,7 @@ const MUSCLE_VIEWS = typeof BODY_MAP === "undefined" ? { front: new Set(), back:
 // ejercicios sin músculos asignados (sin contar los de saltos).
 function muscleSets(sessionList) {
   const map = exMap(), out = {};
-  let unassigned = 0;
+  let unassigned = 0, counted = 0;
   for (const s of sessionList)
     for (const e of s.exercises) {
       const ex = map[e.exerciseId];
@@ -2551,10 +2551,13 @@ function muscleSets(sessionList) {
       const n = e.sets.filter((st) => st.done !== false && getSetType(st) !== "warmup").length;
       if (!n) continue;
       if (!ex.muscles) { unassigned += n; continue; }
+      counted += n;
       ex.muscles.primary.forEach((id) => { out[id] = (out[id] || 0) + n; });
       ex.muscles.secondary.forEach((id) => { out[id] = (out[id] || 0) + n * 0.5; });
     }
-  return Object.defineProperty(out, "unassigned", { value: unassigned, enumerable: false });
+  // No enumerables: `unassigned` (series sin músculos) y `counted` (series que suman al mapa).
+  Object.defineProperty(out, "unassigned", { value: unassigned, enumerable: false });
+  return Object.defineProperty(out, "counted", { value: counted, enumerable: false });
 }
 
 // Nivel 0–4 de un valor contra el máximo de su grupo: 0 = nada, si no ceil(4 × v / máx).
@@ -2590,7 +2593,7 @@ const jumpIconHTML = (size = 28) =>
 // línea de detalle), jumps ({value, level}: ícono de saltos a la derecha) e
 // interactive (tocar un músculo o los saltos muestra su detalle debajo) o
 // action (cada músculo dispara esa acción, como en la hoja de selección).
-function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interactive = false, action = null } = {}) {
+function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interactive = false, action = null, hint = "" } = {}) {
   if (typeof BODY_MAP === "undefined") return "";
   const fig = (view) => {
     const b = BODY_MAP[view];
@@ -2605,7 +2608,7 @@ function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interact
     .map(([id, v]) => `${muscleLabel(id)} ${fmtNum(v)} series`).join(", ");
   return `<div class="vt-bodymap" ${label ? `aria-label="${esc(label)}"` : ""}>
     <div class="vt-bodymap-figs">${fig("front")}${fig("back")}${jumpsHTML}</div>
-    ${interactive ? `<p class="vt-bodymap-info" aria-live="polite"></p>` : ""}
+    ${interactive ? `<p class="vt-bodymap-info ${hint ? "is-hint" : ""}" aria-live="polite" ${hint ? `data-hint="${esc(hint)}"` : ""}>${esc(hint)}</p>` : ""}
   </div>`;
 }
 
@@ -2625,29 +2628,79 @@ function sessionMusclesHTML(session, animate = false) {
   </section>`;
 }
 
-// Sección "Músculos" de Progreso (rango elegido): cuerpo de 240px, saltos
-// del rango contra el período con más saltos, lista de músculos con barra y
-// nota de las series sin músculos asignados.
-function progressMusclesHTML() {
-  const list = sessionsInRange(ui.progressRange);
+// "Músculos trabajados": PRIMERA sección de Progreso y su elemento
+// principal. Tiene su propio período (settings.musclesRange), independiente
+// de la barra Rango, que solo manda en los gráficos.
+const MUSCLE_RANGES = [{ id: "week", label: "Esta semana" }, { id: "4w", label: "4 semanas" }, { id: "3m", label: "3 meses" }];
+const DAY_MS = 86400000;
+
+// Inicio de la ventana del período `range` que termina en `end` (ms):
+// "week" = desde el lunes (igual que los puntos de Esta semana); "4w" y
+// "3m" = los últimos 28 y 91 días.
+function muscleWindowStart(range, end) {
+  if (range === "week") return mondayOf(new Date(end)).getTime();
+  return end - (range === "4w" ? 28 : 91) * DAY_MS;
+}
+
+function musclesWorkedHTML() {
+  const range = MUSCLE_RANGES.some((r) => r.id === settings.musclesRange) ? settings.musclesRange : "week";
+  const now = Date.now(), from = muscleWindowStart(range, now);
+  const inWin = (a, b) => sessions.filter((s) => { const t = new Date(s.date).getTime(); return t >= a && t <= b; });
+  const list = inWin(from, now);
   const values = muscleSets(list);
   const map = exMap();
-  const jumps = list.reduce((a, s) => a + sessionJumps(s, map), 0);
-  const unassigned = values.unassigned;
-  if (!Object.keys(values).length && !jumps && !unassigned) return "";
-  const maxBucket = Math.max(0, ...computeBuckets(ui.progressRange).map((b) => b.sessions.reduce((a, s) => a + sessionJumps(s, map), 0)));
+  const jumpsOf = (l) => l.reduce((a, s) => a + sessionJumps(s, map), 0);
+  const jumps = jumpsOf(list);
+  // Nivel de los saltos: contra el máximo de las últimas 12 ventanas del mismo
+  // largo (12 semanas, 12 bloques de 4 semanas o 12 trimestres).
+  let maxJumps = jumps;
+  for (let k = 1, end = from - 1; k < 12; k++) {
+    const a = range === "week" ? mondayOf(new Date(end)).getTime() : muscleWindowStart(range, end);
+    maxJumps = Math.max(maxJumps, jumpsOf(inWin(a, end)));
+    end = a - 1;
+  }
   const rows = Object.entries(values).sort((a, b) => b[1] - a[1]);
   const maxAll = rows[0]?.[1] || 0;
-  const shown = ui.musclesAll ? rows : rows.slice(0, 6);
-  return `<section class="vt-section">
-    <p class="vt-section-eyebrow">Músculos</p>
-    ${bodyMapHTML(muscleLevels(values), { height: 240, values, interactive: true, jumps: jumps ? { value: jumps, level: intensity(jumps, maxBucket) } : null })}
-    ${rows.length ? `<div class="vt-muscle-list">${shown.map(([id, v]) => `<div class="vt-muscle-item">
-      <span>${esc(muscleLabel(id))}</span><b>${fmtNum(v)}</b>
-      <i style="--w:${Math.round(100 * v / maxAll)}%;--c:var(--muscle-${intensity(v, maxAll)})"></i></div>`).join("")}</div>` : ""}
-    ${rows.length > 6 ? `<button class="vt-text-btn" data-a="muscles-all">${ui.musclesAll ? "Ver menos" : "Ver todos"}</button>` : ""}
-    ${unassigned ? `<button class="vt-muscle-note" data-a="tab" data-tab="ejercicios">${fmtNum(unassigned)} serie${unassigned !== 1 ? "s" : ""} de ejercicios sin músculos asignados</button>` : ""}
+  const shown = ui.musclesAll ? rows : rows.slice(0, 5);
+  const height = innerWidth < 380 ? 280 : 300;
+  return `<section class="vt-section vt-section-first vt-muscles-worked" id="muscles-worked">
+    <h2 class="vt-mw-title">Músculos trabajados</h2>
+    <p class="vt-mw-sub">${fmtNum(values.counted)} serie${values.counted !== 1 ? "s" : ""} · ${list.length} sesi${list.length !== 1 ? "ones" : "ón"}</p>
+    <div class="vt-seg" role="group" aria-label="Período del mapa">${MUSCLE_RANGES.map((r) =>
+      `<button class="${r.id === range ? "is-active" : ""}" data-a="muscles-range" data-range="${r.id}" aria-pressed="${r.id === range}">${r.label}</button>`).join("")}</div>
+    ${bodyMapHTML(muscleLevels(values), { height, values, interactive: true, hint: "Toca un músculo para ver sus series",
+      jumps: jumps ? { value: jumps, level: intensity(jumps, maxJumps) } : null })}
+    ${rows.length ? `<div class="vt-mw-list">${shown.map(([id, v]) => `<div class="vt-mw-row">
+      <span>${esc(muscleLabel(id))}</span>
+      <i style="--w:${Math.round(100 * v / maxAll)}%;--c:var(--muscle-${intensity(v, maxAll)})"></i>
+      <b>${fmtNum(v)}</b></div>`).join("")}</div>`
+      : `<p class="vt-muted vt-mw-empty">Sin series en este período</p>`}
+    ${rows.length > 5 ? `<button class="vt-mw-more" data-a="muscles-all">${ui.musclesAll ? "Ver menos" : `Ver los ${rows.length} músculos`}</button>` : ""}
+    ${values.unassigned ? `<button class="vt-muscle-note" data-a="tab" data-tab="ejercicios">${fmtNum(values.unassigned)} serie${values.unassigned !== 1 ? "s" : ""} de ejercicios sin músculos asignados</button>` : ""}
   </section>`;
+}
+
+// Cambiar el período (o "Ver los N músculos") redibuja SOLO esta sección: los
+// gráficos de abajo no se reconstruyen ni se reaniman. Los cuerpos se
+// conservan y solo cambian las clases de nivel, así el fill transiciona.
+function updateMusclesWorked() {
+  const old = document.getElementById("muscles-worked");
+  if (!old) { render(); return; }
+  const tmp = document.createElement("div");
+  tmp.innerHTML = musclesWorkedHTML();
+  const fresh = tmp.firstElementChild;
+  const oldBodies = [...old.querySelectorAll(".vt-body")];
+  fresh.querySelectorAll(".vt-body").forEach((svg, i) => {
+    const keep = oldBodies[i];
+    if (!keep) return;
+    const oldPaths = keep.querySelectorAll(".vt-body-m");
+    svg.querySelectorAll(".vt-body-m").forEach((p, j) => {
+      oldPaths[j].setAttribute("class", p.getAttribute("class"));
+      oldPaths[j].dataset.sets = p.dataset.sets;
+    });
+    svg.replaceWith(keep);
+  });
+  old.replaceWith(fresh);
 }
 
 // Tocar un músculo (o los saltos) de un mapa interactivo: resalta ese músculo
@@ -2658,6 +2711,7 @@ function pickBodyMap(el) {
   clearBodyMapPicks();
   if (!map) return;
   const info = map.querySelector(".vt-bodymap-info");
+  info.classList.remove("is-hint");
   if (el.dataset.jumps != null) {
     el.classList.add("is-picked");
     info.textContent = `${fmtNum(el.dataset.jumps)} saltos en gimnasio`;
@@ -2669,7 +2723,10 @@ function pickBodyMap(el) {
 }
 function clearBodyMapPicks() {
   document.querySelectorAll(".vt-bodymap .is-picked").forEach((p) => p.classList.remove("is-picked"));
-  document.querySelectorAll(".vt-bodymap-info").forEach((p) => { p.textContent = ""; });
+  document.querySelectorAll(".vt-bodymap-info").forEach((p) => {
+    p.textContent = p.dataset.hint || ""; // vuelve al texto de ayuda, si lo tiene
+    p.classList.toggle("is-hint", !!p.dataset.hint);
+  });
 }
 
 /* ------------------------------ "Tus ejercicios" ------------------------------ */
@@ -2903,7 +2960,8 @@ function progressHTML() {
   const reparto = groupSetCounts(sessionsInRange(ui.progressRange).flatMap((s) => s.exercises));
 
   return `${head}${toggle}
-    <section class="vt-section vt-section-first">
+    ${musclesWorkedHTML()}
+    <section class="vt-section">
       <p class="vt-section-eyebrow">Esta semana</p>
       ${weekDotsHTML()}
     </section>
@@ -2924,7 +2982,6 @@ function progressHTML() {
     </section>
     ${jumpsSectionHTML()}
     ${loadSectionHTML()}
-    ${progressMusclesHTML()}
     ${reparto.length ? `<section class="vt-section"><p class="vt-section-eyebrow">Reparto</p>${repartoHTML(reparto)}</section>` : ""}
     ${recentRecordsHTML()}
     ${yourExercisesHTML()}`;
@@ -4962,7 +5019,12 @@ document.addEventListener("click", (e) => {
       break;
     case "popover-close": closePopover(); break;
     case "bodymap-pick": pickBodyMap(el); break;
-    case "muscles-all": ui.musclesAll = !ui.musclesAll; render(); break;
+    case "muscles-all": ui.musclesAll = !ui.musclesAll; updateMusclesWorked(); break;
+    case "muscles-range":
+      settings.musclesRange = el.dataset.range;
+      persistSettings();
+      updateMusclesWorked();
+      break;
     case "credits-open": ui.creditsSheet = true; render(); break;
     case "credits-close": ui.creditsSheet = false; render(); break;
     case "last-open": openPopover(el, { kind: "last", ex: +el.dataset.ex }); break;

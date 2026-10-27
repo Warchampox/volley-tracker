@@ -1633,3 +1633,12 @@ Entradas nuevas al final. No reescribir lo anterior.
 - sw.js: la instalación pide cada archivo con `cache: "reload"`; antes podía
   guardar un app.js o estilos.css viejos desde la caché HTTP del navegador
   (pasó en el navegador de prueba).
+- Fase 2: "Músculos trabajados" pasa a ser la primera sección de Progreso,
+  con selector propio Esta semana · 4 semanas · 3 meses (`settings.musclesRange`,
+  independiente del Rango). Cambiar el período solo cambia los colores del
+  cuerpo (transición de 200 ms) sin redibujar los gráficos; borra la
+  selección. Saltos: nivel contra el máximo de las últimas 12 ventanas del
+  mismo largo. Línea de info fija de 20 px; lista de 5 + "Ver los N músculos".
+- Verificado a 360 y 390 px (cuerpo 280/300 px; cuerpo→línea 6, línea→lista
+  8), semana vacía con sesiones anteriores, barra Rango fija, y regresiones
+  de trofeo, swipe con deshacer y long-press. Falta probarlo en el teléfono.

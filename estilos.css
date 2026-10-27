@@ -1555,15 +1555,6 @@ input[type="file"] { display: none; }
 .anim-muscles .vt-body-m { animation: vt-muscle-in 400ms var(--ease) 300ms both; }
 @media (prefers-reduced-motion: reduce) { .vt-body-m { transition: none; } .anim-muscles .vt-body-m { animation: none; } }
 
-/* Progreso: lista de músculos con series y una barra fina del color de su nivel. */
-.vt-muscle-list { margin-top: var(--sp-3); border-top: 1px solid var(--line); }
-.vt-muscle-item {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-3);
-  padding: var(--sp-2) 0 var(--sp-2); border-bottom: 1px solid var(--line);
-}
-.vt-muscle-item span { font-size: var(--fs-md); }
-.vt-muscle-item b { font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; }
-.vt-muscle-item i { grid-column: 1 / -1; height: 3px; margin-top: var(--sp-1); border-radius: var(--r-full); background: linear-gradient(var(--c), var(--c)) left / var(--w) 100% no-repeat, var(--surface-2); }
 .vt-muscle-note { display: block; margin-top: var(--sp-2); padding: var(--sp-2) 0; background: none; border: none; color: var(--text-dim); font-size: var(--fs-sm); text-align: left; cursor: pointer; }
 /* Detalle de ejercicio. */
 .vt-ex-muscles { margin-bottom: var(--sp-2); }
@@ -1608,3 +1599,27 @@ input[type="file"] { display: none; }
 }
 .vt-muscle-chip button::before { content: ""; position: absolute; inset: -8px; }
 .vt-pop-row small { margin-left: var(--sp-1); font-size: var(--fs-sm); }
+
+/* "Músculos trabajados" (primera sección de Progreso): título, período
+   propio en un segmentado, cuerpo grande, línea de detalle fija y lista. */
+.vt-mw-title { margin: 0; font-size: var(--fs-xl); font-weight: 700; }
+.vt-mw-sub { margin: 2px 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.vt-seg {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; margin-bottom: var(--sp-3);
+  background: var(--surface); border-radius: calc(var(--r-sm) + 2px); /* concéntrico con las opciones */
+}
+.vt-seg button {
+  position: relative; height: 32px; border: none; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+}
+.vt-seg button::before { content: ""; position: absolute; inset: -6px 0; } /* 44px de área táctil */
+.vt-seg button.is-active { background: var(--surface-3); color: var(--text); }
+.vt-muscles-worked .vt-bodymap-info { height: 20px; min-height: 0; margin: 6px 0 var(--sp-2); line-height: 20px; color: var(--text-dim); }
+.vt-bodymap-info.is-hint { color: var(--text-faint); }
+.vt-mw-list { display: flex; flex-direction: column; }
+.vt-mw-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 36px; align-items: center; gap: var(--sp-3); min-height: 36px; }
+.vt-mw-row span { font-size: var(--fs-md); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-mw-row i { height: 6px; border-radius: 3px; background: linear-gradient(var(--c), var(--c)) left / var(--w) 100% no-repeat, var(--surface-2); }
+.vt-mw-row b { font-size: var(--fs-md); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.vt-mw-more { padding: var(--sp-2) 0; background: none; border: none; color: var(--blue-text); font-size: var(--fs-md); font-weight: 500; cursor: pointer; }
+.vt-mw-empty { margin: var(--sp-1) 0 0; }
