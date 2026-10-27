@@ -4,6 +4,13 @@
 - HTML/CSS/JS plano, sin build ni framework. 3 archivos: index.html,
   estilos.css, app.js. Librerías externas solo por CDN (ej. Chart.js,
   SortableJS), nunca npm/bundler.
+- Excepción aprobada (2026-10-27): `bodymap.js`, un cuarto archivo SOLO DE
+  DATOS (MUSCLES y BODY_MAP: trazos SVG de react-native-body-highlighter,
+  licencia MIT). Se carga con `defer` antes de app.js y está en el precache
+  de sw.js. Toda la lógica sigue en app.js. El comentario con el aviso de
+  licencia MIT de su encabezado es OBLIGATORIO: no borrarlo. Etiquetas
+  visibles: `gluteos` = "Glúteo mayor" y `abductores` = "Glúteo medio" (los
+  ids no cambian).
 - Persistencia: localStorage (routines, sessions, custom-exercises,
   settings). Sin backend. Sync entre dispositivos es manual, vía
   exportar/importar JSON — no proponer alternativas salvo pedido
@@ -23,6 +30,13 @@
   repartir desde cero.
 
 ## Datos (campos opcionales, todos viajan tal cual en el export/import)
+- `exercise.muscles = { primary: [ids], secondary: [ids] }` (ids de
+  MUSCLES; un id no puede estar en las dos listas; `cleanMuscles` al
+  importar). Sin el campo, el ejercicio no suma al mapa. Conteo
+  (`muscleSets`): cada serie hecha suma 1 a cada principal y 0,5 a cada
+  secundario; sin Calentamiento; una serie unilateral cuenta una vez; los
+  ejercicios que cuentan como saltos NO suman (la pliometría queda fuera del
+  mapa y va por el ícono de saltos).
 - `exercise.countsJumps` (boolean): si las reps del ejercicio cuentan
   como saltos. Sin definir = `true` solo para el grupo "Pliometría"
   (helper `countsJumps(ex)`); se guarda explícito solo cuando difiere
@@ -371,6 +385,31 @@ Patrones (reutilizar, no inventar variantes):
   (nav). Avisos sin mover el foco por `announce()` (región `#sr-live`,
   polite). Con `prefers-reduced-motion` no hay pop del trofeo, pulso de
   Organizar ni animación de gráficos.
+
+## Mapa muscular (2026-10-27)
+- Componente `bodyMapHTML(levels, { height, values, jumps, interactive, action })`:
+  cuerpo de frente y de espalda lado a lado (cada `path` muscular con
+  `data-muscle`). Niveles 0–4 por vista: `ceil(4 × valor / máximo)` contra
+  el músculo más trabajado de esa vista. Tokens `--muscle-0` (sin series,
+  `--surface-2`) a `--muscle-4` #7FA3F2, en el azul de marca; silueta en
+  `--surface` y bordes entre partes en `--bg`.
+- El ícono de saltos es "un músculo más": a la derecha de los cuerpos, con
+  el color de su nivel (`--text-faint` en 0), el número y "saltos". Nivel:
+  en una sesión, contra la sesión con más saltos; en Progreso, contra el
+  período con más saltos de `computeBuckets` del rango.
+- Interactivo (resumen, detalle de sesión y Progreso): tocar un músculo lo
+  resalta con borde `--text` de 2px y muestra "Cuádriceps · 14 series";
+  tocar los saltos, "312 saltos en gimnasio". Es estado de pantalla, sin
+  render().
+- Dónde aparece: resumen (anima los niveles al abrir, una vez), detalle de
+  sesión, Progreso (antes de Reparto, con lista y nota de series sin
+  músculos) y detalle de ejercicio (principales en nivel 4, secundarios en
+  2). Se eligen en el modal de ejercicio (fila "Músculos" → hoja con ciclo
+  sin marcar → principal → secundario, fichas y "Agregar por nombre").
+- `MUSCLE_HINTS` (app.js) sugiere músculos al CREAR un ejercicio mientras no
+  se toquen: gana la PRIMERA regla que calce, así que el orden importa
+  (palabras completas, plural con -s / -es, `requires` para "peso muerto").
+- Créditos en Ajustes con la licencia MIT de los dibujos.
 
 ## Animaciones (2026-10-24, no agregar otras sin pedido explícito)
 - Curva ÚNICA: token `--ease` = cubic-bezier(.2, .8, .2, 1). Solo CSS más

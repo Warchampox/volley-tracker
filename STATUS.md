@@ -1598,3 +1598,10 @@ Entradas nuevas al final. No reescribir lo anterior.
   cuerpo sin pintar), Progreso, detalles, importar un archivo de músculos
   (no toca 1RM, sesiones ni rutinas), respaldo completo con `muscles` y
   bodymap.js en el precache.
+- Cierre del mapa muscular: CLAUDE.md con la excepción de bodymap.js (solo
+  datos, aviso MIT obligatorio), el campo `muscles` y su conteo, los tokens
+  `--muscle-0` a `--muscle-4`, el ícono de saltos como un músculo más,
+  `MUSCLE_HINTS` (el orden importa) y la pliometría fuera del mapa. sw.js
+  goat-v37 → goat-v38. Pendiente: Martín importa
+  vbprep-ejercicios-musculos.json después de desplegar y prueba en su
+  teléfono si los toques sobre músculos chicos aciertan.
