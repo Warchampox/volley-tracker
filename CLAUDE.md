@@ -11,6 +11,9 @@
   licencia MIT de su encabezado es OBLIGATORIO: no borrarlo. Etiquetas
   visibles: `gluteos` = "Glúteo mayor" y `abductores` = "Glúteo medio" (los
   ids no cambian).
+- sw.js: subir `CACHE_NAME` en cada entrega. La instalación pide cada
+  archivo con `cache: "reload"` para no guardar versiones viejas desde la
+  caché HTTP del navegador; no quitarlo.
 - Persistencia: localStorage (routines, sessions, custom-exercises,
   settings). Sin backend. Sync entre dispositivos es manual, vía
   exportar/importar JSON — no proponer alternativas salvo pedido
@@ -54,6 +57,9 @@
   el banner de recordatorio en Rutinas (14 días + sesiones nuevas, o
   nunca exportado con 3+ sesiones) y el subtítulo de Ajustes.
   `settings.backupSnoozeUntil` lo pospone 7 días.
+- `settings.musclesRange` ("week" | "4w" | "3m", por defecto "week"):
+  período del mapa "Músculos trabajados" de Progreso. Independiente del
+  Rango de los gráficos; uno no toca al otro.
 - El respaldo incluye `exercise-groups` desde 2026-10-02.
 - Exportación diferenciada (`EXPORT_KINDS`, campo `kind` en el JSON):
   `full` (respaldo), `routines`, `sessions`, `exercises`. Regla de
@@ -187,6 +193,12 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
   editables, 3,6:1 sobre `--bg`).
 - Números: siempre con `fmtNum()` (coma decimal chilena) y espacio
   antes de la unidad: `52,5 kg`, nunca `52.5kg`.
+- Espacios (2026-10-27): **≥ 12px entre un ícono y un control táctil**
+  (trofeo ↔ check, ícono ↔ botón) y **≤ 4px entre un valor y su unidad**
+  ("60 s" del descanso, número → kg). Se mide con `getBoundingClientRect`
+  y no se mide a mitad de una animación. En filas de serie unilaterales y
+  de tiempo (`.vt-set-row-tight`) no cabe el trofeo al lado del número:
+  va de 12px en la esquina de arriba.
 
 Patrones (reutilizar, no inventar variantes):
 - Fila de serie tipo tabla `[nº] [valor] [×] [valor] [✓]`: check a la
@@ -300,7 +312,11 @@ Patrones (reutilizar, no inventar variantes):
   más de 2,5 h y al tocar la duración en el detalle de sesión; la
   carga sale siempre de `durationSec`.
 - Progreso tiene UN selector de rango (`.vt-range-bar`), nunca uno por
-  sección.
+  sección. La única excepción es "Músculos trabajados", que tiene su
+  propio período (control segmentado `.vt-seg`).
+- Orden de Progreso → Resumen (2026-10-27): 1) "Músculos trabajados", el
+  elemento principal; 2) Esta semana (puntos y cifras); 3) barra Rango
+  fija con sus gráficos; 4) Reparto, Récords recientes, Tus ejercicios.
 - Selectores chicos como píldoras (`.vt-pills`), pestañas internas
   subrayadas (`.vt-tabs`), botón de texto (`.vt-text-btn`) para
   acciones secundarias (también "+ Agregar serie", `.vt-add-set`),
@@ -400,16 +416,26 @@ Patrones (reutilizar, no inventar variantes):
   (magnific.com, licencia gratuita CON ATRIBUCIÓN: el crédito en Ajustes →
   Créditos es obligatorio). Va con relleno (currentColor), no con trazo. Nivel:
   en una sesión, contra la sesión con más saltos; en Progreso, contra el
-  período con más saltos de `computeBuckets` del rango.
+  máximo de las últimas 12 ventanas del mismo largo que el período elegido.
 - Interactivo (resumen, detalle de sesión y Progreso): tocar un músculo lo
   resalta con borde `--text` de 2px y muestra "Cuádriceps · 14 series";
   tocar los saltos, "312 saltos en gimnasio". Es estado de pantalla, sin
   render().
 - Dónde aparece: resumen (anima los niveles al abrir, una vez), detalle de
-  sesión, Progreso (antes de Reparto, con lista y nota de series sin
-  músculos) y detalle de ejercicio (principales en nivel 4, secundarios en
+  sesión, Progreso (primera sección, ver abajo) y detalle de ejercicio (principales en nivel 4, secundarios en
   2). Se eligen en el modal de ejercicio (fila "Músculos" → hoja con ciclo
   sin marcar → principal → secundario, fichas y "Agregar por nombre").
+- Progreso, "Músculos trabajados" (`musclesWorkedHTML`): título 20px/700,
+  "31 series · 3 sesiones", control segmentado Esta semana (lunes a hoy)
+  · 4 semanas (28 días) · 3 meses (91 días). Cuerpo de 300px (280px bajo
+  380px de ancho), línea de info SIEMPRE visible de 20px ("Toca un músculo
+  para ver sus series" en `--text-faint`), lista de 5 filas + "Ver los N
+  músculos", nota de series sin músculos. Cambiar el período usa
+  `updateMusclesWorked()`: reemplaza solo esta sección conservando los
+  `path` del cuerpo (los colores pasan con la transición de 200ms), no
+  vuelve a dibujar los gráficos y borra la selección. Período vacío:
+  cuerpo en `--muscle-0` y "Sin series en este período"; la sección solo
+  se oculta si no hay ninguna sesión.
 - `MUSCLE_HINTS` (app.js) sugiere músculos al CREAR un ejercicio mientras no
   se toquen: gana la PRIMERA regla que calce, así que el orden importa
   (palabras completas, plural con -s / -es, `requires` para "peso muerto").
