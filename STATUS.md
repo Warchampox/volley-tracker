@@ -1605,3 +1605,9 @@ Entradas nuevas al final. No reescribir lo anterior.
   goat-v37 → goat-v38. Pendiente: Martín importa
   vbprep-ejercicios-musculos.json después de desplegar y prueba en su
   teléfono si los toques sobre músculos chicos aciertan.
+- Ícono de saltos nuevo, por pedido de Martín: silueta de un jugador
+  rematando, sin pelota, sacada del .ai de "Hand drawn volleyball
+  silhouette" (Freepik / magnific.com, gratis con atribución) y convertida a
+  un camino SVG de 24×24 con relleno (`JUMP_SILHOUETTE`). Crédito con enlace
+  en Ajustes → Créditos. Se descartaron dos imágenes de bancos de pago
+  (Dreamstime y VectorStock) por licencia.

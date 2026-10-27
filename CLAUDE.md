@@ -394,7 +394,11 @@ Patrones (reutilizar, no inventar variantes):
   `--surface-2`) a `--muscle-4` #7FA3F2, en el azul de marca; silueta en
   `--surface` y bordes entre partes en `--bg`.
 - El ícono de saltos es "un músculo más": a la derecha de los cuerpos, con
-  el color de su nivel (`--text-faint` en 0), el número y "saltos". Nivel:
+  el color de su nivel (`--text-faint` en 0), el número y "saltos". El
+  dibujo es la silueta de un jugador rematando, sin pelota
+  (`JUMP_SILHOUETTE`), de "Hand drawn volleyball silhouette" de Freepik
+  (magnific.com, licencia gratuita CON ATRIBUCIÓN: el crédito en Ajustes →
+  Créditos es obligatorio). Va con relleno (currentColor), no con trazo. Nivel:
   en una sesión, contra la sesión con más saltos; en Progreso, contra el
   período con más saltos de `computeBuckets` del rango.
 - Interactivo (resumen, detalle de sesión y Progreso): tocar un músculo lo
@@ -409,7 +413,9 @@ Patrones (reutilizar, no inventar variantes):
 - `MUSCLE_HINTS` (app.js) sugiere músculos al CREAR un ejercicio mientras no
   se toquen: gana la PRIMERA regla que calce, así que el orden importa
   (palabras completas, plural con -s / -es, `requires` para "peso muerto").
-- Créditos en Ajustes con la licencia MIT de los dibujos.
+- Créditos en Ajustes: licencia MIT de los dibujos del cuerpo y atribución
+  a Freepik por la silueta de saltos. Todo recurso de terceros que se
+  agregue lleva su crédito ahí.
 
 ## Animaciones (2026-10-24, no agregar otras sin pedido explícito)
 - Curva ÚNICA: token `--ease` = cubic-bezier(.2, .8, .2, 1). Solo CSS más

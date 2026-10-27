@@ -1564,6 +1564,8 @@ input[type="file"] { display: none; }
 .vt-settings-link { width: 100%; background: none; border: none; border-bottom: 1px solid var(--line); color: var(--text); text-align: left; cursor: pointer; }
 .vt-credits { padding: var(--sp-4); font-size: var(--fs-sm); }
 .vt-credits p { margin: 0 0 var(--sp-3); }
+.vt-credits a { color: var(--blue-text); }
+.vt-credits-next { margin-top: var(--sp-4) !important; }
 .vt-credits pre { margin: 0; white-space: pre-wrap; font-family: var(--font); font-size: var(--fs-xs); color: var(--text-dim); }
 
 /* Fila "Músculos" del modal de ejercicio y hoja de selección. */
