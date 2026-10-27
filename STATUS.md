@@ -1611,3 +1611,25 @@ Entradas nuevas al final. No reescribir lo anterior.
   un camino SVG de 24×24 con relleno (`JUMP_SILHOUETTE`). Crédito con enlace
   en Ajustes → Créditos. Se descartaron dos imágenes de bancos de pago
   (Dreamstime y VectorStock) por licencia.
+
+## 2026-10-27 cont. — Espacios y mapa en Progreso, Fase 1 de 2: espacios
+- Regla: 12px como mínimo entre un ícono o indicador y un control táctil;
+  4px como máximo entre un valor y su unidad. Medido con getBoundingClientRect
+  a 360px (antes → después):
+  · trofeo de PR → check: 4 → 12 px (normal, unilateral, peso corporal);
+    trofeo → cronómetro en tiempo: 4 → 12 px (`--pr-right` con `--sp-3`).
+  · texto "100" → trofeo: normal 20 → 12 px; tiempo con +kg 100: 14 → 6 px
+    y unilateral 5 → −3 px (se montaba). En esas filas angostas
+    (`.vt-set-row-tight`) el trofeo pasa a 12px en la esquina superior, sobre
+    el número: 8px de aire vertical y 12px al control. Bajarlo a 16px no
+    alcanzaba (ya medía 16).
+  · descanso del bloque, "60" → "s": 12 → 2 px (número y "s" en una sola
+    zona táctil de 44px, `.vt-rest-field`, ancho al contenido).
+  · cumplían sin cambios: reloj → número 11, unidad → nota 16, nota →
+    colapso 20; encabezado Tiempo ↔ Volumen 16, ⋯ ↔ chevron 16, número → kg
+    4; descanso −15 s ↔ número 42, número ↔ +15 s 42, +15 s ↔ ✕ 20;
+    Organizar círculo → nombre 12, nombre → asa ≥ 25; selector texto →
+    círculo 12.
+- sw.js: la instalación pide cada archivo con `cache: "reload"`; antes podía
+  guardar un app.js o estilos.css viejos desde la caché HTTP del navegador
+  (pasó en el navegador de prueba).

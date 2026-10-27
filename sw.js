@@ -32,7 +32,10 @@ self.addEventListener("install", (e) => {
   // confirme "Recargar" en el aviso de actualización disponible.
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      // cache: "reload": cada archivo se pide a la red, nunca a la caché HTTP
+      // del navegador (GitHub Pages la deja 10 min); si no, una versión nueva
+      // podía instalarse con un app.js o estilos.css viejos.
+      .then((cache) => cache.addAll(APP_SHELL.map((url) => new Request(url, { cache: "reload" }))))
   );
 });
 

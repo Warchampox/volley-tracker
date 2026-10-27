@@ -593,8 +593,12 @@ select.vt-input {
 /* Descanso del ejercicio: ícono de reloj + valor editable + "s", sin la
    palabra "Descanso" (hacía partir en dos líneas los nombres largos). */
 .vt-rest-mini { display: inline-flex; align-items: center; gap: var(--sp-1); color: var(--text-dim); font-size: var(--fs-sm); }
+/* Número + "s" en una sola zona táctil (44px de alto): la caja del número
+   mide lo que el número (field-sizing; 3ch donde no existe), así la unidad
+   queda pegada a él, como "60 s" y no "60   s". */
+.vt-rest-field { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 var(--sp-1); cursor: text; }
 .vt-rest-mini input {
-  width: 40px; padding: var(--sp-2) 2px; text-align: center;
+  width: 3ch; field-sizing: content; min-width: 2ch; padding: var(--sp-2) 0; text-align: right;
   font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim);
   background: var(--editable-line); border: none; border-radius: 0;
 }
@@ -654,15 +658,20 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    demás. --pr-right = todo lo que hay a su derecha (padding + check + RPE y
    sus gaps); la fila de tiempo suma además el botón de cronómetro. */
 .vt-set-row {
-  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1));
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-3)); /* 12px de aire hasta el check */
 }
 .vt-set-row-time {
-  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-timer) + var(--sp-1));
+  --pr-right: calc(var(--sp-1) + var(--col-check) + var(--sp-1) + var(--col-timer) + var(--sp-3)); /* 12px hasta el cronómetro */
 }
 .vt-set-row .vt-pr {
   position: absolute; top: 0; bottom: 0; right: var(--pr-right);
   align-items: center; pointer-events: none;
 }
+/* Filas angostas (unilateral: 3 valores; tiempo: valor + lastre + cronómetro):
+   a 360px un valor de 3 cifras llega hasta donde va el trofeo. Ahí va de
+   12px en la esquina de arriba, por encima del texto, sin acercarse al check. */
+.vt-set-row-tight .vt-pr { top: 0; bottom: auto; align-items: flex-start; }
+.vt-set-row-tight .vt-pr svg { width: 12px; height: 12px; }
 
 .vt-check {
   width: var(--col-check); height: var(--col-check); flex-shrink: 0;

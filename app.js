@@ -1807,10 +1807,10 @@ function trainActiveHTML() {
               ${last ? `<button class="vt-last-btn ${ui.popover?.kind === "last" && ui.popover.ex === exIdx ? "is-open" : ""}" data-a="last-open" data-ex="${exIdx}" aria-haspopup="dialog">${icon("history", 18)} Última vez</button>` : ""}
               <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
-                  <input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
+                  <label class="vt-rest-field"><input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
                     value="${num(e.restSeconds) > 0 ? num(e.restSeconds) : ""}" placeholder="0"
                     data-i="ex-rest" data-ex="${exIdx}" aria-label="Descanso en segundos"
-                    autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"> s
+                    autocomplete="off" autocorrect="off" spellcheck="false" name="f_exrest_${exIdx}"><span aria-hidden="true">s</span></label>
                 </span>
                 <button class="vt-btn-ghost" data-a="session-note-toggle" data-ex="${exIdx}" aria-label="Nota del ejercicio" aria-expanded="${ui.openExNotes.has(exIdx)}" style="${e.sessionNote ? "color:var(--amber)" : ""}">${icon("note", 15)}</button>
                 <button class="vt-btn-ghost" data-a="ex-toggle-collapse" data-ex="${exIdx}" aria-label="Colapsar ejercicio">${icon("chevUp", 16)}</button>
@@ -1995,7 +1995,7 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   return `
     <div class="vt-swipe-wrap ${isAnim("enter", `${exIdx}:${setIdx}`) ? "anim-enter" : ""}" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""} ${isAnim("check", `${exIdx}:${setIdx}`) ? "anim-check" : ""}">
+      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${type === "time" || unilateral ? "vt-set-row-tight" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""} ${isAnim("check", `${exIdx}:${setIdx}`) ? "anim-check" : ""}">
         <button class="vt-settype-btn vt-col-num ${typeBtnClass} ${menuOpen ? "is-open" : ""}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-haspopup="dialog" aria-label="${spoken}: tipo y esfuerzo${rpe ? `, RPE ${rpe}` : ""}">${label}${rpe ? `<small>@${rpe}</small>` : ""}</button>
         ${fields}
         <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${st.done ? "Desmarcar" : "Marcar"} ${spoken.charAt(0).toLowerCase() + spoken.slice(1)}" aria-pressed="${!!st.done}">${icon("check", 15)}</button>
