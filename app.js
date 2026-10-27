@@ -309,6 +309,7 @@ const PATHS = {
   playFill: '<polygon points="8 5 19 12 8 19 8 5" fill="currentColor"/>',
   timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  jump: '<line x1="4" y1="21" x2="20" y2="21"/><line x1="12" y1="17" x2="12" y2="4"/><polyline points="7 9 12 4 17 9"/>',
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
   unlink: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="2" y1="2" x2="22" y2="22"/>',
 };
@@ -2457,6 +2458,102 @@ function fmtRelDate(iso) {
   return `hace ${y} año${y !== 1 ? "s" : ""}`;
 }
 
+/* --------------------------------- Mapa muscular --------------------------------- */
+// Dibujos en bodymap.js (solo datos: MUSCLES y BODY_MAP, trazos MIT de
+// react-native-body-highlighter). Cada ejercicio puede tener
+// `muscles: {primary: [ids], secondary: [ids]}`; si no lo tiene, no suma.
+
+const muscleLabel = (id) => (typeof MUSCLES !== "undefined" && MUSCLES.find((m) => m.id === id)?.label) || id;
+// Qué músculos se dibujan en cada vista (deltoides_ant y serrato solo de frente, deltoides_post solo de espalda…).
+const MUSCLE_VIEWS = typeof BODY_MAP === "undefined" ? { front: new Set(), back: new Set() }
+  : Object.fromEntries(["front", "back"].map((v) => [v, new Set(BODY_MAP[v].parts.filter((p) => p.m).map((p) => p.m))]));
+
+// Series por músculo de una lista de sesiones guardadas: cada serie hecha
+// (sin Calentamiento) suma 1 a cada principal y 0,5 a cada secundario. Una
+// serie unilateral cuenta una vez. Los ejercicios que cuentan como saltos
+// no suman: su carga va en el ícono de saltos. `unassigned` = series de
+// ejercicios sin músculos asignados (sin contar los de saltos).
+function muscleSets(sessionList) {
+  const map = exMap(), out = {};
+  let unassigned = 0;
+  for (const s of sessionList)
+    for (const e of s.exercises) {
+      const ex = map[e.exerciseId];
+      if (!ex || countsJumps(ex)) continue;
+      const n = e.sets.filter((st) => st.done !== false && getSetType(st) !== "warmup").length;
+      if (!n) continue;
+      if (!ex.muscles) { unassigned += n; continue; }
+      ex.muscles.primary.forEach((id) => { out[id] = (out[id] || 0) + n; });
+      ex.muscles.secondary.forEach((id) => { out[id] = (out[id] || 0) + n * 0.5; });
+    }
+  return Object.defineProperty(out, "unassigned", { value: unassigned, enumerable: false });
+}
+
+// Nivel 0–4 de un valor contra el máximo de su grupo: 0 = nada, si no ceil(4 × v / máx).
+const intensity = (v, max) => v > 0 && max > 0 ? Math.min(4, Math.ceil(4 * v / max)) : 0;
+
+// Niveles por vista: cada vista se compara con SU músculo más trabajado.
+function muscleLevels(values) {
+  return Object.fromEntries(["front", "back"].map((v) => {
+    const ids = [...MUSCLE_VIEWS[v]];
+    const max = Math.max(0, ...ids.map((id) => values[id] || 0));
+    return [v, Object.fromEntries(ids.map((id) => [id, intensity(values[id] || 0, max)]))];
+  }));
+}
+
+// Principales en nivel 4 y secundarios en nivel 2 (modal, detalle de ejercicio).
+function fixedLevels(muscles) {
+  const lv = {};
+  muscles?.secondary.forEach((id) => { lv[id] = 2; });
+  muscles?.primary.forEach((id) => { lv[id] = 4; });
+  return { front: lv, back: lv };
+}
+
+// Cuerpo de frente y de espalda, lado a lado. `levels` = {front: {id: 0–4},
+// back: {…}}. Opciones: height (px), values (series por músculo, para la
+// línea de detalle), jumps ({value, level}: ícono de saltos a la derecha) e
+// interactive (tocar un músculo o los saltos muestra su detalle debajo).
+function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interactive = false } = {}) {
+  if (typeof BODY_MAP === "undefined") return "";
+  const fig = (view) => {
+    const b = BODY_MAP[view];
+    const paths = b.parts.map((p) => !p.m ? `<path class="vt-body-sil" d="${p.d}"/>`
+      : `<path class="vt-body-m lvl-${levels[view]?.[p.m] || 0}" d="${p.d}" data-muscle="${p.m}"${interactive
+        ? ` data-a="bodymap-pick" data-sets="${values[p.m] || 0}"` : ""}/>`).join("");
+    return `<svg class="vt-body" viewBox="${b.viewBox}" style="height:${height}px" role="img" aria-label="Cuerpo de ${view === "front" ? "frente" : "espalda"}">${paths}</svg>`;
+  };
+  const jumpsHTML = !jumps ? "" : `<button class="vt-jumps lvl-${jumps.level}" ${interactive ? `data-a="bodymap-pick" data-jumps="${jumps.value}"` : "disabled"}>
+      ${icon("jump", 28)}<b>${fmtNum(jumps.value)}</b><span>saltos</span></button>`;
+  const label = Object.entries(values).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+    .map(([id, v]) => `${muscleLabel(id)} ${fmtNum(v)} series`).join(", ");
+  return `<div class="vt-bodymap" ${label ? `aria-label="${esc(label)}"` : ""}>
+    <div class="vt-bodymap-figs">${fig("front")}${fig("back")}${jumpsHTML}</div>
+    ${interactive ? `<p class="vt-bodymap-info" aria-live="polite"></p>` : ""}
+  </div>`;
+}
+
+// Tocar un músculo (o los saltos) de un mapa interactivo: resalta ese músculo
+// en todos sus cuerpos y escribe su detalle debajo. Estado de pantalla, sin
+// render(): no se guarda ni redibuja (en Progreso no reanima los gráficos).
+function pickBodyMap(el) {
+  const map = el.closest(".vt-bodymap");
+  clearBodyMapPicks();
+  if (!map) return;
+  const info = map.querySelector(".vt-bodymap-info");
+  if (el.dataset.jumps != null) {
+    el.classList.add("is-picked");
+    info.textContent = `${fmtNum(el.dataset.jumps)} saltos en gimnasio`;
+    return;
+  }
+  const id = el.dataset.muscle, n = num(el.dataset.sets);
+  map.querySelectorAll(`[data-muscle="${id}"]`).forEach((p) => p.classList.add("is-picked"));
+  info.textContent = `${muscleLabel(id)} · ${fmtNum(n)} serie${n === 1 ? "" : "s"}`;
+}
+function clearBodyMapPicks() {
+  document.querySelectorAll(".vt-bodymap .is-picked").forEach((p) => p.classList.remove("is-picked"));
+  document.querySelectorAll(".vt-bodymap-info").forEach((p) => { p.textContent = ""; });
+}
+
 /* ------------------------------ "Tus ejercicios" ------------------------------ */
 
 // Los destacados que eligió el usuario (hasta 5, los mismos del viejo panel
@@ -4144,6 +4241,20 @@ function backupReminderText() {
   return `Hace ${days} días que no respaldas tus datos`;
 }
 
+// Músculos de un ejercicio (`muscles: {primary, secondary}`, opcional): solo
+// ids de MUSCLES, sin repetir y sin el mismo id en las dos listas (gana
+// principal). Sin ninguno válido, el campo se quita. Lo usa la importación.
+function cleanMuscles(ex) {
+  if (!ex || ex.muscles == null) return ex;
+  const valid = new Set(typeof MUSCLES !== "undefined" ? MUSCLES.map((m) => m.id) : []);
+  const pick = (list, skip) => [...new Set(Array.isArray(list) ? list : [])].filter((id) => valid.has(id) && !skip.has(id));
+  const primary = pick(ex.muscles.primary, new Set());
+  const secondary = pick(ex.muscles.secondary, new Set(primary));
+  if (primary.length || secondary.length) ex.muscles = { primary, secondary };
+  else delete ex.muscles;
+  return ex;
+}
+
 // RPE al importar: solo enteros de 1 a 10 (por serie y de sesión). Un valor
 // con decimal se baja al entero (7,5 → 7); uno fuera de rango o que no es
 // número se descarta. Lo que ya está guardado en el dispositivo no se toca.
@@ -4165,6 +4276,7 @@ function processImportedData(data) {
   // archivos de antes de que existiera `kind` son todos completos).
   const isFull = Array.isArray(data.sessions) && (!data.kind || data.kind === "full");
   if (Array.isArray(data.sessions)) cleanImportedRpe(data.sessions);
+  if (Array.isArray(inExercises)) inExercises.forEach(cleanMuscles);
 
   if (isFull) {
     askConfirm("Este archivo es un respaldo completo: trae también entrenamientos y 1RM. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
@@ -4577,6 +4689,8 @@ document.addEventListener("click", (e) => {
   // que lo soltó no debe además ejecutar la acción normal del elemento
   // (ej. el toggle de colapsar de una fila colapsada) — ver long-press más abajo.
   if (Date.now() < suppressClickUntil) return;
+  // Tocar fuera de un músculo o de los saltos limpia el detalle del mapa muscular.
+  if (!e.target.closest?.('[data-a="bodymap-pick"]') && document.querySelector(".vt-bodymap .is-picked")) clearBodyMapPicks();
   const el = e.target.closest("[data-a]");
   lastClickKey = controlKey(el);
   if (!el) return;
@@ -4597,6 +4711,7 @@ document.addEventListener("click", (e) => {
       else { ui.actionSheet = { kind: el.dataset.kind, id }; render(); }
       break;
     case "popover-close": closePopover(); break;
+    case "bodymap-pick": pickBodyMap(el); break;
     case "last-open": openPopover(el, { kind: "last", ex: +el.dataset.ex }); break;
     case "last-use": useLastValues(+el.dataset.ex); break;
     case "sheet-close": render(); break;

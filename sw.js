@@ -14,6 +14,7 @@ const APP_SHELL = [
   "index.html",
   "estilos.css",
   "app.js",
+  "bodymap.js", // dibujos del mapa muscular (solo datos)
   "manifest.json",
   "icons/icon-192.png",
   "icons/icon-512.png",

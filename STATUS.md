@@ -1556,3 +1556,18 @@ Entradas nuevas al final. No reescribir lo anterior.
   descanso cancelado a mitad del latido. Movimiento reducido: reglas CSS y
   `reducedMotion()` comprobados; no se pudo emular en el navegador.
   Pendiente en el teléfono: ritmo, vibraciones y "reducir movimiento".
+
+## 2026-10-27 — Mapa muscular, Fase 1 de 3: modelo y componente
+- `bodymap.js` (solo datos, aviso MIT de react-native-body-highlighter) en
+  la raíz, cargado antes de app.js y en el precache. Por pedido de Martín,
+  `gluteos` se muestra "Glúteo mayor" y `abductores` "Glúteo medio" (ids
+  sin cambio, anotado en el encabezado).
+- Campo opcional `exercise.muscles = {primary, secondary}` (`cleanMuscles`
+  al importar: ids válidos, sin repetir, sin el mismo en las dos listas).
+  `muscleSets()`: 1 por principal y 0,5 por secundario por serie hecha, sin
+  calentamiento, sin ejercicios de saltos; cuenta aparte las series sin
+  músculos. Niveles 0–4 por vista (`muscleLevels`, `ceil(4 × v / máx)`),
+  tokens `--muscle-0` a `--muscle-4`, `bodyMapHTML()` con ícono de saltos e
+  interacción (resalta el músculo con borde de 2px y muestra "Cuádriceps ·
+  7 series", sin render()). Verificado a 360px: los dos cuerpos y el ícono
+  caben sin desbordar.
