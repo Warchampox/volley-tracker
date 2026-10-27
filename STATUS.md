@@ -1584,3 +1584,17 @@ Entradas nuevas al final. No reescribir lo anterior.
   músculos; también al crear desde el selector. Los 17 de fábrica con
   músculos; la pliometría sin. Verificado a 360px: 21 nombres de prueba con
   la regla esperada, sin sobrescribir al seguir escribiendo.
+
+## 2026-10-27 cont. — Mapa muscular, Fase 3 de 3: dónde aparece
+- Resumen: sección "Músculos" tras las stats (200px, interactiva, saltos si
+  hubo; al abrir los músculos pasan de --muscle-0 a su nivel en 400 ms +300,
+  solo una vez). Detalle de sesión: igual, sin animación. Progreso: antes de
+  "Reparto", con el rango elegido (240px), lista con barra por nivel (6 +
+  "Ver todos") y nota "N series de ejercicios sin músculos asignados" que
+  lleva a Ejercicios. Detalle de ejercicio: cuerpo de 160px con principales y
+  secundarios, o "Sin músculos asignados · Asignar" (abre el modal con la
+  hoja). Ajustes: "Créditos" con la licencia MIT de los dibujos.
+- Verificado a 360px: resumen con volumen y solo pliometría (ícono de saltos,
+  cuerpo sin pintar), Progreso, detalles, importar un archivo de músculos
+  (no toca 1RM, sesiones ni rutinas), respaldo completo con `muscles` y
+  bodymap.js en el precache.

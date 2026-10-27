@@ -1541,7 +1541,30 @@ input[type="file"] { display: none; }
 .vt-jumps b { font-size: var(--fs-sm); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .vt-jumps span { font-size: var(--fs-xs); color: var(--text-dim); }
 .vt-bodymap-info { min-height: 20px; margin: var(--sp-2) 0 0; text-align: center; font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
-@media (prefers-reduced-motion: reduce) { .vt-body-m { transition: none; } }
+/* Al abrir el resumen (ui.anim summary): los músculos pasan de --muscle-0 a su nivel. */
+@keyframes vt-muscle-in { from { fill: var(--muscle-0); } }
+.anim-muscles .vt-body-m { animation: vt-muscle-in 400ms var(--ease) 300ms both; }
+@media (prefers-reduced-motion: reduce) { .vt-body-m { transition: none; } .anim-muscles .vt-body-m { animation: none; } }
+
+/* Progreso: lista de músculos con series y una barra fina del color de su nivel. */
+.vt-muscle-list { margin-top: var(--sp-3); border-top: 1px solid var(--line); }
+.vt-muscle-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-3);
+  padding: var(--sp-2) 0 var(--sp-2); border-bottom: 1px solid var(--line);
+}
+.vt-muscle-item span { font-size: var(--fs-md); }
+.vt-muscle-item b { font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vt-muscle-item i { grid-column: 1 / -1; height: 3px; margin-top: var(--sp-1); border-radius: var(--r-full); background: linear-gradient(var(--c), var(--c)) left / var(--w) 100% no-repeat, var(--surface-2); }
+.vt-muscle-note { display: block; margin-top: var(--sp-2); padding: var(--sp-2) 0; background: none; border: none; color: var(--text-dim); font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+/* Detalle de ejercicio. */
+.vt-ex-muscles { margin-bottom: var(--sp-2); }
+.vt-ex-muscles-text { text-align: center; }
+.vt-ex-muscles-text .vt-text-btn { padding: 0; }
+/* Ajustes: fila que abre una hoja, y la hoja de créditos. */
+.vt-settings-link { width: 100%; background: none; border: none; border-bottom: 1px solid var(--line); color: var(--text); text-align: left; cursor: pointer; }
+.vt-credits { padding: var(--sp-4); font-size: var(--fs-sm); }
+.vt-credits p { margin: 0 0 var(--sp-3); }
+.vt-credits pre { margin: 0; white-space: pre-wrap; font-family: var(--font); font-size: var(--fs-xs); color: var(--text-dim); }
 
 /* Fila "Músculos" del modal de ejercicio y hoja de selección. */
 .vt-modal-field { display: flex; flex-direction: column; gap: var(--sp-1); }

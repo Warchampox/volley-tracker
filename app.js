@@ -231,6 +231,8 @@ const ui = {
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
   popover: null,          // null | {kind: "last"|"set"|"actions", anchor (controlKey del botón), ...} — ver popoverHTML
   muscleSheet: false,     // hoja "Músculos" abierta sobre el modal de ejercicio
+  musclesAll: false,      // Progreso: lista de músculos completa (si no, los 6 primeros)
+  creditsSheet: false,    // hoja de créditos (Ajustes)
   anim: null,             // null | {kind, key}: animación de UNA acción, solo para el render que la sigue — ver "Animaciones"
 };
 
@@ -949,6 +951,7 @@ function render() {
     ${ui.groupModal ? groupModalHTML() : ""}
     ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}
     ${ui.shareText ? shareTextModalHTML() : ""}
+    ${ui.creditsSheet ? creditsSheetHTML() : ""}
     ${ui.popover ? popoverHTML() : ""}`;
 
   updateRestBar();
@@ -2139,6 +2142,7 @@ function sessionDetailHTML() {
       { label: "Series", value: done.reduce((a, e) => a + e.sets.length, 0) },
     ])}
     ${jumpsLineHTML(sessionJumps(s))}
+    ${sessionMusclesHTML(s)}
     <section class="vt-section">
       <p class="vt-section-eyebrow">Lo que hiciste</p>
       ${doneListHTML(done, sessionPRs()[s.id] || new Set(), true)}
@@ -2598,6 +2602,47 @@ function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interact
   </div>`;
 }
 
+// Sección "Músculos" de una sesión (resumen y detalle de sesión): cuerpo de
+// 200px interactivo y el ícono de saltos si los hubo, con su nivel contra la
+// sesión con más saltos del historial. Vacía si no suma a nada.
+// `animate`: al abrir el resumen, los músculos pasan de --muscle-0 a su nivel.
+function sessionMusclesHTML(session, animate = false) {
+  const values = muscleSets([session]);
+  const jumps = sessionJumps(session);
+  if (!Object.keys(values).length && !jumps) return "";
+  const map = exMap();
+  const maxJumps = Math.max(jumps, ...sessions.map((x) => sessionJumps(x, map)));
+  return `<section class="vt-section ${animate ? "anim-muscles" : ""}">
+    <p class="vt-section-eyebrow">Músculos</p>
+    ${bodyMapHTML(muscleLevels(values), { height: 200, values, interactive: true, jumps: jumps ? { value: jumps, level: intensity(jumps, maxJumps) } : null })}
+  </section>`;
+}
+
+// Sección "Músculos" de Progreso (rango elegido): cuerpo de 240px, saltos
+// del rango contra el período con más saltos, lista de músculos con barra y
+// nota de las series sin músculos asignados.
+function progressMusclesHTML() {
+  const list = sessionsInRange(ui.progressRange);
+  const values = muscleSets(list);
+  const map = exMap();
+  const jumps = list.reduce((a, s) => a + sessionJumps(s, map), 0);
+  const unassigned = values.unassigned;
+  if (!Object.keys(values).length && !jumps && !unassigned) return "";
+  const maxBucket = Math.max(0, ...computeBuckets(ui.progressRange).map((b) => b.sessions.reduce((a, s) => a + sessionJumps(s, map), 0)));
+  const rows = Object.entries(values).sort((a, b) => b[1] - a[1]);
+  const maxAll = rows[0]?.[1] || 0;
+  const shown = ui.musclesAll ? rows : rows.slice(0, 6);
+  return `<section class="vt-section">
+    <p class="vt-section-eyebrow">Músculos</p>
+    ${bodyMapHTML(muscleLevels(values), { height: 240, values, interactive: true, jumps: jumps ? { value: jumps, level: intensity(jumps, maxBucket) } : null })}
+    ${rows.length ? `<div class="vt-muscle-list">${shown.map(([id, v]) => `<div class="vt-muscle-item">
+      <span>${esc(muscleLabel(id))}</span><b>${fmtNum(v)}</b>
+      <i style="--w:${Math.round(100 * v / maxAll)}%;--c:var(--muscle-${intensity(v, maxAll)})"></i></div>`).join("")}</div>` : ""}
+    ${rows.length > 6 ? `<button class="vt-text-btn" data-a="muscles-all">${ui.musclesAll ? "Ver menos" : "Ver todos"}</button>` : ""}
+    ${unassigned ? `<button class="vt-muscle-note" data-a="tab" data-tab="ejercicios">${fmtNum(unassigned)} serie${unassigned !== 1 ? "s" : ""} de ejercicios sin músculos asignados</button>` : ""}
+  </section>`;
+}
+
 // Tocar un músculo (o los saltos) de un mapa interactivo: resalta ese músculo
 // en todos sus cuerpos y escribe su detalle debajo. Estado de pantalla, sin
 // render(): no se guarda ni redibuja (en Progreso no reanima los gráficos).
@@ -2733,6 +2778,17 @@ function oneRMHintHTML(ex) {
   </div>`;
 }
 
+// Músculos en el detalle de ejercicio: cuerpo de 160px con principales y
+// secundarios, o "Sin músculos asignados · Asignar" (abre el modal con la hoja).
+function exerciseMusclesHTML(ex) {
+  if (countsJumps(ex)) return `<p class="vt-muted vt-ex-muscles-text">Cuenta como saltos: no aparece en el mapa.</p>`;
+  const mu = ex.muscles;
+  if (!mu) return `<p class="vt-muted vt-ex-muscles-text">Sin músculos asignados · <button class="vt-text-btn" data-a="ex-edit" data-id="${ex.id}" data-sheet="muscles">Asignar</button></p>`;
+  const names = (ids) => ids.map(muscleLabel).join(", ");
+  return `<div class="vt-ex-muscles">${bodyMapHTML(fixedLevels(mu), { height: 160 })}
+    <p class="vt-muted vt-ex-muscles-text">${[mu.primary.length ? `Principales: ${esc(names(mu.primary))}` : "", mu.secondary.length ? `Secundarios: ${esc(names(mu.secondary))}` : ""].filter(Boolean).join(" · ")}</p></div>`;
+}
+
 // Pantalla que se abre al tocar un ejercicio — en "Tus ejercicios" de
 // Progreso o en la pestaña Ejercicios (filas y Recientes): gráfico con
 // toggle de métrica y soporte unilateral, rango, 1RM editable y compartir PR.
@@ -2776,6 +2832,7 @@ function exerciseDetailHTML() {
       </div>
       <button class="vt-more-btn" data-a="sheet-open" data-kind="exercise" data-id="${exId}" aria-label="Opciones del ejercicio">${icon("more", 20)}</button>
     </header>
+    ${exerciseMusclesHTML(ex)}
     ${!hasHistory ? `<p class="vt-muted vt-detail-empty">Sin registros todavía. Cuando lo entrenes, acá va a aparecer su gráfico.</p>` : `${strip}
     <section class="vt-section">
       <div class="vt-sec-head">
@@ -2860,6 +2917,7 @@ function progressHTML() {
     </section>
     ${jumpsSectionHTML()}
     ${loadSectionHTML()}
+    ${progressMusclesHTML()}
     ${reparto.length ? `<section class="vt-section"><p class="vt-section-eyebrow">Reparto</p>${repartoHTML(reparto)}</section>` : ""}
     ${recentRecordsHTML()}
     ${yourExercisesHTML()}`;
@@ -3054,6 +3112,11 @@ function settingsHTML() {
       <div class="vt-settings-label">Borrar datos personales<small>Entrenamientos o 1RM; no toca rutinas ni ejercicios</small></div>
       <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 24)}</button>
     </div>
+    <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Acerca de</p>
+    <button class="vt-settings-row vt-settings-link" data-a="credits-open">
+      <span class="vt-settings-label">Créditos<small>Licencias de lo que usa GOAT</small></span>
+      <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
+    </button>
     <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
     <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>
     ${storagePersisted ? "" : `<p class="vt-muted" style="text-align:center">Instala GOAT en la pantalla de inicio para que el teléfono no borre tus datos</p>`}`;
@@ -4043,6 +4106,7 @@ function sessionSummaryHTML() {
           { label: "Ejercicios", value: done.length },
         ])}
         ${jumpsLineHTML(sum.jumps)}
+        ${(() => { const ses = sessions.find((x) => x.id === sum.sessionId); return ses ? sessionMusclesHTML(ses, isAnim("summary")) : ""; })()}
         ${section("Esta semana", weekDotsHTML(isAnim("summary")))}
         ${recordsSection}
         ${doneSection}
@@ -4359,6 +4423,30 @@ function extractJSON(text) {
   // Segundo intento solo si el primero falla: algunos teclados cambian las
   // comillas rectas por tipográficas al pegar o reenviar.
   return scan(raw) ?? scan(raw.replace(/[\u201C\u201D]/g, '"'));
+}
+
+// Licencia de los dibujos del mapa muscular (bodymap.js), que la exige.
+const BODYMAP_LICENSE = `MIT License
+
+Copyright (c) 2022 ELABBASSI Hicham
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`;
+
+function creditsSheetHTML() {
+  return `
+    <div class="vt-modal-backdrop" data-a="credits-close">
+      <div class="vt-modal" data-stop="1">
+        <div class="vt-modal-head"><h2 class="vt-modal-title">Créditos</h2></div>
+        <div class="vt-modal-body vt-credits">
+          <p>Mapa muscular: <b>react-native-body-highlighter</b>, de Hicham Elabbassi, licencia MIT.</p>
+          <pre>${esc(BODYMAP_LICENSE)}</pre>
+        </div>
+      </div>
+    </div>`;
 }
 
 function shareTextModalHTML() {
@@ -4866,6 +4954,9 @@ document.addEventListener("click", (e) => {
       break;
     case "popover-close": closePopover(); break;
     case "bodymap-pick": pickBodyMap(el); break;
+    case "muscles-all": ui.musclesAll = !ui.musclesAll; render(); break;
+    case "credits-open": ui.creditsSheet = true; render(); break;
+    case "credits-close": ui.creditsSheet = false; render(); break;
     case "last-open": openPopover(el, { kind: "last", ex: +el.dataset.ex }); break;
     case "last-use": useLastValues(+el.dataset.ex); break;
     case "sheet-close": render(); break;
