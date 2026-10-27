@@ -52,27 +52,29 @@ function migrateGroupColors(groups) {
 // extra (amarillo y azul lavanda). Ninguno es un color reservado.
 const GROUP_PALETTE = [...DEFAULT_GROUPS.map((g) => g.color), "#E3C94F", "#7FA7FF"];
 
+// Catálogo de fábrica (solo instalaciones nuevas). `muscles` sigue la tabla
+// de MUSCLE_HINTS; la pliometría queda sin músculos: va por el ícono de saltos.
 const DEFAULT_EXERCISES = [
-  { id: "ex_sentadilla_trasera", name: "Sentadilla trasera", group: "Piernas", type: "weight" },
-  { id: "ex_sentadilla_frontal", name: "Sentadilla frontal", group: "Piernas", type: "weight" },
-  { id: "ex_peso_muerto_rumano", name: "Peso muerto rumano", group: "Piernas", type: "weight" },
-  { id: "ex_zancada_bulgara", name: "Zancada búlgara", group: "Piernas", type: "weight" },
-  { id: "ex_hip_thrust", name: "Hip thrust", group: "Piernas", type: "weight" },
-  { id: "ex_prensa", name: "Prensa", group: "Piernas", type: "weight" },
+  { id: "ex_sentadilla_trasera", name: "Sentadilla trasera", group: "Piernas", type: "weight", muscles: { primary: ["cuadriceps", "gluteos"], secondary: ["aductores"] } },
+  { id: "ex_sentadilla_frontal", name: "Sentadilla frontal", group: "Piernas", type: "weight", muscles: { primary: ["cuadriceps"], secondary: ["gluteos", "aductores", "abdominales"] } },
+  { id: "ex_peso_muerto_rumano", name: "Peso muerto rumano", group: "Piernas", type: "weight", muscles: { primary: ["isquios", "gluteos"], secondary: ["lumbar"] } },
+  { id: "ex_zancada_bulgara", name: "Zancada búlgara", group: "Piernas", type: "weight", muscles: { primary: ["cuadriceps", "gluteos"], secondary: ["aductores"] } },
+  { id: "ex_hip_thrust", name: "Hip thrust", group: "Piernas", type: "weight", muscles: { primary: ["gluteos"], secondary: ["isquios"] } },
+  { id: "ex_prensa", name: "Prensa", group: "Piernas", type: "weight", muscles: { primary: ["cuadriceps", "gluteos"], secondary: ["aductores"] } },
   { id: "ex_salto_cajon", name: "Salto al cajón", group: "Pliometría", type: "bodyweight" },
   { id: "ex_salto_contramov", name: "Salto con contramovimiento", group: "Pliometría", type: "bodyweight" },
   { id: "ex_salto_una_pierna", name: "Salto a una pierna", group: "Pliometría", type: "bodyweight" },
-  { id: "ex_press_banca", name: "Press banca", group: "Empuje", type: "weight" },
-  { id: "ex_press_militar", name: "Press militar", group: "Empuje", type: "weight" },
-  { id: "ex_fondos", name: "Fondos", group: "Empuje", type: "bodyweight" },
-  { id: "ex_dominadas", name: "Dominadas", group: "Tracción", type: "bodyweight" },
-  { id: "ex_remo_barra", name: "Remo con barra", group: "Tracción", type: "weight" },
-  { id: "ex_jalon_pecho", name: "Jalón al pecho", group: "Tracción", type: "weight" },
-  { id: "ex_face_pull", name: "Face pull", group: "Hombro", type: "weight" },
-  { id: "ex_manguito_rotador", name: "Manguito rotador externo", group: "Hombro", type: "weight" },
-  { id: "ex_plancha", name: "Plancha", group: "Core", type: "time" },
-  { id: "ex_rueda_abdominal", name: "Rueda abdominal", group: "Core", type: "bodyweight" },
-  { id: "ex_pallof_press", name: "Pallof press", group: "Core", type: "weight" },
+  { id: "ex_press_banca", name: "Press banca", group: "Empuje", type: "weight", muscles: { primary: ["pecho", "triceps"], secondary: ["deltoides_ant"] } },
+  { id: "ex_press_militar", name: "Press militar", group: "Empuje", type: "weight", muscles: { primary: ["deltoides_ant"], secondary: ["triceps", "trapecio"] } },
+  { id: "ex_fondos", name: "Fondos", group: "Empuje", type: "bodyweight", muscles: { primary: ["pecho", "triceps"], secondary: ["deltoides_ant"] } },
+  { id: "ex_dominadas", name: "Dominadas", group: "Tracción", type: "bodyweight", muscles: { primary: ["dorsal"], secondary: ["biceps"] } },
+  { id: "ex_remo_barra", name: "Remo con barra", group: "Tracción", type: "weight", muscles: { primary: ["dorsal"], secondary: ["biceps", "deltoides_post", "trapecio"] } },
+  { id: "ex_jalon_pecho", name: "Jalón al pecho", group: "Tracción", type: "weight", muscles: { primary: ["dorsal"], secondary: ["biceps"] } },
+  { id: "ex_face_pull", name: "Face pull", group: "Hombro", type: "weight", muscles: { primary: ["deltoides_post", "manguito"], secondary: ["trapecio"] } },
+  { id: "ex_manguito_rotador", name: "Manguito rotador externo", group: "Hombro", type: "weight", muscles: { primary: ["manguito"], secondary: ["deltoides_post"] } },
+  { id: "ex_plancha", name: "Plancha", group: "Core", type: "time", muscles: { primary: ["abdominales"], secondary: ["oblicuos"] } },
+  { id: "ex_rueda_abdominal", name: "Rueda abdominal", group: "Core", type: "bodyweight", muscles: { primary: ["abdominales"], secondary: ["oblicuos"] } },
+  { id: "ex_pallof_press", name: "Pallof press", group: "Core", type: "weight", muscles: { primary: ["oblicuos"], secondary: ["abdominales"] } },
 ];
 
 /* ---------------------------------- Utilidades --------------------------------- */
@@ -228,6 +230,7 @@ const ui = {
   replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
   collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
   popover: null,          // null | {kind: "last"|"set"|"actions", anchor (controlKey del botón), ...} — ver popoverHTML
+  muscleSheet: false,     // hoja "Músculos" abierta sobre el modal de ejercicio
   anim: null,             // null | {kind, key}: animación de UNA acción, solo para el render que la sigue — ver "Animaciones"
 };
 
@@ -313,6 +316,8 @@ const PATHS = {
   link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>',
   unlink: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="2" y1="2" x2="22" y2="22"/>',
 };
+
+let muscleHintTimer = null; // retraso de la sugerencia de músculos al escribir el nombre
 
 // Une partes de una línea de datos con el separador "·" en tinta terciaria.
 // Las partes ya vienen escapadas (pueden traer HTML propio, como <b>).
@@ -932,6 +937,7 @@ function render() {
     </div>
     ${ui.picker ? pickerHTML() : ""}
     ${ui.exerciseModal ? exerciseModalHTML() : ""}
+    ${ui.exerciseModal && ui.muscleSheet ? muscleSheetHTML() : ""}
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
     ${ui.durationDialog ? durationDialogHTML() : ""}
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
@@ -1198,7 +1204,7 @@ function openPopover(el, popover) {
 
 function popoverHTML() {
   const p = ui.popover;
-  const body = { last: lastTimeMenuHTML, set: setMenuHTML, actions: actionsMenuHTML }[p.kind]?.(p) || "";
+  const body = { last: lastTimeMenuHTML, set: setMenuHTML, actions: actionsMenuHTML, muscles: muscleAddMenuHTML }[p.kind]?.(p) || "";
   return `<div class="vt-popover-backdrop ${popoverShown ? "" : "is-entering"}" data-a="popover-close">
     <div class="vt-popover vt-popover-${p.kind}" data-stop="1">${body}</div>
   </div>`;
@@ -1287,6 +1293,16 @@ function lastTimeMenuHTML(p) {
     </table>
     <p class="vt-last-best">Mejor serie: ${bestSetText(info.entry.sets, type, uni)}</p>
     <button class="vt-pop-btn" data-a="last-use" data-ex="${p.ex}">Usar estos valores</button>`;
+}
+
+// "Agregar por nombre" (hoja de músculos): los 20 músculos; elegir uno lo
+// marca como principal, o como secundario si ya era principal.
+function muscleAddMenuHTML() {
+  const mu = ui.exerciseModal?.muscles || { primary: [], secondary: [] };
+  return (typeof MUSCLES === "undefined" ? [] : MUSCLES).map((m) => {
+    const state = mu.primary.includes(m.id) ? " · principal" : mu.secondary.includes(m.id) ? " · secundario" : "";
+    return `<button class="vt-pop-row" data-a="muscle-add" data-muscle="${m.id}"><span>${esc(m.label)}<small class="vt-dim">${state}</small></span></button>`;
+  }).join("");
 }
 
 /* -------------------------------- Menú de serie -------------------------------- */
@@ -2459,6 +2475,55 @@ function fmtRelDate(iso) {
 }
 
 /* --------------------------------- Mapa muscular --------------------------------- */
+// Sugerencia de músculos por nombre al CREAR un ejercicio. Gana la PRIMERA
+// regla que calce, así que el orden importa (p. ej. "peso muerto rumano"
+// antes que "peso muerto"; "glute side plank" y "escapulares desde plancha"
+// antes que abdominales; "rotación externa" antes que oblicuos). Las palabras
+// se comparan completas, aceptando plural con "s" o "es". `requires` = otra
+// frase que también tiene que estar.
+const MUSCLE_HINTS = [
+  { keys: ["rumano", "rdl", "stiff", "1 pierna", "una pierna"], requires: "peso muerto", primary: ["isquios", "gluteos"], secondary: ["lumbar"] },
+  { keys: ["hex", "hexagonal", "trap bar"], primary: ["cuadriceps", "gluteos"], secondary: ["isquios", "lumbar", "trapecio", "antebrazo"] },
+  { keys: ["peso muerto", "deadlift"], primary: ["gluteos", "isquios", "lumbar"], secondary: ["cuadriceps", "trapecio", "antebrazo"] },
+  { keys: ["hip thrust", "puente"], primary: ["gluteos"], secondary: ["isquios"] },
+  { keys: ["abductor", "abduccion", "clamshell", "almeja", "monster walk", "glute side plank"], primary: ["abductores"], secondary: ["gluteos"] },
+  { keys: ["sentadilla frontal", "front squat"], primary: ["cuadriceps"], secondary: ["gluteos", "aductores", "abdominales"] },
+  { keys: ["clean", "cargada", "arranque", "snatch", "tirones"], primary: ["cuadriceps", "gluteos"], secondary: ["isquios", "trapecio", "gemelos"] },
+  { keys: ["sentadilla", "squat", "prensa", "zancada", "bulgara", "lunge", "subida", "step up"], primary: ["cuadriceps", "gluteos"], secondary: ["aductores"] },
+  { keys: ["leg extension", "extension de cuadriceps", "extension de pierna"], primary: ["cuadriceps"], secondary: [] },
+  { keys: ["leg curl", "curl femoral", "nordico", "nordic"], primary: ["isquios"], secondary: ["gemelos"] },
+  { keys: ["gemelo", "pantorrilla", "calf"], primary: ["gemelos"], secondary: [] },
+  { keys: ["tibial", "tibialis"], primary: ["tibial"], secondary: [] },
+  { keys: ["copenhague", "aductor"], primary: ["aductores"], secondary: ["oblicuos"] },
+  { keys: ["serrato", "protraccion", "escapulares"], primary: ["serrato"], secondary: ["trapecio", "pecho"] },
+  { keys: ["press banca", "bench", "flexion", "push up", "pushup", "fondos", "dips"], primary: ["pecho", "triceps"], secondary: ["deltoides_ant"] },
+  { keys: ["press militar", "overhead", "press hombro", "arnold", "elevacion frontal"], primary: ["deltoides_ant"], secondary: ["triceps", "trapecio"] },
+  { keys: ["manguito", "rotador", "rotacion externa", "rotacion interna"], primary: ["manguito"], secondary: ["deltoides_post"] },
+  { keys: ["face pull", "pajaro", "reverse fly", "deltoides posterior"], primary: ["deltoides_post", "manguito"], secondary: ["trapecio"] },
+  { keys: ["elevacion lateral", "lateral raise"], primary: ["deltoides_ant"], secondary: ["deltoides_post"] },
+  { keys: ["encogimiento", "shrug"], primary: ["trapecio"], secondary: [] },
+  { keys: ["dominada", "chin", "pull up", "jalon", "pulldown", "pull over", "pullover"], primary: ["dorsal"], secondary: ["biceps"] },
+  { keys: ["remo", "row"], primary: ["dorsal"], secondary: ["biceps", "deltoides_post", "trapecio"] },
+  { keys: ["curl"], primary: ["biceps"], secondary: ["antebrazo"] },
+  { keys: ["triceps", "frances", "pushdown"], primary: ["triceps"], secondary: [] },
+  { keys: ["antebrazo", "muneca", "wrist", "granjero", "farmer"], primary: ["antebrazo"], secondary: [] },
+  { keys: ["lumbar", "hiperextension", "superman", "good morning"], primary: ["lumbar"], secondary: ["gluteos", "isquios"] },
+  { keys: ["oblicuo", "pallof", "twist", "rotacion", "russian", "lenador"], primary: ["oblicuos"], secondary: ["abdominales"] },
+  { keys: ["plancha", "plank", "abdominal", "crunch", "sit up", "situp", "rueda", "elevacion de pierna", "pie a barra", "toes to bar", "hollow", "v up"], primary: ["abdominales"], secondary: ["oblicuos"] },
+];
+
+// Minúsculas, sin tildes ni signos, palabras separadas por un espacio.
+const normalizeName = (str) => ` ${String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim()} `;
+// ¿Está la frase como palabras completas? La última palabra acepta plural (-s / -es).
+const hasPhrase = (norm, phrase) => new RegExp(` ${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)? `).test(norm);
+
+// Músculos sugeridos para un nombre, o null si ninguna regla calza.
+function suggestMuscles(name) {
+  const norm = normalizeName(name);
+  const rule = MUSCLE_HINTS.find((r) => r.keys.some((k) => hasPhrase(norm, k)) && (!r.requires || hasPhrase(norm, r.requires)));
+  return rule ? { primary: [...rule.primary], secondary: [...rule.secondary] } : null;
+}
+
 // Dibujos en bodymap.js (solo datos: MUSCLES y BODY_MAP, trazos MIT de
 // react-native-body-highlighter). Cada ejercicio puede tener
 // `muscles: {primary: [ids], secondary: [ids]}`; si no lo tiene, no suma.
@@ -2512,14 +2577,15 @@ function fixedLevels(muscles) {
 // Cuerpo de frente y de espalda, lado a lado. `levels` = {front: {id: 0–4},
 // back: {…}}. Opciones: height (px), values (series por músculo, para la
 // línea de detalle), jumps ({value, level}: ícono de saltos a la derecha) e
-// interactive (tocar un músculo o los saltos muestra su detalle debajo).
-function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interactive = false } = {}) {
+// interactive (tocar un músculo o los saltos muestra su detalle debajo) o
+// action (cada músculo dispara esa acción, como en la hoja de selección).
+function bodyMapHTML(levels, { height = 200, values = {}, jumps = null, interactive = false, action = null } = {}) {
   if (typeof BODY_MAP === "undefined") return "";
   const fig = (view) => {
     const b = BODY_MAP[view];
     const paths = b.parts.map((p) => !p.m ? `<path class="vt-body-sil" d="${p.d}"/>`
       : `<path class="vt-body-m lvl-${levels[view]?.[p.m] || 0}" d="${p.d}" data-muscle="${p.m}"${interactive
-        ? ` data-a="bodymap-pick" data-sets="${values[p.m] || 0}"` : ""}/>`).join("");
+        ? ` data-a="bodymap-pick" data-sets="${values[p.m] || 0}"` : action ? ` data-a="${action}"` : ""}/>`).join("");
     return `<svg class="vt-body" viewBox="${b.viewBox}" style="height:${height}px" role="img" aria-label="Cuerpo de ${view === "front" ? "frente" : "espalda"}">${paths}</svg>`;
   };
   const jumpsHTML = !jumps ? "" : `<button class="vt-jumps lvl-${jumps.level}" ${interactive ? `data-a="bodymap-pick" data-jumps="${jumps.value}"` : "disabled"}>
@@ -3138,8 +3204,91 @@ function groupModalHTML() {
     </div>`;
 }
 
+// Fila "Músculos" del modal de ejercicio: cuerpo en miniatura (principales
+// en --muscle-4, secundarios en --muscle-2), los nombres y un chevron. Se
+// redibuja sola (sin render) mientras se escribe el nombre y llega una sugerencia.
+function muscleRowHTML(m) {
+  const names = (ids) => ids.map((id, i) => { const l = muscleLabel(id); return i ? l.charAt(0).toLowerCase() + l.slice(1) : l; }).join(", ");
+  const mu = m.muscles;
+  const text = mu?.primary.length || mu?.secondary.length
+    ? `<span>${esc(names(mu.primary) || "—")}</span>${mu.secondary.length ? `<small>+ ${esc(names(mu.secondary).toLowerCase())}</small>` : ""}`
+    : `<span class="vt-dim">Sin asignar</span>`;
+  return `<button type="button" class="vt-muscle-row" id="exm-muscles-row" data-a="muscles-open">
+    ${bodyMapHTML(fixedLevels(mu), { height: 56 })}
+    <span class="vt-muscle-text">${text}</span>
+    ${m.musclesSuggested ? `<span class="vt-muscle-tag">Sugerido</span>` : ""}
+    <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
+  </button>`;
+}
+
+// Pasa al estado lo que hay escrito en el modal de ejercicio, para que un
+// render() (abrir la hoja de músculos) no lo pierda.
+function syncExerciseModal() {
+  const m = ui.exerciseModal, $ = (id) => document.getElementById(id);
+  if (!m || !$("exm-name")) return;
+  m.name = $("exm-name").value;
+  m.group = $("exm-group").value;
+  m.type = $("exm-type").value;
+  m.oneRM = $("exm-onerm")?.value || undefined;
+  m.unilateral = !!$("exm-unilateral")?.checked;
+  m.jumpsChecked = !!$("exm-jumps")?.checked;
+}
+
+// Con "Cuenta como saltos" activo, la fila de músculos se oculta (no suma al
+// mapa); al desactivarlo vuelve con lo que tenía.
+function syncJumpsRow() {
+  const on = !!document.getElementById("exm-jumps")?.checked && document.getElementById("exm-type")?.value !== "time";
+  const row = document.getElementById("exm-muscles-row"), note = document.getElementById("exm-muscles-jumps");
+  if (row) row.hidden = on;
+  if (note) note.hidden = !on;
+}
+
+// Hoja "Músculos": cuerpo grande donde cada toque hace el ciclo sin marcar →
+// principal → secundario → sin marcar (el lado da igual), leyenda, fichas
+// de lo elegido con ✕ y "Agregar por nombre" para los músculos chicos.
+// Trabaja sobre el borrador del modal (ui.exerciseModal.muscles); Listo,
+// Escape o tocar fuera la cierran guardando (no hay nada destructivo).
+function muscleSheetHTML() {
+  const mu = ui.exerciseModal?.muscles || { primary: [], secondary: [] };
+  const chip = (id, lvl) => `<span class="vt-chip vt-muscle-chip"><span class="vt-dotgroup" style="background:var(--muscle-${lvl})"></span>${esc(muscleLabel(id))}
+    <button type="button" data-a="muscle-remove" data-muscle="${id}" aria-label="Quitar ${esc(muscleLabel(id))}">${icon("x", 14)}</button></span>`;
+  return `
+    <div class="vt-modal-backdrop" data-a="muscles-done">
+      <div class="vt-modal vt-muscle-sheet" data-stop="1">
+        <div class="vt-modal-head">
+          <h2 class="vt-modal-title">Músculos</h2>
+          <button class="vt-mode-btn vt-mode-primary" data-a="muscles-done">Listo</button>
+        </div>
+        <div class="vt-modal-body">
+          ${bodyMapHTML(fixedLevels(mu), { height: 320, action: "muscle-toggle" })}
+          <p class="vt-muscle-legend"><span><i style="background:var(--muscle-4)"></i>Principal</span><span><i style="background:var(--muscle-2)"></i>Secundario</span></p>
+          <div class="vt-muscle-chips">${mu.primary.map((id) => chip(id, 4)).join("") + mu.secondary.map((id) => chip(id, 2)).join("")
+            || '<span class="vt-muted">Toca un músculo para marcarlo</span>'}</div>
+          <button class="vt-modal-row" data-a="muscle-add-open">${icon("plus", 16)} Agregar por nombre</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Cambia un músculo del borrador. `to` = "primary" | "secondary" | null; sin
+// `to`, sigue el ciclo del toque. Tocar a mano quita la marca de "Sugerido".
+function setMuscle(id, to) {
+  const m = ui.exerciseModal;
+  const mu = m.muscles || { primary: [], secondary: [] };
+  const now = mu.primary.includes(id) ? "primary" : mu.secondary.includes(id) ? "secondary" : null;
+  if (to === undefined) to = now === null ? "primary" : now === "primary" ? "secondary" : null;
+  mu.primary = mu.primary.filter((x) => x !== id);
+  mu.secondary = mu.secondary.filter((x) => x !== id);
+  if (to) mu[to].push(id);
+  m.muscles = mu.primary.length || mu.secondary.length ? mu : undefined;
+  m.musclesTouched = true;
+  m.musclesSuggested = false;
+  render();
+}
+
 function exerciseModalHTML() {
   const m = ui.exerciseModal;
+  const jumpsOn = (m.jumpsChecked ?? countsJumps(m)) && m.type !== "time";
   return `
     <div class="vt-modal-backdrop" data-a="ex-modal-cancel">
       <div class="vt-modal" data-stop="1">
@@ -3149,7 +3298,7 @@ function exerciseModalHTML() {
         </div>
         <div class="vt-modal-form">
           <label>Nombre
-            <input type="text" class="vt-input" id="exm-name" value="${esc(m.name)}" placeholder="Ej: Curl femoral" autocomplete="off">
+            <input type="text" class="vt-input" id="exm-name" value="${esc(m.name)}" placeholder="Ej: Curl femoral" data-i="exm-name" autocomplete="off">
           </label>
           <label>Grupo muscular
             <select class="vt-input" id="exm-group" data-c="exm-group">
@@ -3161,6 +3310,11 @@ function exerciseModalHTML() {
               ${Object.entries(TYPES).map(([id, t]) => `<option value="${id}" ${m.type === id ? "selected" : ""}>${t.label}</option>`).join("")}
             </select>
           </label>
+          <div class="vt-modal-field">
+            <span class="vt-field-label">Músculos</span>
+            ${muscleRowHTML(m).replace('id="exm-muscles-row"', `id="exm-muscles-row" ${jumpsOn ? "hidden" : ""}`)}
+            <p class="vt-muted vt-muscle-jumps" id="exm-muscles-jumps" ${jumpsOn ? "" : "hidden"}>Cuenta como saltos: no aparece en el mapa</p>
+          </div>
           <label id="exm-onerm-label" style="${m.type === "time" ? "display:none" : ""}">1RM estimado (kg) — opcional, para cargas por %
             <input type="number" inputmode="decimal" class="vt-input" id="exm-onerm" min="0" step="2.5" value="${m.oneRM ?? ""}"
               autocomplete="off" autocorrect="off" spellcheck="false" name="f_exmonerm">
@@ -3171,7 +3325,7 @@ function exerciseModalHTML() {
           </div>
           <label class="vt-modal-toggle-row" id="exm-jumps-row" style="${m.type === "time" ? "display:none" : ""}">
             <span>Cuenta como saltos<small>Sus reps suman al conteo de saltos en gimnasio</small></span>
-            <input type="checkbox" class="vt-switch" id="exm-jumps" data-c="exm-jumps" ${countsJumps(m) ? "checked" : ""} autocomplete="off">
+            <input type="checkbox" class="vt-switch" id="exm-jumps" data-c="exm-jumps" ${(m.jumpsChecked ?? countsJumps(m)) ? "checked" : ""} autocomplete="off">
           </label>
         </div>
         <div class="vt-modal-actions">
@@ -5032,7 +5186,9 @@ document.addEventListener("click", (e) => {
       // que ex-modal-save lo agregue automáticamente ahí al guardar.
       // Con un chip de grupo activo, el ejercicio nuevo parte en ese grupo.
       // Lo ya elegido en el selector (ui.pickerSelected) se conserva.
-      ui.exerciseModal = { id: null, name, group: ui.pickerGroup || "Custom", type: "weight", pickerCtx: ui.picker };
+      const hint = suggestMuscles(name);
+      ui.exerciseModal = { id: null, name, group: ui.pickerGroup || "Custom", type: "weight", pickerCtx: ui.picker,
+        muscles: hint || undefined, musclesSuggested: !!hint };
       ui.picker = null;
       ui.pickerQuery = "";
       render();
@@ -5353,7 +5509,8 @@ document.addEventListener("click", (e) => {
     case "ex-new": ui.exerciseModal = { id: null, name: "", group: "Custom", type: "weight" }; render(); break;
     case "ex-edit": {
       const ex = exercises.find((x) => x.id === id);
-      if (ex) ui.exerciseModal = { ...ex };
+      if (ex) ui.exerciseModal = { ...ex, muscles: ex.muscles ? deepClone(ex.muscles) : undefined };
+      ui.muscleSheet = el.dataset.sheet === "muscles"; // "Asignar" del detalle abre directo la hoja
       render();
       break;
     }
@@ -5373,7 +5530,17 @@ document.addEventListener("click", (e) => {
       }, { label: "Eliminar ejercicio", danger: true });
       break;
     }
-    case "ex-modal-cancel": ui.exerciseModal = null; render(); break;
+    case "ex-modal-cancel": ui.exerciseModal = null; ui.muscleSheet = false; render(); break;
+    case "muscles-open": syncExerciseModal(); ui.muscleSheet = true; render(); break;
+    case "muscles-done": ui.muscleSheet = false; render(); break;
+    case "muscle-toggle": setMuscle(el.dataset.muscle); break;
+    case "muscle-remove": setMuscle(el.dataset.muscle, null); break;
+    case "muscle-add-open": openPopover(el, { kind: "muscles" }); break;
+    case "muscle-add": {
+      const mu = ui.exerciseModal?.muscles;
+      setMuscle(el.dataset.muscle, mu?.primary.includes(el.dataset.muscle) || mu?.secondary.includes(el.dataset.muscle) ? "secondary" : "primary");
+      break;
+    }
     case "ex-modal-save": {
       const name = document.getElementById("exm-name").value.trim();
       const group = document.getElementById("exm-group").value;
@@ -5388,14 +5555,18 @@ document.addEventListener("click", (e) => {
       const jumpsVal = !!document.getElementById("exm-jumps")?.checked;
       const countsJumpsVal = type !== "time" && jumpsVal !== (group === "Pliometría") ? jumpsVal : undefined;
       const m = ui.exerciseModal;
+      // Los músculos se guardan aunque cuente como saltos: si después se
+      // desactiva, vuelven. El mapa igual ignora los ejercicios de saltos.
+      const muscles = cleanMuscles({ muscles: m.muscles && deepClone(m.muscles) }).muscles;
       let exId = m.id;
       if (m.id) {
         const i = exercises.findIndex((x) => x.id === m.id);
-        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal };
+        if (i >= 0) exercises[i] = { ...exercises[i], name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal, muscles };
       } else {
         exId = uid("cex");
-        exercises.push({ id: exId, name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal });
+        exercises.push({ id: exId, name, group, type, oneRM, unilateral, countsJumps: countsJumpsVal, muscles });
       }
+      ui.muscleSheet = false;
       persistExercises();
       ui.exerciseModal = null;
       // Si se abrió desde un picker (crear con personalización completa), lo
@@ -5613,6 +5784,22 @@ document.addEventListener("input", (e) => {
       if (it) it.note = el.value;
       break;
     }
+    case "exm-name": {
+      // Sugerencia de músculos: solo al CREAR y mientras no se hayan tocado.
+      const m = ui.exerciseModal;
+      if (!m || m.id || m.musclesTouched) break;
+      m.name = el.value;
+      clearTimeout(muscleHintTimer);
+      muscleHintTimer = setTimeout(() => {
+        if (ui.exerciseModal !== m || m.musclesTouched) return;
+        const hint = suggestMuscles(m.name);
+        m.muscles = hint || undefined;
+        m.musclesSuggested = !!hint;
+        const row = document.getElementById("exm-muscles-row");
+        if (row) { const hidden = row.hidden; row.outerHTML = muscleRowHTML(m); document.getElementById("exm-muscles-row").hidden = hidden; }
+      }, 300);
+      break;
+    }
     case "group-name":
       // Sincronizado con el estado (y no solo leído al guardar) porque elegir
       // un color dispara render() y reconstruye el input desde ui.groupModal.name.
@@ -5689,14 +5876,16 @@ document.addEventListener("change", (e) => {
       if (uniRow) uniRow.style.display = el.value === "time" ? "none" : "";
       const jumpsRow = document.getElementById("exm-jumps-row");
       if (jumpsRow) jumpsRow.style.display = el.value === "time" ? "none" : "";
+      syncJumpsRow();
       break;
     }
     // "Cuenta como saltos" sigue al valor por defecto del grupo (Pliometría =
     // sí) mientras el usuario no lo haya tocado a mano en este modal.
-    case "exm-jumps": el.dataset.touched = "1"; break;
+    case "exm-jumps": el.dataset.touched = "1"; syncJumpsRow(); break;
     case "exm-group": {
       const sw = document.getElementById("exm-jumps");
       if (sw && !sw.dataset.touched && ui.exerciseModal?.countsJumps === undefined) sw.checked = el.value === "Pliometría";
+      syncJumpsRow();
       break;
     }
     case "import-file":

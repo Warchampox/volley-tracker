@@ -1542,3 +1542,35 @@ input[type="file"] { display: none; }
 .vt-jumps span { font-size: var(--fs-xs); color: var(--text-dim); }
 .vt-bodymap-info { min-height: 20px; margin: var(--sp-2) 0 0; text-align: center; font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .vt-body-m { transition: none; } }
+
+/* Fila "Músculos" del modal de ejercicio y hoja de selección. */
+.vt-modal-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+.vt-field-label { font-size: var(--fs-xs); color: var(--text-dim); }
+.vt-muscle-row {
+  width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--text); text-align: left; cursor: pointer;
+}
+.vt-muscle-row[hidden] { display: none; }
+.vt-muscle-row .vt-bodymap { flex-shrink: 0; }
+.vt-muscle-row .vt-bodymap-figs { gap: 2px; }
+.vt-muscle-row .vt-body { max-width: none; }
+.vt-muscle-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-md); }
+.vt-muscle-text small { font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-dim { color: var(--text-dim); }
+.vt-muscle-tag { flex-shrink: 0; font-size: var(--fs-xs); color: var(--text-dim); }
+.vt-muscle-jumps { margin: 0; }
+.vt-muscle-jumps[hidden] { display: none; }
+.vt-muscle-sheet { height: 92vh; max-height: 92vh; }
+.vt-muscle-sheet .vt-modal-body { flex: 1; padding: var(--sp-3) var(--sp-4) var(--sp-6); }
+.vt-muscle-sheet .vt-body { max-width: 46%; }
+.vt-muscle-legend { display: flex; justify-content: center; gap: var(--sp-4); margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-muscle-legend span { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.vt-muscle-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.vt-muscle-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.vt-muscle-chip { color: var(--text); padding-right: 2px; }
+.vt-muscle-chip button {
+  width: 28px; height: 28px; padding: 0; border: none; background: transparent; color: var(--text-dim); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; position: relative;
+}
+.vt-muscle-chip button::before { content: ""; position: absolute; inset: -8px; }
+.vt-pop-row small { margin-left: var(--sp-1); font-size: var(--fs-sm); }

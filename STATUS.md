@@ -1571,3 +1571,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   interacción (resalta el músculo con borde de 2px y muestra "Cuádriceps ·
   7 series", sin render()). Verificado a 360px: los dos cuerpos y el ícono
   caben sin desbordar.
+
+## 2026-10-27 cont. — Mapa muscular, Fase 2 de 3: elegir músculos
+- Modal de ejercicio: fila "Músculos" (cuerpo en miniatura, nombres,
+  "Sugerido" y chevron) que se oculta con "Cuenta como saltos" y vuelve al
+  desactivarlo. Hoja "Músculos" (92vh): cuerpo grande con ciclo sin marcar →
+  principal → secundario, leyenda, fichas con ✕ y "Agregar por nombre"
+  (menú flotante con los 20). Listo, Escape o tocar fuera guardan en el
+  borrador (`syncExerciseModal` evita perder lo escrito al redibujar).
+- Sugerencia por nombre al crear (`MUSCLE_HINTS` en orden, palabras
+  completas con plural, retraso de 300 ms) mientras no se toquen los
+  músculos; también al crear desde el selector. Los 17 de fábrica con
+  músculos; la pliometría sin. Verificado a 360px: 21 nombres de prueba con
+  la regla esperada, sin sobrescribir al seguir escribiendo.
