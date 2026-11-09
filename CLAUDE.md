@@ -1,4 +1,33 @@
-# GOAT — reglas del proyecto
+# VB Prep — reglas del proyecto
+
+## Nombre y marca (2026-11-09)
+- La app se llama **VB Prep** ("VB" en mayúscula, "Prep" normal, con
+  espacio). Antes fue GOAT y antes Pesitas. El repo y la URL de GitHub
+  Pages siguen siendo `volley-tracker` (cambiar la URL rompe la app
+  instalada; lo decide Martín aparte).
+- Compatibilidad: el campo `app: "volley-tracker"` del JSON exportado y
+  las llaves de localStorage NO cambian. La importación sigue aceptando
+  archivos y textos viejos con "GOAT" o "Rutina GOAT:" en la cabecera
+  (`extractJSON` ignora el texto alrededor del JSON). Los archivos
+  exportados se llaman `vbprep-…`.
+- El logo y el ícono vienen de Canva, ya recoloreados a `#3B6FE0`, y NO se
+  redibujan ni se regeneran a mano: si cambian, Martín entrega los PNG.
+- Assets de `icons/`:
+  · `icon-192.png`, `icon-512.png`: ícono "any" ("VB" con balón, fondo
+    negro, a sangre), en manifest.json.
+  · `icon-512-maskable.png`: el mismo dentro del círculo seguro del 80%,
+    fondo negro, en manifest.json.
+  · `apple-touch-icon.png` (180px) y `favicon-32.png`, en index.html.
+  · `vbprep-logo.png`: logo completo (jugador + VB + PREP), fondo
+    transparente. Al final de Ajustes (120px de ancho) y arriba a la
+    izquierda de las imágenes para compartir (160px de alto, margen 64px;
+    si no carga, el texto "VB Prep").
+  · `vbprep-player.png`: solo el jugador rematando, fondo transparente.
+    Mascota de los estados vacíos (72px, opacidad 0,55) y del resumen de
+    sesión (56px).
+  Todos van en el precache de sw.js.
+- Resumen de sesión: "como levantar N jugadores de vóleibol" (≈ 85 kg por
+  jugador). Pie de las imágenes para compartir: "ENTRENADO CON VB PREP".
 
 ## Arquitectura (cerrada, no reabrir)
 - HTML/CSS/JS plano, sin build ni framework. 3 archivos: index.html,

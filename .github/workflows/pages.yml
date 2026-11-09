@@ -1,4 +1,4 @@
-name: Deploy GOAT a GitHub Pages
+name: Deploy VB Prep a GitHub Pages
 
 # Publica el repo tal cual (HTML/CSS/JS plano, sin build) usando GitHub
 # Actions en vez del sistema viejo basado en Jekyll — ese quedaba

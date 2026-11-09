@@ -1,4 +1,4 @@
-# GOAT — bitácora de sesión
+# VB Prep — bitácora de sesión
 
 Entradas nuevas al final. No reescribir lo anterior.
 
@@ -1642,3 +1642,19 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Verificado a 360 y 390 px (cuerpo 280/300 px; cuerpo→línea 6, línea→lista
   8), semana vacía con sesiones anteriores, barra Rango fija, y regresiones
   de trofeo, swipe con deshacer y long-press. Falta probarlo en el teléfono.
+
+## 2026-11-09
+- La app pasa a llamarse VB Prep: manifest, título, textos de Ajustes, de
+  compartir e importar, archivos `vbprep-…`, íconos y logo de Canva
+  (mascota = jugador rematando; "N jugadores de vóleibol" a 85 kg c/u; logo
+  en Ajustes y en las imágenes para compartir, que bajan 100px). Se
+  borraron goat-face, goat-body, club-logo y watermark-u. sw.js →
+  `vbprep-v40` (activate borra las cachés `goat-*`).
+- Verificado a 360 y 390 px: Ajustes, estado vacío, resumen, las dos
+  imágenes (con logo y con el texto de respaldo), importar una rutina
+  pegada "Rutina GOAT:" y un respaldo completo. `app` del JSON sigue en
+  "volley-tracker". Falta en el teléfono: ícono maskable en círculo y
+  squircle, nombre en el launcher, splash y el aviso de versión nueva. El
+  ícono del launcher puede tardar en cambiar (Android lo actualiza solo
+  cada cierto tiempo); si no cambia, desinstalar y reinstalar, pero
+  exportando un respaldo antes.

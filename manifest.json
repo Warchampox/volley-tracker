@@ -1,6 +1,6 @@
 {
-  "name": "GOAT",
-  "short_name": "GOAT",
+  "name": "VB Prep",
+  "short_name": "VB Prep",
   "description": "Registro de entrenamientos de vóleibol: rutinas, series, descansos y progreso.",
   "start_url": "./index.html",
   "scope": "./",

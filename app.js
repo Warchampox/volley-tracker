@@ -1542,7 +1542,7 @@ function actionSheetHTML() {
     const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="routine-share" data-mode="${mode}" data-id="${id}">
       ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
     title = `Compartir "${routines.find((r) => r.id === id)?.name || "rutina"}"`;
-    rows = opt("text", "note", "Como texto", "Un mensaje para WhatsApp; el otro lo copia y lo pega en GOAT")
+    rows = opt("text", "note", "Como texto", "Un mensaje para WhatsApp; el otro lo copia y lo pega en VB Prep")
       + opt("file", "download", "Como archivo", "Un .json para importar desde Ajustes");
   } else if (kind === "reset") {
     // Borrado de datos personales: entrenamientos y 1RM. Rutinas, ejercicios
@@ -3178,12 +3178,13 @@ function settingsHTML() {
     </div>
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Acerca de</p>
     <button class="vt-settings-row vt-settings-link" data-a="credits-open">
-      <span class="vt-settings-label">Créditos<small>Licencias de lo que usa GOAT</small></span>
+      <span class="vt-settings-label">Créditos<small>Licencias de lo que usa VB Prep</small></span>
       <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
     </button>
-    <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">GOAT · datos guardados en este dispositivo</p>
+    <img src="icons/vbprep-logo.png" alt="VB Prep" class="vt-settings-logo">
+    <p class="vt-muted" style="text-align:center;margin-top:var(--sp-4)">VB Prep · datos guardados en este dispositivo</p>
     <p class="vt-muted" style="text-align:center">Almacenamiento protegido: ${storagePersisted ? "sí" : "no"}</p>
-    ${storagePersisted ? "" : `<p class="vt-muted" style="text-align:center">Instala GOAT en la pantalla de inicio para que el teléfono no borre tus datos</p>`}`;
+    ${storagePersisted ? "" : `<p class="vt-muted" style="text-align:center">Instala VB Prep en la pantalla de inicio para que el teléfono no borre tus datos</p>`}`;
 }
 
 /* ----------------------------- Gestión de ejercicios ------------------------------ */
@@ -3613,11 +3614,11 @@ function infoDialogHTML() {
 }
 
 function emptyHTML(title, detail, action) {
-  // onerror oculta la mascota sin romper el layout si icons/goat-face.png
+  // onerror oculta la mascota sin romper el layout si icons/vbprep-player.png
   // todavía no existe en este dispositivo/deploy — el resto del estado
   // vacío se ve igual de bien sin ella.
   return `<div class="vt-empty">
-    <img src="icons/goat-face.png" alt="" class="vt-empty-mascot" onerror="this.style.display='none'">
+    <img src="icons/vbprep-player.png" alt="" class="vt-empty-mascot" onerror="this.style.display='none'">
     <h2>${title}</h2><p>${detail}</p>${action}
   </div>`;
 }
@@ -4109,7 +4110,7 @@ function sessionSummaryHTML() {
     : "Sesión cumplida";
 
   // Número héroe: el volumen; si no hubo volumen (solo tiempo o peso
-  // corporal), la duración — y ahí no hay comparación ni cabras.
+  // corporal), la duración — y ahí no hay comparación ni jugadores.
   const dur = durationParts(sum.durationSec);
   const hasVol = sum.volume > 0;
   const hero = hasVol ? { value: Math.round(sum.volume).toLocaleString("es-CL"), unit: "kg" } : dur;
@@ -4121,8 +4122,8 @@ function sessionSummaryHTML() {
       subParts.push(`<span class="${pct >= 0 ? "vt-sum-up" : ""}">${pct >= 0 ? "+" : "−"}${Math.abs(pct)}%</span> vs la última vez`);
     }
   }
-  const goats = Math.round(sum.volume / 60); // una cabra ≈ 60 kg
-  if (hasVol && goats > 0) subParts.push(`como levantar <b>${goats.toLocaleString("es-CL")} cabra${goats !== 1 ? "s" : ""}</b>`);
+  const players = Math.round(sum.volume / 85); // un jugador de vóleibol ≈ 85 kg
+  if (hasVol && players > 0) subParts.push(`como levantar <b>${players.toLocaleString("es-CL")} ${players !== 1 ? "jugadores" : "jugador"} de vóleibol</b>`);
 
   // Al abrirse, los récords entran escalonados (80 ms entre filas, desde 700 ms).
   const recordsSection = nPR === 0 ? "" : section("Récords", `<div class="vt-records">${sum.prHits.map((hit, i) => `
@@ -4155,7 +4156,7 @@ function sessionSummaryHTML() {
     <div class="vt-summary-overlay">
       <div class="vt-summary-inner">
         <div class="vt-sum-head">
-          <img src="icons/goat-face.png" alt="" class="vt-sum-mascot" onerror="this.style.display='none'">
+          <img src="icons/vbprep-player.png" alt="" class="vt-sum-mascot" onerror="this.style.display='none'">
           <p class="vt-eyebrow">Sesión nº ${sum.sessionNumber} · ${fmtDate(sum.date)}</p>
           <h1 class="vt-sum-headline">${headline}</h1>
           <p class="vt-sum-routine">${esc(sum.routineName)}</p>
@@ -4224,10 +4225,10 @@ async function drawSessionShareCard(ctx, sum) {
   ctx.textAlign = "left";
   ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 30px ${SHARE_FONT}`;
-  ctx.fillText(fmtDate(sum.date).toUpperCase(), 64, 190);
+  ctx.fillText(fmtDate(sum.date).toUpperCase(), 64, 290);
 
   ctx.fillStyle = cssVar("--text");
-  fitText(ctx, sum.routineName, 64, 300, SHARE_W - 128, 88, 700, SHARE_FONT);
+  fitText(ctx, sum.routineName, 64, 400, SHARE_W - 128, 88, 700, SHARE_FONT);
 
   const stats = [
     { label: "DURACIÓN", value: fmtDurationMin(sum.durationSec) },
@@ -4240,21 +4241,21 @@ async function drawSessionShareCard(ctx, sum) {
     ctx.textAlign = "left";
     ctx.fillStyle = cssVar("--text-dim");
     ctx.font = `600 24px ${SHARE_FONT}`;
-    ctx.fillText(s.label, x, 430);
+    ctx.fillText(s.label, x, 530);
     ctx.fillStyle = cssVar("--text");
     ctx.font = `600 54px ${SHARE_FONT}`;
-    ctx.fillText(s.value, x, 495);
+    ctx.fillText(s.value, x, 595);
   });
 
   ctx.strokeStyle = cssVar("--line");
-  ctx.beginPath(); ctx.moveTo(64, 550); ctx.lineTo(SHARE_W - 64, 550); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(64, 650); ctx.lineTo(SHARE_W - 64, 650); ctx.stroke();
 
   const prs = (sum.prHits || []).slice(0, 3);
   if (prs.length) {
     ctx.fillStyle = cssVar("--text-dim");
     ctx.font = `600 28px ${SHARE_FONT}`;
-    ctx.fillText("PRs DE HOY", 64, 620);
-    let y = 690;
+    ctx.fillText("PRs DE HOY", 64, 720);
+    let y = 790;
     prs.forEach((hit) => {
       if (trophyImg) ctx.drawImage(trophyImg, 64, y - 34, 40, 40);
       ctx.fillStyle = cssVar("--amber");
@@ -4270,30 +4271,36 @@ async function drawSessionShareCard(ctx, sum) {
   ctx.textAlign = "center";
   ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 26px ${SHARE_FONT}`;
-  ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
+  ctx.fillText("ENTRENADO CON VB PREP", SHARE_W / 2, SHARE_H - 60);
 }
 
 async function drawPRShareCard(ctx, p) {
   const trophyImg = await svgIconImage(PATHS.trophy, cssVar("--amber"), 400);
-  ctx.drawImage(trophyImg, SHARE_W / 2 - 80, 220, 160, 160);
+  ctx.drawImage(trophyImg, SHARE_W / 2 - 80, 320, 160, 160);
 
   ctx.textAlign = "center";
   ctx.fillStyle = cssVar("--amber");
   ctx.font = `700 40px ${SHARE_FONT}`;
-  ctx.fillText("NUEVO PR", SHARE_W / 2, 470);
+  ctx.fillText("NUEVO PR", SHARE_W / 2, 570);
 
   ctx.fillStyle = cssVar("--text");
-  fitText(ctx, p.exerciseName, SHARE_W / 2, 580, SHARE_W - 160, 72, 700, SHARE_FONT, "center");
+  fitText(ctx, p.exerciseName, SHARE_W / 2, 680, SHARE_W - 160, 72, 700, SHARE_FONT, "center");
 
   ctx.font = `700 150px ${SHARE_FONT}`;
-  ctx.fillText(fmtPRValue(p), SHARE_W / 2, 800);
+  ctx.fillText(fmtPRValue(p), SHARE_W / 2, 900);
 
   ctx.fillStyle = cssVar("--text-dim");
   ctx.font = `600 32px ${SHARE_FONT}`;
-  ctx.fillText(fmtDate(p.date), SHARE_W / 2, 870);
+  ctx.fillText(fmtDate(p.date), SHARE_W / 2, 970);
 
   ctx.font = `600 26px ${SHARE_FONT}`;
-  ctx.fillText("ENTRENADO CON GOAT", SHARE_W / 2, SHARE_H - 60);
+  ctx.fillText("ENTRENADO CON VB PREP", SHARE_W / 2, SHARE_H - 60);
+}
+
+async function shareLogoImage() {
+  const img = new Image();
+  img.src = "icons/vbprep-logo.png";
+  try { await img.decode(); return img; } catch { return null; }
 }
 
 async function buildShareBlob(kind, data) {
@@ -4305,10 +4312,16 @@ async function buildShareBlob(kind, data) {
   ctx.fillStyle = cssVar("--bg");
   ctx.fillRect(0, 0, SHARE_W, SHARE_H);
 
-  ctx.textAlign = "left";
-  ctx.fillStyle = cssVar("--blue");
-  ctx.font = `800 46px ${SHARE_FONT}`;
-  ctx.fillText("GOAT", 64, 110);
+  // Logo arriba a la izquierda (160px de alto, margen 64px); si no carga,
+  // el nombre en texto en el mismo lugar.
+  const logo = await shareLogoImage();
+  if (logo) ctx.drawImage(logo, 64, 64, Math.round(160 * logo.naturalWidth / logo.naturalHeight), 160);
+  else {
+    ctx.textAlign = "left";
+    ctx.fillStyle = cssVar("--blue");
+    ctx.font = `800 46px ${SHARE_FONT}`;
+    ctx.fillText("VB Prep", 64, 110);
+  }
 
   if (kind === "session") await drawSessionShareCard(ctx, data);
   else await drawPRShareCard(ctx, data);
@@ -4398,11 +4411,11 @@ async function deliverJSONFile(data, name, title, tryShare) {
 
 async function exportJSON(kind = "full") {
   const def = EXPORT_KINDS.find((k) => k.id === kind) || EXPORT_KINDS[0];
-  const name = `goat-${def.file}-${new Date().toISOString().slice(0, 10)}.json`;
+  const name = `vbprep-${def.file}-${new Date().toISOString().slice(0, 10)}.json`;
   let delivered;
   try {
     // El respaldo completo siempre se descarga; los parciales intentan compartir.
-    delivered = await deliverJSONFile(buildExportData(def.id), name, `GOAT · ${def.label}`, def.id !== "full");
+    delivered = await deliverJSONFile(buildExportData(def.id), name, `VB Prep · ${def.label}`, def.id !== "full");
   } catch (err) {
     askAlert("No se pudo generar el archivo.");
     return;
@@ -4443,10 +4456,10 @@ const slug = (str) => String(str).toLowerCase().normalize("NFD").replace(/[\u030
 function routineShareText(data) {
   const r = data.routines[0];
   const names = r.exercises.map((x) => exName(x.exerciseId)).join(" · ");
-  return `Rutina GOAT: ${r.name}
+  return `Rutina VB Prep: ${r.name}
 ${r.exercises.length} ejercicio${r.exercises.length !== 1 ? "s" : ""}: ${names}
 
-Para importarla: copia este mensaje completo y pégalo en GOAT → Ajustes → Importar datos → botón de pegar.
+Para importarla: copia este mensaje completo y pégalo en VB Prep → Ajustes → Importar datos → botón de pegar.
 
 ${JSON.stringify(data)}`;
 }
@@ -4456,7 +4469,7 @@ async function shareRoutine(routineId, mode) {
   if (!data) return;
   const r = data.routines[0];
   if (mode === "file") {
-    try { await deliverJSONFile(data, `goat-rutina-${slug(r.name)}.json`, `Rutina GOAT: ${r.name}`, true); }
+    try { await deliverJSONFile(data, `vbprep-rutina-${slug(r.name)}.json`, `Rutina VB Prep: ${r.name}`, true); }
     catch (err) { askAlert("No se pudo generar el archivo."); }
     return;
   }
@@ -5543,12 +5556,12 @@ document.addEventListener("click", (e) => {
       break;
     case "summary-share": {
       const sum = ui.sessionSummary;
-      if (sum) shareImage("session", sum, `goat-sesion-${sum.date.slice(0, 10)}.png`, sum.routineName);
+      if (sum) shareImage("session", sum, `vbprep-sesion-${sum.date.slice(0, 10)}.png`, sum.routineName);
       break;
     }
     case "pr-share": {
       const p = computeAllPRs().find((x) => x.exerciseId === id); // el más reciente de ese ejercicio
-      if (p) shareImage("pr", p, `goat-pr-${p.exerciseName.toLowerCase().replace(/\s+/g, "-")}.png`, `PR: ${p.exerciseName}`);
+      if (p) shareImage("pr", p, `vbprep-pr-${p.exerciseName.toLowerCase().replace(/\s+/g, "-")}.png`, `PR: ${p.exerciseName}`);
       break;
     }
 
@@ -5841,7 +5854,7 @@ document.addEventListener("click", (e) => {
     case "paste-json-import": {
       const text = document.getElementById("paste-json-text").value;
       const data = extractJSON(text);
-      if (!data) { askAlert("El texto pegado no trae datos de GOAT. Copia el mensaje completo, desde el principio hasta el final."); break; }
+      if (!data) { askAlert("El texto pegado no trae datos de VB Prep. Copia el mensaje completo, desde el principio hasta el final."); break; }
       ui.pasteJsonModal = false;
       processImportedData(data);
       break;

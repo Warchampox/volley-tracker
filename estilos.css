@@ -1562,6 +1562,8 @@ input[type="file"] { display: none; }
 .vt-ex-muscles-text .vt-text-btn { padding: 0; }
 /* Ajustes: fila que abre una hoja, y la hoja de créditos. */
 .vt-settings-link { width: 100%; background: none; border: none; border-bottom: 1px solid var(--line); color: var(--text); text-align: left; cursor: pointer; }
+/* Logo de VB Prep al final de Ajustes, sobre la línea de datos guardados. */
+.vt-settings-logo { display: block; width: 120px; height: auto; margin: var(--sp-8) auto 0; }
 .vt-credits { padding: var(--sp-4); font-size: var(--fs-sm); }
 .vt-credits p { margin: 0 0 var(--sp-3); }
 .vt-credits a { color: var(--blue-text); }

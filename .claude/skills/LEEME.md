@@ -30,10 +30,10 @@ scripts: ninguna de estas skills ejecuta nada sola.
   las guías completas y reglas para web apps; la de Emil Kowalski trata solo
   animación y gestos (resortes, arrastre, hojas) y sirve como complemento.
 
-## Encaje con GOAT (HTML/CSS/JS plano)
+## Encaje con VB Prep (HTML/CSS/JS plano)
 
 Ninguna exige React, Tailwind ni SwiftUI. taste está escrita sobre todo para
-landing pages; para GOAT aplica su guía de pantallas de app
+landing pages; para VB Prep aplica su guía de pantallas de app
 (`taste/references/app-screens.md`). apple-design trata una web app con sus
 principios y fundamentos (accesibilidad, color, tipografía, layout, textos),
 no con las convenciones propias de iOS.

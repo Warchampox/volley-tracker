@@ -1,12 +1,12 @@
-/* ============================== GOAT — Service Worker ==============================
+/* ============================ VB Prep — Service Worker =============================
    IMPORTANTE PARA FUTUROS DEPLOYS:
-   Sube el número de CACHE_NAME ("goat-v2", "goat-v3", ...) cada vez que
+   Sube el número de CACHE_NAME ("vbprep-v40", "vbprep-v41", ...) cada vez que
    estilos.css o app.js cambien de forma significativa. Si no lo subes, los usuarios
    con la app instalada seguirán viendo la versión vieja indefinidamente, porque el
    app shell se sirve cache-first. No hay build tools: solo edita esta constante.
 ======================================================================================= */
 
-const CACHE_NAME = "goat-v39";
+const CACHE_NAME = "vbprep-v40";
 
 // App shell propio (mismo origen). "./" cubre la navegación a la raíz de la app.
 const APP_SHELL = [
@@ -21,9 +21,8 @@ const APP_SHELL = [
   "icons/icon-512-maskable.png",
   "icons/apple-touch-icon.png",
   "icons/favicon-32.png",
-  "icons/watermark-u.png",
-  "icons/goat-face.png",
-  "icons/goat-body.png",
+  "icons/vbprep-logo.png",
+  "icons/vbprep-player.png",
 ];
 
 self.addEventListener("install", (e) => {
@@ -46,8 +45,8 @@ self.addEventListener("message", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      // Cualquier caché de una versión anterior (incluidas las "pesitas-*" de
-      // antes del rebranding a GOAT) se borra — este origen solo cachea esta app.
+      // Cualquier caché de una versión anterior (incluidas las "pesitas-*" y
+      // "goat-*" de los nombres anteriores) se borra — este origen solo cachea esta app.
       .then((keys) => Promise.all(
         keys
           .filter((k) => k !== CACHE_NAME)
