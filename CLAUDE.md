@@ -62,6 +62,12 @@
   repartir desde cero.
 
 ## Datos (campos opcionales, todos viajan tal cual en el export/import)
+- Sesión en curso (`active-session`, 2026-11-16): además de
+  `runningTimerInfo`, guarda `collapsedIdx` (índices colapsados, en
+  `persistActiveSession`, que corre en cada render) y `scrollY` (400 ms
+  después de dejar de scrollear, solo con la sesión a la vista). Al cargar se
+  restauran sin animar. `finishSession` quita los dos: NUNCA llegan a
+  `sessions` ni al JSON exportado.
 - `exercise.muscles = { primary: [ids], secondary: [ids] }` (ids de
   MUSCLES; un id no puede estar en las dos listas; `cleanMuscles` al
   importar). Sin el campo, el ejercicio no suma al mapa. Conteo
@@ -206,7 +212,8 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
   `--fs-2xl` 24px (header chico, nombre de sesión) · `--fs-3xl` 32px
   (título de pestaña, descanso, titular del resumen) · `--fs-hero`
   88px (SOLO el número héroe del resumen de sesión) · `--fs-menu` 16px
-  (SOLO menús flotantes: filas, título y valores de la tabla).
+  (SOLO menús flotantes: filas, título y valores de la tabla) ·
+  `--fs-guide` 17px (SOLO el texto de la burbuja del tutorial).
 - Espaciado (grilla de 4): `--sp-1` 4px · `--sp-2` 8px · `--sp-3` 12px
   · `--sp-4` 16px · `--sp-6` 24px · `--sp-8` 32px · `--sp-12` 48px ·
   `--sp-16` 64px.
@@ -471,6 +478,32 @@ Patrones (reutilizar, no inventar variantes):
 - Créditos en Ajustes: licencia MIT de los dibujos del cuerpo y atribución
   a Freepik por la silueta de saltos. Todo recurso de terceros que se
   agregue lleva su crédito ahí.
+
+## Tutorial (2026-11-16)
+- Se aprende haciendo: una sesión de práctica de verdad con la "Rutina de
+  práctica" (`PRACTICE_ROUTINE`: Sentadilla trasera 2 × 10 × 20 kg y Plancha
+  2 × 0:30, descanso 30 s), que vive SOLO en memoria y aparece arriba de
+  todo en Rutinas mientras dura el tutorial.
+- Cuándo se abre: solo, una vez, si `settings.tutorialDone` no existe y no
+  hay sesiones ni rutinas (modal centrado "¿Te muestro cómo se usa?",
+  Empezar / Ahora no; "Ahora no" deja `tutorialDone = true`). A mano desde
+  Ajustes → Ver tutorial; con una sesión real en curso solo avisa.
+- La sesión de práctica (`practice: true`) NUNCA se guarda: ni en `sessions`
+  (finishSession muestra el resumen sin PRs, 1RM ni comparación), ni en
+  `active-session` (persistActiveSession la salta), ni trofeos en vivo, y
+  "Última vez" muestra "Sin registros anteriores". Recargar a mitad la
+  pierde y `tutorialDone` no cambia. Terminar o Salir (con askConfirm)
+  descartan todo y dejan `tutorialDone = true`.
+- Guía: capa `#tutorial-layer` fuera de `$app` (no la rehace render): un
+  hueco con `box-shadow` sobre el elemento REAL (que recibe el toque),
+  cuatro bloqueadores alrededor y la burbuja (`--surface-2`, flecha de 10px,
+  "Paso N de 8", Salir, "Siguiente" en los pasos que solo explican). Se
+  recoloca después de cada render, al scrollear y al cambiar el tamaño; se
+  esconde mientras hay un diálogo abierto (salvo el resumen del paso 8).
+  Escape = Salir.
+- Textos y objetivos: TODOS en `TUTORIAL_STEPS` (app.js), para cambiarlos en
+  un solo lugar. Si se agregan features básicas nuevas (por ejemplo "Cómo se
+  hace"), evaluar sumarlas como un paso más.
 
 ## Animaciones (2026-10-24, no agregar otras sin pedido explícito)
 - Curva ÚNICA: token `--ease` = cubic-bezier(.2, .8, .2, 1). Solo CSS más
