@@ -170,7 +170,7 @@ const persistGroups = () => save("exercise-groups", exerciseGroups);
 // Igual con los ejercicios colapsados (collapsedIdx); scrollY lo guarda el
 // listener de scroll. Los dos se quitan al finalizar (finishSession).
 function persistActiveSession() {
-  if (ui.activeSession) {
+  if (ui.activeSession && !ui.activeSession.practice) { // la del tutorial nunca se guarda
     ui.activeSession.runningTimerInfo = runningTimer
       ? { exIdx: runningTimer.exIdx, setIdx: runningTimer.setIdx, startedAt: runningTimer.startedAt }
       : null;
@@ -221,6 +221,7 @@ const ui = {
   openExNotes: new Set(), // exIdx con la nota de ejercicio (sessionNote) abierta
   sessionSummary: null,   // null | {routineName, date, durationSec, volume, setsCount, prHits, appliedUpdates}
   confirmDialog: null,    // null | {message, label, danger, onYes, onNo, cancelLabel} — ver askConfirm
+  tutorialOffer: false,   // modal "¿Te muestro cómo se usa?" (instalación nueva, ver Tutorial)
   infoDialog: null,       // null | {message} — reemplaza alert() nativo, un solo botón
   folderModal: null,      // null | {id|null, name}
   movingRoutineId: null,  // id de la rutina que se está moviendo a otra carpeta, o null
@@ -944,6 +945,7 @@ function render() {
     ${ui.exerciseModal && ui.muscleSheet ? muscleSheetHTML() : ""}
     ${ui.sessionSummary ? sessionSummaryHTML() : ""}
     ${ui.durationDialog ? durationDialogHTML() : ""}
+    ${ui.tutorialOffer ? tutorialOfferHTML() : ""}
     ${ui.confirmDialog ? confirmDialogHTML() : ""}
     ${ui.infoDialog ? infoDialogHTML() : ""}
     ${ui.folderModal ? folderModalHTML() : ""}
@@ -965,6 +967,7 @@ function render() {
   setupDialogs(dialogWasOpen, prevFocusKey);
   runAnimHooks();
   if (ui.activeSession) persistActiveSession();
+  tutorialSync();
 }
 
 /* ---------------------------------- Animaciones ----------------------------------
@@ -1101,7 +1104,8 @@ function setupDialogs(wasOpen, prevFocusKey) {
   }
   if (!wasOpen) { dialogReturnKey = lastClickKey || prevFocusKey; lastClickKey = null; }
   // Toda hoja inferior lleva la barrita de arriba (se cierra arrastrándola, ver sheetDrag).
-  layers.forEach((l) => l.querySelector(".vt-modal")?.insertAdjacentHTML("afterbegin", '<div class="vt-grabber" aria-hidden="true"></div>'));
+  // El modal centrado (.is-center) no es una hoja: sin barrita ni arrastre.
+  layers.forEach((l) => { if (!l.matches(".is-center")) l.querySelector(".vt-modal")?.insertAdjacentHTML("afterbegin", '<div class="vt-grabber" aria-hidden="true"></div>'); });
   const panel = top.querySelector(".vt-modal, .vt-popover") || top;
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
@@ -1147,7 +1151,7 @@ document.addEventListener("touchstart", (e) => {
   sheetDrag = null;
   if (e.touches.length !== 1) return;
   const top = topDialog();
-  const panel = top?.matches(".vt-modal-backdrop[data-a]") && top.querySelector(".vt-modal");
+  const panel = top?.matches(".vt-modal-backdrop[data-a]:not(.is-center)") && top.querySelector(".vt-modal");
   if (!panel || !panel.contains(e.target) || e.target.closest("input, textarea, select")) return;
   const t = e.touches[0];
   sheetDrag = { backdrop: top, panel, scroller: e.target.closest(".vt-modal-body"), startX: t.clientX, startY: t.clientY,
@@ -1281,8 +1285,10 @@ function lastTimeDate(iso) {
 
 function lastTimeMenuHTML(p) {
   const ex = ui.activeSession?.exercises[p.ex];
-  const info = ex && lastSessionFor(ex.exerciseId);
-  if (!info) return "";
+  // En la sesión de práctica del tutorial no se muestra el historial real.
+  const info = ex && !ui.activeSession.practice && lastSessionFor(ex.exerciseId);
+  if (!info) return `<div class="vt-pop-head"><span class="vt-pop-title">Última vez</span></div>
+    <p class="vt-last-best">Sin registros anteriores</p>`;
   const type = exType(ex.exerciseId), uni = exUnilateral(ex.exerciseId);
   const cols = lastTimeColumns(type, uni);
   let n = 0;
@@ -1440,7 +1446,7 @@ function mountSortables() {
 // Una rutina = una fila: texto a la izquierda, botón redondo de Iniciar a la
 // derecha. Editar / Duplicar / Mover / Eliminar viven en la hoja del ⋯
 // (actionSheetHTML), no como íconos sueltos.
-function routineRowHTML(r, map, lastUsed) {
+function routineRowHTML(r, map, lastUsed, practice = false) {
   const last = lastUsed(r.id);
   const n = r.exercises.length;
   const names = r.exercises.map((re) => map[re.exerciseId]?.name || "Ejercicio");
@@ -1448,7 +1454,7 @@ function routineRowHTML(r, map, lastUsed) {
     <div class="vt-routine-text">
       <div class="vt-routine-head">
         <h2 class="vt-routine-name">${esc(r.name) || "Sin nombre"}</h2>
-        <button class="vt-more-btn" data-a="sheet-open" data-kind="routine" data-id="${r.id}" aria-label="Más opciones">${icon("more", 18)}</button>
+        ${practice ? "" : `<button class="vt-more-btn" data-a="sheet-open" data-kind="routine" data-id="${r.id}" aria-label="Más opciones">${icon("more", 18)}</button>`}
       </div>
       <p class="vt-routine-meta">${sepJoin([`${n} ejercicio${n !== 1 ? "s" : ""}`, last ? `última vez ${fmtDateShort(last)}` : "sin usar"])}</p>
       ${names.length ? `<p class="vt-routine-exs">${sepJoin(names.map(esc))}</p>` : ""}
@@ -1484,11 +1490,14 @@ function routinesHTML() {
     </div>`;
   }).join("");
 
-  const body = routines.length === 0 && routineFolders.length === 0
-    ? emptyHTML("Todavía no hay rutinas por acá",
+  // Tutorial: la rutina de práctica (solo en memoria) va arriba de todo, fuera
+  // de las carpetas, y reemplaza al estado vacío.
+  const practiceHTML = tutorial ? `<div class="vt-routine-list">${routineRowHTML(PRACTICE_ROUTINE, map, () => null, true)}</div>` : "";
+  const body = practiceHTML + (routines.length === 0 && routineFolders.length === 0
+    ? (tutorial ? "" : emptyHTML("Todavía no hay rutinas por acá",
         "Creemos la primera — sin límite de cuántas puedes guardar, aunque las cambies cada mes.",
-        `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`)
-    : looseHTML + foldersHTML;
+        `<button class="vt-btn-primary" data-a="routine-new">Crear rutina</button>`))
+    : looseHTML + foldersHTML);
 
   const html = `
     <header class="vt-header">
@@ -1784,7 +1793,8 @@ function trainActiveHTML() {
         const uni = !!ex?.unilateral;
         const prior = priorStats(e.exerciseId);
         const complete = isExerciseComplete(e);
-        const prs = prFlags(t, e.sets, prior, uni);
+        // En la práctica del tutorial no hay récords: nada se compara con el historial.
+        const prs = ui.activeSession.practice ? e.sets.map(() => false) : prFlags(t, e.sets, prior, uni);
         const anyPR = prs.some(Boolean);
         const accent = blockAccentColor(ex, lbl);
 
@@ -1807,7 +1817,7 @@ function trainActiveHTML() {
             </div>
             ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
             <div class="vt-ex-meta">
-              ${last ? `<button class="vt-last-btn ${ui.popover?.kind === "last" && ui.popover.ex === exIdx ? "is-open" : ""}" data-a="last-open" data-ex="${exIdx}" aria-haspopup="dialog">${icon("history", 18)} Última vez</button>` : ""}
+              ${last || ui.activeSession.practice ? `<button class="vt-last-btn ${ui.popover?.kind === "last" && ui.popover.ex === exIdx ? "is-open" : ""}" data-a="last-open" data-ex="${exIdx}" aria-haspopup="dialog">${icon("history", 18)} Última vez</button>` : ""}
               <div class="vt-ex-tools">
                 <span class="vt-rest-mini" title="Descanso">${icon("timer", 14)}
                   <label class="vt-rest-field"><input type="number" inputmode="numeric" class="vt-input vt-num" min="0" step="15"
@@ -3180,6 +3190,10 @@ function settingsHTML() {
       <button class="vt-btn-icon vt-danger" data-a="sheet-open" data-kind="reset" aria-label="Borrar datos personales">${icon("trash", 24)}</button>
     </div>
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Acerca de</p>
+    <button class="vt-settings-row vt-settings-link" data-a="tutorial-start">
+      <span class="vt-settings-label">Ver tutorial<small>Una sesión de práctica para aprender lo básico</small></span>
+      <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
+    </button>
     <button class="vt-settings-row vt-settings-link" data-a="credits-open">
       <span class="vt-settings-label">Créditos<small>Licencias de lo que usa VB Prep</small></span>
       <span class="vt-cat-chev">${icon("chevRight", 16)}</span>
@@ -3838,6 +3852,9 @@ function finishSession() {
   // acá adentro: se ejecuta directo si no hay nada sin marcar, o como
   // callback del modal de confirmación si sí lo hay.
   const save = (durationSec) => {
+    // Sesión de práctica del tutorial: muestra el resumen, pero no se guarda,
+    // no busca PRs ni sugiere 1RM, y no compara contra el historial.
+    const practice = !!s.practice;
     // PRs: se calculan ANTES de meter esta sesión en `sessions`, si no el
     // ejercicio terminaría comparándose contra sí mismo.
     const map = exMap();
@@ -3845,7 +3862,7 @@ function finishSession() {
     // PR tiene que superar al anterior de la misma sesión (prFlags), la mejor
     // es simplemente la última marcada.
     const prHits = [];
-    for (const e of s.exercises) {
+    for (const e of practice ? [] : s.exercises) {
       const type = exType(e.exerciseId);
       const uni = exUnilateral(e.exerciseId);
       const flags = prFlags(type, e.sets, priorStats(e.exerciseId), uni);
@@ -3882,7 +3899,7 @@ function finishSession() {
 
     // Sesión anterior de la MISMA rutina (antes de meter esta en `sessions`),
     // para el titular y el "+8% vs la última vez" del resumen.
-    const prevSame = s.routineId ? sessions.find((x) => x.routineId === s.routineId) : null;
+    const prevSame = s.routineId && !practice ? sessions.find((x) => x.routineId === s.routineId) : null;
 
     // collapsedIdx y scrollY son solo para recuperar la sesión en curso: no
     // van al historial ni al JSON exportado.
@@ -3899,7 +3916,7 @@ function finishSession() {
     // informativo hasta que el usuario confirme sincronizarla desde el resumen.
     // Nunca toca `cleaned` ni las sesiones ya guardadas.
     let routineDiff = null;
-    if (s.routineId) {
+    if (s.routineId && !practice) {
       const routine = routines.find((r) => r.id === s.routineId);
       if (routine) {
         const originalIds = new Set(routine.exercises.map((re) => re.exerciseId));
@@ -3916,8 +3933,10 @@ function finishSession() {
       }
     }
 
-    sessions = [cleaned, ...sessions];
-    persistSessions();
+    if (!practice) {
+      sessions = [cleaned, ...sessions];
+      persistSessions();
+    }
 
     ui.sessionSummary = {
       routineId: cleaned.routineId,
@@ -3929,7 +3948,7 @@ function finishSession() {
       jumps: sessionJumps(cleaned),
       rpe: null, // RPE de sesión (1–10), opcional: se elige en el resumen y se guarda en la sesión
       setsCount: done,
-      sessionNumber: sessions.length, // total de sesiones guardadas, contando esta
+      sessionNumber: sessions.length + (practice ? 1 : 0), // total de sesiones guardadas, contando esta
       prevVolume: prevSame ? sessionVolume(prevSame, false) : null, // null = primera vez con esta rutina
       prHits,
       appliedUpdates: new Set(),
@@ -5073,6 +5092,17 @@ document.addEventListener("click", (e) => {
       ui.infoDialog = null;
       render();
       break;
+    case "tutorial-start":
+      ui.tutorialOffer = false;
+      startTutorial();
+      break;
+    case "tutorial-later":
+      ui.tutorialOffer = false;
+      settings.tutorialDone = true;
+      persistSettings();
+      render();
+      showPillToast("Puedes verlo cuando quieras en Ajustes");
+      break;
 
     /* Rutinas */
     case "routine-new":
@@ -5101,11 +5131,12 @@ document.addEventListener("click", (e) => {
       }, { label: "Eliminar rutina", danger: true });
       break;
     case "routine-start": {
-      const r = routines.find((x) => x.id === id);
+      const r = id === PRACTICE_ID ? (tutorial ? PRACTICE_ROUTINE : null) : routines.find((x) => x.id === id);
       if (r) {
         const start = () => {
           runningTimer = null; // no arrastrar el cronómetro de una sesión que se está reemplazando
           ui.activeSession = buildSessionFromRoutine(r);
+          if (r === PRACTICE_ROUTINE) ui.activeSession.practice = true; // ver Tutorial
           ui.sessionMinimized = false;
           ui.openExNotes.clear();
           ui.collapsedExercises.clear();
@@ -5424,7 +5455,7 @@ document.addEventListener("click", (e) => {
       if (st.done) {
         // Animación de marcar (y de récord, si la serie quedó como PR) solo en esta fila.
         ui.anim = { kind: "check", key: `${exI}:${setI}` };
-        const pr = prFlags(exType(ex.exerciseId), ex.sets, priorStats(ex.exerciseId), exUnilateral(ex.exerciseId))[setI];
+        const pr = !ui.activeSession.practice && prFlags(exType(ex.exerciseId), ex.sets, priorStats(ex.exerciseId), exUnilateral(ex.exerciseId))[setI];
         if (settings.vibrate) navigator.vibrate?.(pr ? [12, 60, 24] : 12);
       }
       render();
@@ -6098,14 +6129,233 @@ window.addEventListener("beforeunload", (e) => {
 /* ------------------------ Restaurar sesión activa autoguardada ------------------------ */
 // Aviso chico y discreto (no bloqueante) de que se recuperó una sesión sola —
 // mismo patrón de elemento de DOM aparte que showUpdateToast, se autodestruye solo.
-function showRecoveredToast() {
+function showRecoveredToast() { showPillToast("Recuperamos tu sesión en curso"); }
+
+// Píldora chica arriba (#recovered-toast) que se va sola a los 3,5 s.
+function showPillToast(text) {
+  document.getElementById("recovered-toast")?.remove();
   const bar = document.createElement("div");
   bar.id = "recovered-toast";
   bar.setAttribute("role", "status");
-  bar.textContent = "Recuperamos tu sesión en curso";
+  bar.textContent = text;
   document.body.appendChild(bar);
   setTimeout(() => bar.remove(), 3500);
 }
+
+/* ------------------------------------ Tutorial ------------------------------------
+   Se aprende haciendo: una sesión de práctica de verdad (practice: true) con
+   una rutina que vive solo en memoria, y una guía que ilumina un elemento real
+   y pide tocarlo. La práctica nunca se guarda (ni sesión, ni rutina, ni
+   active-session). Se ofrece sola en una instalación nueva y desde Ajustes. */
+
+// Textos y objetivos de los 8 pasos. `sel`: el elemento que se ilumina (se
+// busca de nuevo en cada render); `rect`: recorte opcional del hueco; `done`:
+// condición que pasa al siguiente paso; `next`: paso que solo explica (botón
+// "Siguiente"); `plain`: sin hueco ni oscurecer, burbuja centrada.
+const TUTORIAL_STEPS = [
+  { text: "Esta es tu rutina. Toca el botón <b>▶</b> para empezar el entrenamiento.",
+    sel: '[data-a="routine-start"][data-id="tut-practice"]', done: () => !!ui.activeSession?.practice },
+  { text: "Cada fila es una serie. El peso y las repeticiones ya vienen puestos. Si quieres cambiarlos, toca el número.",
+    sel: '.vt-swipe-wrap[data-ex="0"][data-set="0"] .vt-set-row', next: true, focus: false,
+    // la fila sin el check: ese se toca en el paso siguiente
+    rect: (el) => {
+      const r = el.getBoundingClientRect(), c = el.querySelector('[data-a="set-check"]')?.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: c ? c.left - 10 : r.right, bottom: r.bottom };
+    } },
+  { text: "Cuando termines la serie, toca el <b>cuadrado</b> para marcarla.",
+    sel: '.vt-swipe-wrap[data-ex="0"][data-set="0"] [data-a="set-check"]', done: () => !!ui.activeSession?.exercises[0]?.sets[0]?.done },
+  { text: "Empezó el descanso. Puedes sumar o restar 15 segundos, o cerrarlo con la ✕.",
+    sel: "#restbar:not(.is-hidden)", next: true, focus: false },
+  { text: "<b>Última vez</b> muestra lo que hiciste la sesión anterior. Como es tu primera vez, todavía está vacío.",
+    sel: '[data-ex-block="0"] [data-a="last-open"]', next: true },
+  { text: "Cuando termines un ejercicio, se cierra solo. También puedes cerrarlo o abrirlo con esta <b>flecha</b>.",
+    sel: '[data-ex-block="0"] [data-a="ex-toggle-collapse"]',
+    enter: (t) => { t.base = ui.collapsedExercises.has(0); }, done: (t) => ui.collapsedExercises.has(0) !== t.base },
+  { text: "Cuando termines todo, toca <b>Finalizar sesión</b>. Las series sin marcar no se cuentan.",
+    sel: '[data-a="session-finish"]', done: () => !!ui.sessionSummary },
+  { text: "Este es tu resumen. Tus sesiones reales quedan guardadas en <b>Progreso → Historial</b>. ¡Listo, ya sabes lo básico!",
+    sel: null, plain: true, finish: true },
+];
+
+const PRACTICE_ID = "tut-practice";
+const PRACTICE_ROUTINE = {
+  id: PRACTICE_ID, name: "Rutina de práctica", folderId: null,
+  exercises: [
+    { exerciseId: "ex_sentadilla_trasera", targetSets: 2, targetReps: 10, targetWeight: 20, restSeconds: 30 },
+    { exerciseId: "ex_plancha", targetSets: 2, targetSeconds: 30, targetWeight: 0, restSeconds: 30 },
+  ],
+};
+
+let tutorial = null; // null | {step, base} mientras corre el tutorial
+
+function tutorialOfferHTML() {
+  return `
+    <div class="vt-modal-backdrop is-center" data-a="tutorial-later">
+      <div class="vt-modal" data-stop="1" role="dialog" aria-label="Tutorial">
+        <div class="vt-modal-form">
+          <p class="vt-tut-offer">¿Te muestro cómo se usa?</p>
+          <p class="vt-muted" style="margin:0">Son 2 minutos.</p>
+        </div>
+        <div class="vt-modal-actions">
+          <button class="vt-btn-ghost" data-a="tutorial-later">Ahora no</button>
+          <button class="vt-btn-primary" data-a="tutorial-start">Empezar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function startTutorial() {
+  if (ui.activeSession) { askAlert("Termina o descarta tu sesión antes de ver el tutorial"); return; }
+  ui.tab = "rutinas";
+  ui.progressDetail = null; ui.sessionDetail = null; ui.creditsSheet = false;
+  tutorial = { step: -1 };
+  render();
+  window.scrollTo(0, 0);
+  tutorialGo(0);
+}
+
+// Descarta la práctica (sesión, descanso, resumen) y vuelve a Rutinas.
+function endTutorial() {
+  if (ui.activeSession?.practice) {
+    runningTimer = null;
+    ui.activeSession = null;
+    persistActiveSession();
+  }
+  stopRest();
+  ui.sessionSummary = null;
+  ui.popover = null;
+  ui.exerciseEditMode = false; ui.exerciseEditDraft = null; ui.selectedExercises.clear();
+  ui.collapsedExercises.clear(); ui.openExNotes.clear();
+  settings.tutorialDone = true;
+  persistSettings();
+  tutorial = null;
+  document.getElementById("tutorial-layer")?.remove();
+  ui.tab = "rutinas";
+  render();
+  window.scrollTo(0, 0);
+}
+
+function exitTutorial() {
+  askConfirm("¿Salir del tutorial?", endTutorial, { label: "Salir", cancelLabel: "Seguir" });
+}
+
+function tutorialGo(step) {
+  tutorial.step = step;
+  const st = TUTORIAL_STEPS[step];
+  st.enter?.(tutorial);
+  const el = st.sel && document.querySelector(st.sel);
+  el?.scrollIntoView({ block: "center" });
+  const layer = tutorialLayer();
+  layer.querySelector(".vt-tut-text").innerHTML = st.text;
+  layer.querySelector(".vt-tut-count").textContent = `Paso ${step + 1} de ${TUTORIAL_STEPS.length}`;
+  const next = layer.querySelector(".vt-tut-next");
+  next.hidden = !(st.next || st.finish);
+  next.textContent = st.finish ? "Terminar" : "Siguiente";
+  // El hueco viaja al objetivo nuevo (250 ms) y la burbuja aparece (150 ms).
+  const bubble = layer.querySelector(".vt-tut-bubble");
+  layer.classList.add("is-moving");
+  clearTimeout(tutorialGo.t);
+  tutorialGo.t = setTimeout(() => layer.classList.remove("is-moving"), 260);
+  bubble.classList.add("is-entering");
+  tutorialLayout();
+  void bubble.offsetWidth;
+  bubble.classList.remove("is-entering");
+  if (el && st.focus !== false && el.matches("button")) el.focus({ preventScroll: true });
+  else bubble.focus({ preventScroll: true });
+}
+
+function tutorialLayer() {
+  let layer = document.getElementById("tutorial-layer");
+  if (layer) return layer;
+  layer = document.createElement("div");
+  layer.id = "tutorial-layer";
+  layer.innerHTML = `
+    <div class="vt-tut-block"></div><div class="vt-tut-block"></div><div class="vt-tut-block"></div><div class="vt-tut-block"></div>
+    <div class="vt-tut-hole"></div>
+    <div class="vt-tut-bubble" role="dialog" aria-live="polite" aria-label="Tutorial" tabindex="-1">
+      <span class="vt-tut-arrow"></span>
+      <p class="vt-tut-text"></p>
+      <div class="vt-tut-foot">
+        <span class="vt-tut-count"></span>
+        <button type="button" class="vt-tut-exit" data-tut="exit">Salir</button>
+        <button type="button" class="vt-tut-next" data-tut="next"></button>
+      </div>
+    </div>`;
+  // Fuera del hueco nada responde, salvo los botones de la burbuja.
+  const swallow = (e) => { if (!e.target.closest(".vt-tut-bubble")) { e.preventDefault(); e.stopPropagation(); } };
+  ["pointerdown", "touchstart", "mousedown"].forEach((t) => layer.addEventListener(t, swallow, { passive: false }));
+  layer.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tut]");
+    e.stopPropagation();
+    if (!b || !tutorial) return;
+    if (b.dataset.tut === "exit") exitTutorial();
+    else if (TUTORIAL_STEPS[tutorial.step].finish) endTutorial();
+    else tutorialGo(tutorial.step + 1);
+  });
+  document.body.appendChild(layer);
+  return layer;
+}
+
+// Después de cada render(), al scrollear y al cambiar el tamaño: pasa de paso
+// si ya se hizo la acción y recoloca el hueco y la burbuja.
+function tutorialSync() {
+  if (!tutorial || tutorial.step < 0) return;
+  const st = TUTORIAL_STEPS[tutorial.step];
+  if (st.done?.(tutorial)) { tutorialGo(tutorial.step + 1); return; }
+  tutorialLayout();
+}
+
+function tutorialLayout() {
+  const layer = document.getElementById("tutorial-layer");
+  if (!tutorial || !layer) return;
+  const st = TUTORIAL_STEPS[tutorial.step];
+  // Un diálogo encima (confirmaciones, "Última vez", el menú de serie) se usa
+  // normal: la guía se esconde mientras está abierto. El resumen del paso 8
+  // es la excepción: la burbuja va encima.
+  const top = topDialog();
+  layer.classList.toggle("is-hidden", !!top && !(st.plain && top.matches(".vt-summary-overlay")));
+  const vw = window.innerWidth, vh = window.innerHeight, M = 8;
+  const el = st.sel && document.querySelector(st.sel);
+  const r = el ? (st.rect ? st.rect(el) : el.getBoundingClientRect()) : null;
+  const hole = r ? { l: r.left - M, t: r.top - M, r: r.right + M, b: r.bottom + M } : { l: vw / 2, t: vh / 2, r: vw / 2, b: vh / 2 };
+  const h = layer.querySelector(".vt-tut-hole");
+  h.classList.toggle("is-plain", !!st.plain);
+  Object.assign(h.style, { left: `${hole.l}px`, top: `${hole.t}px`, width: `${hole.r - hole.l}px`, height: `${hole.b - hole.t}px` });
+  // Bloqueadores: los cuatro lados alrededor del hueco (sin hueco, toda la pantalla).
+  const box = (b, l, t, w, hh) => Object.assign(b.style, { left: `${l}px`, top: `${t}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, hh)}px` });
+  const [bt, bb, bl, br] = layer.querySelectorAll(".vt-tut-block");
+  if (r) {
+    box(bt, 0, 0, vw, hole.t);
+    box(bb, 0, hole.b, vw, vh - hole.b);
+    box(bl, 0, hole.t, hole.l, hole.b - hole.t);
+    box(br, hole.r, hole.t, vw - hole.r, hole.b - hole.t);
+  } else {
+    box(bt, 0, 0, vw, vh); box(bb, 0, 0, 0, 0); box(bl, 0, 0, 0, 0); box(br, 0, 0, 0, 0);
+  }
+  // Burbuja: abajo del hueco si cabe, si no arriba; sin objetivo, centrada.
+  const bubble = layer.querySelector(".vt-tut-bubble"), arrow = layer.querySelector(".vt-tut-arrow");
+  const bw = bubble.offsetWidth, bh = bubble.offsetHeight, GAP = 12, EDGE = 16;
+  let top2, left;
+  arrow.className = "vt-tut-arrow";
+  if (!r) {
+    top2 = (vh - bh) / 2; left = (vw - bw) / 2;
+  } else {
+    const below = vh - hole.b - EDGE >= bh + GAP || vh - hole.b > hole.t;
+    top2 = below ? hole.b + GAP : hole.t - GAP - bh;
+    top2 = Math.min(Math.max(top2, EDGE), vh - EDGE - bh);
+    const cx = (hole.l + hole.r) / 2;
+    left = Math.min(Math.max(cx - bw / 2, EDGE), vw - EDGE - bw);
+    arrow.classList.add(below ? "is-up" : "is-down");
+    arrow.style.left = `${Math.min(Math.max(cx - left - 10, 12), bw - 32)}px`;
+  }
+  Object.assign(bubble.style, { top: `${top2}px`, left: `${left}px` });
+}
+
+window.addEventListener("scroll", () => { if (tutorial) tutorialLayout(); }, { passive: true });
+window.addEventListener("resize", () => { if (tutorial) tutorialLayout(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && tutorial && !topDialog()) { e.preventDefault(); exitTutorial(); }
+});
 
 // Posición del scroll de la sesión en vivo: se guarda en active-session 400 ms
 // después de dejar de scrollear, solo con la sesión a la vista (no minimizada,
@@ -6146,6 +6396,10 @@ window.addEventListener("scroll", () => {
     showRecoveredToast();
   }
 }
+
+// Instalación nueva (sin sesiones ni rutinas y sin haber visto u omitido el
+// tutorial): se ofrece una vez.
+if (settings.tutorialDone === undefined && !sessions.length && !routines.length && !ui.activeSession) ui.tutorialOffer = true;
 
 render();
 appReady = true;

@@ -38,6 +38,7 @@
   --fs-sm: 13px;   /* texto secundario: notas, "última vez", subtítulos, muted */
   --fs-md: 15px;   /* texto base: nombres en listas, inputs, botones */
   --fs-menu: 16px; /* SOLO menús flotantes: filas de acción, título y valores de la tabla */
+  --fs-guide: 17px; /* SOLO el texto de la burbuja del tutorial (más grande a propósito) */
   --fs-lg: 18px;   /* valores: stats, inputs de series, valores destacados */
   --fs-xl: 20px;   /* títulos de bloque/rutina, títulos de modal */
   --fs-2xl: 24px;  /* títulos de header chico, nombre de sesión */
@@ -1625,3 +1626,47 @@ input[type="file"] { display: none; }
 .vt-mw-row b { font-size: var(--fs-md); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .vt-mw-more { padding: var(--sp-2) 0; background: none; border: none; color: var(--blue-text); font-size: var(--fs-md); font-weight: 500; cursor: pointer; }
 .vt-mw-empty { margin: var(--sp-1) 0 0; }
+
+/* Modal centrado (no hoja): la oferta del tutorial en una instalación nueva. */
+.vt-modal-backdrop.is-center { align-items: center; padding: var(--sp-4); }
+.vt-modal-backdrop.is-center .vt-modal { border-radius: var(--r-lg); border-bottom: 1px solid var(--line); }
+.vt-tut-offer { margin: 0 0 var(--sp-1); font-size: var(--fs-xl); font-weight: 700; }
+
+/* Tutorial: capa sobre toda la app con un hueco alrededor del objetivo (que
+   recibe el toque de verdad), bloqueadores alrededor y la burbuja de texto.
+   Se esconde mientras hay un diálogo abierto (tutorialLayout). */
+#tutorial-layer { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+#tutorial-layer.is-hidden { display: none; }
+.vt-tut-block { position: fixed; pointer-events: auto; touch-action: none; }
+.vt-tut-hole {
+  position: fixed; pointer-events: none; border-radius: var(--r-md);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+}
+.vt-tut-hole.is-plain { box-shadow: none; }
+#tutorial-layer.is-moving .vt-tut-hole {
+  transition: left 250ms var(--ease), top 250ms var(--ease), width 250ms var(--ease), height 250ms var(--ease);
+}
+.vt-tut-bubble {
+  position: fixed; pointer-events: auto;
+  width: min(320px, calc(100vw - 32px)); padding: var(--sp-4);
+  background: var(--surface-2); border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  transition: opacity 150ms var(--ease);
+}
+.vt-tut-bubble:focus { outline: none; }
+.vt-tut-bubble.is-entering { opacity: 0; transition: none; }
+.vt-tut-text { margin: 0; font-size: var(--fs-guide); font-weight: 500; line-height: 1.4; color: var(--text); }
+.vt-tut-text b { font-weight: 700; }
+.vt-tut-foot { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-2) calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0; }
+.vt-tut-count { flex: 1; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.vt-tut-foot button { min-height: 44px; padding: 0 var(--sp-1); background: none; border: none; cursor: pointer; }
+.vt-tut-exit { font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-tut-next { margin-left: var(--sp-2); font-size: var(--fs-md); font-weight: 600; color: var(--blue-text); }
+.vt-tut-next[hidden] { display: none; }
+/* Flecha de 10px hacia el objetivo (arriba si la burbuja va abajo, y al revés). */
+.vt-tut-arrow { position: absolute; width: 0; height: 0; border: 10px solid transparent; display: none; }
+.vt-tut-arrow.is-up { display: block; top: -20px; border-bottom-color: var(--surface-2); }
+.vt-tut-arrow.is-down { display: block; bottom: -20px; border-top-color: var(--surface-2); }
+@media (prefers-reduced-motion: reduce) {
+  #tutorial-layer.is-moving .vt-tut-hole, .vt-tut-bubble { transition: none; }
+}

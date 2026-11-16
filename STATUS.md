@@ -1669,3 +1669,14 @@ Entradas nuevas al final. No reescribir lo anterior.
 - Verificado a 360 y 390 px: 2 colapsados automáticos + 1 a mano, expandir a
   mano, mover un colapsado en Organizar, finalizar y recargar sin sesión.
   Falta en el teléfono: cerrar la app desde multitarea a mitad de sesión.
+- Fase 2: tutorial de 8 pasos con una sesión de práctica de verdad
+  (`practice: true`, "Rutina de práctica" solo en memoria). Se ofrece sola en
+  una instalación nueva (modal centrado, "Ahora no" deja `tutorialDone`) y
+  desde Ajustes → Ver tutorial. La guía ilumina el elemento real (hueco con
+  box-shadow, bloqueadores alrededor), se esconde mientras hay un diálogo y
+  al terminar o salir no queda nada: ni sesión, ni rutina, ni PRs, ni
+  active-session. En la práctica no hay trofeos de récord.
+- Verificado a 360 y 390 px: los 8 pasos sin salirse de la pantalla ni tapar
+  el objetivo; "Ahora no"; con datos reales el JSON exportado queda idéntico;
+  con sesión real en curso sale el aviso; Salir en el paso 4 corta el
+  descanso; recargar a mitad no deja nada. Falta: probarlo en el teléfono.
