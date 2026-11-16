@@ -167,11 +167,14 @@ const persistGroups = () => save("exercise-groups", exerciseGroups);
 // terminar/descartar. También sincroniza acá el cronómetro inline en curso
 // (runningTimer, variable de módulo fuera de `ui`) dentro de
 // ui.activeSession.runningTimerInfo, para poder reconstruirlo al recargar.
+// Igual con los ejercicios colapsados (collapsedIdx); scrollY lo guarda el
+// listener de scroll. Los dos se quitan al finalizar (finishSession).
 function persistActiveSession() {
   if (ui.activeSession) {
     ui.activeSession.runningTimerInfo = runningTimer
       ? { exIdx: runningTimer.exIdx, setIdx: runningTimer.setIdx, startedAt: runningTimer.startedAt }
       : null;
+    ui.activeSession.collapsedIdx = [...ui.collapsedExercises];
     save("active-session", ui.activeSession);
   } else {
     localStorage.removeItem("active-session");
@@ -228,7 +231,7 @@ const ui = {
   exerciseEditDraft: null,     // null | copia profunda de los ejercicios en edición mientras dura el modo
   selectedExercises: new Set(), // índices (dentro del draft) seleccionados en modo Organizar
   replaceExerciseIdx: null,     // índice (dentro del draft) del ejercicio a reemplazar (picker en contexto "replace")
-  collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — no persiste
+  collapsedExercises: new Set(), // exIdx colapsados en la sesión activa — se guardan en active-session.collapsedIdx
   popover: null,          // null | {kind: "last"|"set"|"actions", anchor (controlKey del botón), ...} — ver popoverHTML
   muscleSheet: false,     // hoja "Músculos" abierta sobre el modal de ejercicio
   musclesAll: false,      // Progreso: lista de músculos completa (si no, los 6 primeros)
@@ -1045,7 +1048,7 @@ function toggleBlock(exI) {
   const closing = !ui.collapsedExercises.has(exI);
   closing ? ui.collapsedExercises.add(exI) : ui.collapsedExercises.delete(exI);
   ui.anim = { kind: closing ? "collapse" : "expand", key: exI, from, ms: closing ? 320 : 280 };
-  render();
+  render(); // render() ya llama a persistActiveSession(): el colapso queda guardado
 }
 
 // Borrar una serie con animación (swipe o menú de serie): la fila se desliza
@@ -3881,8 +3884,11 @@ function finishSession() {
     // para el titular y el "+8% vs la última vez" del resumen.
     const prevSame = s.routineId ? sessions.find((x) => x.routineId === s.routineId) : null;
 
+    // collapsedIdx y scrollY son solo para recuperar la sesión en curso: no
+    // van al historial ni al JSON exportado.
+    const { collapsedIdx, scrollY, ...kept } = s;
     const cleaned = {
-      ...s,
+      ...kept,
       durationSec,
       exercises: s.exercises
         .map((e) => ({ ...e, sets: e.sets.filter((st) => st.done).map(({ doneAt, ...st }) => st) })) // doneAt era solo para la sugerencia de duración
@@ -5314,6 +5320,7 @@ document.addEventListener("click", (e) => {
           }
           ui.collapsedExercises = remapIdxSet(ui.collapsedExercises);
           ui.openExNotes = remapIdxSet(ui.openExNotes);
+          // (el render() de abajo persiste los colapsados ya remapeados)
           removed.forEach((ex) => {
             (ui.activeSession.explicitlyRemoved ??= []).push({ id: ex.exerciseId, name: exName(ex.exerciseId) });
           });
@@ -6100,6 +6107,20 @@ function showRecoveredToast() {
   setTimeout(() => bar.remove(), 3500);
 }
 
+// Posición del scroll de la sesión en vivo: se guarda en active-session 400 ms
+// después de dejar de scrollear, solo con la sesión a la vista (no minimizada,
+// sin Organizar ni el resumen encima).
+let restoreScrollY = 0;
+let scrollSaveTimer = null;
+window.addEventListener("scroll", () => {
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(() => {
+    if (!ui.activeSession || ui.sessionMinimized || ui.tab !== "rutinas" || ui.exerciseEditMode || ui.sessionSummary) return;
+    ui.activeSession.scrollY = Math.round(window.scrollY);
+    persistActiveSession();
+  }, 400);
+}, { passive: true });
+
 // Antes del primer render(): si había una sesión autoguardada (persistActiveSession,
 // ver Storage), se restaura tal cual quedó — series marcadas, valores editados,
 // ejercicios agregados, todo. Cubre el caso de cerrar la pestaña sin terminar
@@ -6110,6 +6131,11 @@ function showRecoveredToast() {
     ui.activeSession = savedActiveSession;
     ui.sessionMinimized = false;
     ui.tab = "rutinas"; // la lleva directo a la sesión en curso, no a donde estuviera antes
+    // Colapsados como quedaron (sin animar: ui.anim sigue en null) y, después
+    // del primer render, el scroll donde estaba.
+    ui.collapsedExercises = new Set((savedActiveSession.collapsedIdx || [])
+      .filter((i) => Number.isInteger(i) && i < savedActiveSession.exercises.length));
+    restoreScrollY = savedActiveSession.scrollY || 0;
     if (savedActiveSession.runningTimerInfo) {
       const info = savedActiveSession.runningTimerInfo;
       const st = savedActiveSession.exercises[info.exIdx]?.sets?.[info.setIdx];
@@ -6124,6 +6150,7 @@ function showRecoveredToast() {
 render();
 appReady = true;
 notifySaveFailure(); // por si save() ya falló durante la carga
+if (restoreScrollY) requestAnimationFrame(() => window.scrollTo(0, restoreScrollY));
 
 // Pide al navegador que no borre los datos de la app por falta de espacio
 // (sin esto, localStorage es "best effort" y el sistema puede limpiarlo). El

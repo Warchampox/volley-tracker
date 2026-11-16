@@ -1658,3 +1658,14 @@ Entradas nuevas al final. No reescribir lo anterior.
   ícono del launcher puede tardar en cambiar (Android lo actualiza solo
   cada cierto tiempo); si no cambia, desinstalar y reinstalar, pero
   exportando un respaldo antes.
+
+## 2026-11-16
+- Fase 1: los ejercicios colapsados y el scroll de la sesión en curso
+  sobreviven a recargar. `active-session` guarda `collapsedIdx` (en
+  `persistActiveSession`, que ya corre en cada render) y `scrollY` (400 ms
+  después de dejar de scrollear, solo con la sesión a la vista); al cargar
+  se restauran sin animar. `finishSession` los quita: no llegan al
+  historial ni al JSON exportado.
+- Verificado a 360 y 390 px: 2 colapsados automáticos + 1 a mano, expandir a
+  mano, mover un colapsado en Organizar, finalizar y recargar sin sesión.
+  Falta en el teléfono: cerrar la app desde multitarea a mitad de sesión.
