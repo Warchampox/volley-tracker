@@ -232,9 +232,11 @@ nav y los anchos/altos de elementos (columnas, botones, círculos).
 - Espacios (2026-10-27): **≥ 12px entre un ícono y un control táctil**
   (trofeo ↔ check, ícono ↔ botón) y **≤ 4px entre un valor y su unidad**
   ("60 s" del descanso, número → kg). Se mide con `getBoundingClientRect`
-  y no se mide a mitad de una animación. En filas de serie unilaterales y
-  de tiempo (`.vt-set-row-tight`) no cabe el trofeo al lado del número:
-  va de 12px en la esquina de arriba.
+  y no se mide a mitad de una animación. El trofeo de PR mide 16px y va
+  centrado en todas las filas de serie: en kg × reps y peso corporal, flota
+  en el aire libre antes del check; en unilaterales y de tiempo tiene su
+  columna fija (`{pr: true}` en `setColumns`, `.vt-col-pr`, también en el
+  encabezado). Nunca más chico ni en una esquina (2026-11-17: se veía mal).
 
 Patrones (reutilizar, no inventar variantes):
 - Fila de serie tipo tabla `[nº] [valor] [×] [valor] [✓]`: check a la
@@ -500,7 +502,10 @@ Patrones (reutilizar, no inventar variantes):
   "Paso N de 8", Salir, "Siguiente" en los pasos que solo explican). Se
   recoloca después de cada render, al scrollear y al cambiar el tamaño; se
   esconde mientras hay un diálogo abierto (salvo el resumen del paso 8).
-  Escape = Salir.
+  Escape = Salir. También se recoloca 360 ms después de cada render, cuando
+  ya terminó una animación de altura (el colapso del paso 6 sube el botón
+  Finalizar). El paso 7 corta el descanso: la barra de descanso tapa el
+  botón Finalizar.
 - Textos y objetivos: TODOS en `TUTORIAL_STEPS` (app.js), para cambiarlos en
   un solo lugar. Si se agregan features básicas nuevas (por ejemplo "Cómo se
   hace"), evaluar sumarlas como un paso más.

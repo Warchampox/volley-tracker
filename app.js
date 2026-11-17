@@ -1860,9 +1860,12 @@ function trainActiveHTML() {
 //   {cap, f}   → columna de valor (flex:1), f = campo de la serie
 //   {x: true}  → el "×" entre kg y reps
 //   {timer: true} → botón de cronómetro
+//   {pr: true} → lugar fijo del trofeo en las filas angostas (unilateral y
+//                tiempo): ahí un valor de 3 cifras llegaba hasta el trofeo
+//                flotante, así que se le reserva su columna (vacía sin PR)
 function setColumns(type, unilateral) {
-  if (type === "time") return [{ cap: "tiempo", f: "seconds" }, { cap: "+kg", f: "weight" }, { timer: true }];
-  if (unilateral) return [{ cap: "kg", f: "weight" }, { cap: "izq", f: "repsL" }, { cap: "der", f: "repsR" }];
+  if (type === "time") return [{ cap: "tiempo", f: "seconds" }, { cap: "+kg", f: "weight" }, { pr: true }, { timer: true }];
+  if (unilateral) return [{ cap: "kg", f: "weight" }, { cap: "izq", f: "repsL" }, { cap: "der", f: "repsR" }, { pr: true }];
   if (type === "bodyweight") return [{ cap: "reps", f: "reps" }, { cap: "+kg", f: "weight" }];
   return [{ cap: "kg", f: "weight" }, { x: true }, { cap: "reps", f: "reps" }];
 }
@@ -1872,6 +1875,7 @@ function setCapsHTML(type, unilateral) {
   const cols = setColumns(type, unilateral).map((c) =>
     c.x ? `<span class="vt-col-x"></span>`
       : c.timer ? `<span class="vt-col-timer"></span>`
+      : c.pr ? `<span class="vt-col-pr"></span>`
       : `<span class="vt-cap vt-col-val">${c.cap}</span>`).join("");
   return `<div class="vt-set-caps" aria-hidden="true"><span class="vt-col-num"></span>${cols}<span class="vt-col-check"></span></div>`;
 }
@@ -1996,8 +2000,11 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
     `data-i="set" data-f="${f}" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${spoken}, ${spokenField}" autocomplete="off" autocorrect="off" spellcheck="false" name="f_${f}_${exIdx}_${setIdx}"`;
 
   const running = !!(runningTimer && runningTimer.exIdx === exIdx && runningTimer.setIdx === setIdx);
-  const fields = setColumns(type, unilateral).map((c) => {
+  const trophy = pr ? `<span class="vt-pr" title="¡PR!" role="img" aria-label="Récord">${icon("trophy", 16)}</span>` : "";
+  const cols = setColumns(type, unilateral);
+  const fields = cols.map((c) => {
     if (c.x) return `<span class="vt-x vt-col-x">×</span>`;
+    if (c.pr) return `<span class="vt-col-pr">${trophy}</span>`;
     if (c.timer) return `<button class="vt-timer-btn vt-col-timer ${running ? "is-running" : ""}" data-a="set-timer" data-ex="${exIdx}" data-set="${setIdx}"
         aria-label="${running ? "Pausar cronómetro" : "Cronometrar serie"}">${icon(running ? "pause" : "playBtn", 22)}</button>`;
     if (c.f === "seconds") return `<input type="text" inputmode="numeric" class="vt-input vt-num vt-set-input vt-col-val vt-set-input-clock ${running ? "is-running" : ""}" value="${fmtClockInput(num(st.seconds))}" ${attrs("seconds", "tiempo")}>`;
@@ -2008,11 +2015,11 @@ function setRowHTML(type, st, exIdx, setIdx, pr, label, unilateral) {
   return `
     <div class="vt-swipe-wrap ${isAnim("enter", `${exIdx}:${setIdx}`) ? "anim-enter" : ""}" data-ex="${exIdx}" data-set="${setIdx}">
       <div class="vt-swipe-bg" aria-hidden="true">${icon("trash", 18)}</div>
-      <div class="vt-set-row ${type === "time" ? "vt-set-row-time" : ""} ${type === "time" || unilateral ? "vt-set-row-tight" : ""} ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""} ${isAnim("check", `${exIdx}:${setIdx}`) ? "anim-check" : ""}">
+      <div class="vt-set-row ${stype === "warmup" ? "is-warmup" : ""} ${st.done ? "is-done" : ""} ${pr ? "is-pr" : ""} ${isAnim("check", `${exIdx}:${setIdx}`) ? "anim-check" : ""}">
         <button class="vt-settype-btn vt-col-num ${typeBtnClass} ${menuOpen ? "is-open" : ""}" data-a="settype-toggle" data-ex="${exIdx}" data-set="${setIdx}" aria-haspopup="dialog" aria-label="${spoken}: tipo y esfuerzo${rpe ? `, RPE ${rpe}` : ""}">${label}${rpe ? `<small>@${rpe}</small>` : ""}</button>
         ${fields}
         <button class="vt-check vt-col-check" data-a="set-check" data-ex="${exIdx}" data-set="${setIdx}" aria-label="${st.done ? "Desmarcar" : "Marcar"} ${spoken.charAt(0).toLowerCase() + spoken.slice(1)}" aria-pressed="${!!st.done}">${icon("check", 15)}</button>
-        ${pr ? `<span class="vt-pr" title="¡PR!" role="img" aria-label="Récord">${icon("trophy", 16)}</span>` : ""}
+        ${cols.some((c) => c.pr) ? "" : trophy}
       </div>
     </div>`;
 }
@@ -6172,7 +6179,8 @@ const TUTORIAL_STEPS = [
     sel: '[data-ex-block="0"] [data-a="ex-toggle-collapse"]',
     enter: (t) => { t.base = ui.collapsedExercises.has(0); }, done: (t) => ui.collapsedExercises.has(0) !== t.base },
   { text: "Cuando termines todo, toca <b>Finalizar sesión</b>. Las series sin marcar no se cuentan.",
-    sel: '[data-a="session-finish"]', done: () => !!ui.sessionSummary },
+    sel: '[data-a="session-finish"]', done: () => !!ui.sessionSummary,
+    enter: () => stopRest() }, // la barra de descanso tapa el botón: si sigue corriendo, se corta
   { text: "Este es tu resumen. Tus sesiones reales quedan guardadas en <b>Progreso → Historial</b>. ¡Listo, ya sabes lo básico!",
     sel: null, plain: true, finish: true },
 ];
@@ -6301,8 +6309,12 @@ function tutorialLayer() {
 function tutorialSync() {
   if (!tutorial || tutorial.step < 0) return;
   const st = TUTORIAL_STEPS[tutorial.step];
-  if (st.done?.(tutorial)) { tutorialGo(tutorial.step + 1); return; }
-  tutorialLayout();
+  if (st.done?.(tutorial)) tutorialGo(tutorial.step + 1);
+  else tutorialLayout();
+  // Las animaciones de altura (colapsar un ejercicio, 320 ms) mueven lo de
+  // abajo sin scroll ni render: se recoloca otra vez cuando terminan.
+  clearTimeout(tutorialSync.t);
+  tutorialSync.t = setTimeout(tutorialLayout, 360);
 }
 
 function tutorialLayout() {

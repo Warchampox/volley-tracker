@@ -1680,3 +1680,13 @@ Entradas nuevas al final. No reescribir lo anterior.
   el objetivo; "Ahora no"; con datos reales el JSON exportado queda idéntico;
   con sesión real en curso sale el aviso; Salir en el paso 4 corta el
   descanso; recargar a mitad no deja nada. Falta: probarlo en el teléfono.
+
+## 2026-11-17
+- Tutorial, paso 7: la barra de descanso (todavía corriendo desde el paso 4)
+  tapaba "Finalizar sesión" y la luz quedaba sobre la barra. Ahora el paso 7
+  corta el descanso, y la guía se recoloca 360 ms después de cada render (el
+  colapso animado del paso 6 movía el botón después de medirlo).
+- Trofeo en filas unilaterales y de tiempo: se veía chico (12px) y pegado
+  arriba. Ahora tiene su propia columna (`.vt-col-pr`, también en el
+  encabezado): 16px, centrado, a 12px del check o del cronómetro, ≥ 22px del
+  número (con 112/112). Verificado a 360 y 390 px; falta en el teléfono.
