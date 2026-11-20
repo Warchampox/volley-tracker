@@ -162,6 +162,141 @@ const persistSettings = () => save("settings", settings);
 const persistFolders = () => save("routine-folders", routineFolders);
 const persistGroups = () => save("exercise-groups", exerciseGroups);
 
+/* ----------------------- Imágenes de ejercicios (IndexedDB) -----------------------
+   Excepción aprobada (2026-11-20): SOLO las imágenes de "Cómo se hace" viven en
+   IndexedDB (localStorage no aguanta GIFs, ~5 MB en total); todo lo demás sigue
+   en localStorage. Base "vbprep-media", store "media", clave "<exId>:<role>"
+   (role "main" o "easier") → { type, blob, updatedAt }. La base se abre la
+   primera vez que hace falta (con las guías apagadas, nunca). Sin IndexedDB la
+   app funciona igual y no ofrece imágenes. */
+const MEDIA_ROLES = ["main", "easier"];
+const MEDIA_MAX = 4 * 1024 * 1024;
+const MEDIA_TOO_BIG = "La imagen es muy pesada (máx. 4 MB)";
+let mediaDB = null;     // promesa de la base (o null si no hay IndexedDB)
+let mediaKeys = null;   // Set de claves con imagen; null = todavía no se cargó
+let mediaReady = false; // la base abrió bien: se pueden ofrecer imágenes
+const mediaURLs = new Map(); // clave → object URL ya creado (se revocan en releaseMediaURLs)
+const mediaKey = (exId, role) => `${exId}:${role}`;
+
+function mediaOpen() {
+  return mediaDB ??= new Promise((resolve) => {
+    let req;
+    try { req = indexedDB.open("vbprep-media", 1); } catch { resolve(null); return; }
+    req.onupgradeneeded = () => req.result.createObjectStore("media");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = req.onblocked = () => resolve(null);
+  });
+}
+async function mediaTx(mode, fn) {
+  const db = await mediaOpen();
+  if (!db) throw new Error("Sin IndexedDB");
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("media", mode);
+    const req = fn(tx.objectStore("media"));
+    tx.oncomplete = () => resolve(req?.result);
+    tx.onerror = tx.onabort = () => reject(tx.error);
+  });
+}
+const mediaGet = (exId, role) => mediaTx("readonly", (st) => st.get(mediaKey(exId, role))).catch(() => null);
+async function mediaPut(exId, role, blob) {
+  await mediaTx("readwrite", (st) => st.put({ type: blob.type, blob, updatedAt: Date.now() }, mediaKey(exId, role)));
+  mediaKeys?.add(mediaKey(exId, role));
+  dropMediaURL(mediaKey(exId, role));
+}
+async function mediaDelete(exId, role) {
+  await mediaTx("readwrite", (st) => st.delete(mediaKey(exId, role)));
+  mediaKeys?.delete(mediaKey(exId, role));
+  dropMediaURL(mediaKey(exId, role));
+}
+const mediaAllKeys = async () => (await mediaTx("readonly", (st) => st.getAllKeys())) || [];
+async function mediaClear() {
+  await mediaTx("readwrite", (st) => st.clear());
+  mediaKeys = new Set();
+  releaseMediaURLs();
+}
+// Carga una vez el Set de claves (al iniciar con las guías encendidas, o al encenderlas).
+async function mediaLoadKeys() {
+  if (mediaKeys) return;
+  mediaReady = !!(await mediaOpen());
+  mediaKeys = new Set(mediaReady ? await mediaAllKeys().catch(() => []) : []);
+  if (appReady) render();
+}
+const hasMedia = (exId, role = "main") => !!mediaKeys?.has(mediaKey(exId, role));
+function dropMediaURL(key) {
+  if (mediaURLs.has(key)) { URL.revokeObjectURL(mediaURLs.get(key)); mediaURLs.delete(key); }
+}
+function releaseMediaURLs() {
+  mediaURLs.forEach((url) => URL.revokeObjectURL(url));
+  mediaURLs.clear();
+}
+// Después de cada render: pone el src a las <img data-media="clave"> (el blob
+// se lee de IndexedDB una sola vez por clave y queda como object URL).
+async function hydrateMedia() {
+  for (const img of document.querySelectorAll("img[data-media]:not([src])")) {
+    const key = img.dataset.media;
+    if (!mediaURLs.has(key)) {
+      const [exId, role] = key.split(":");
+      const rec = await mediaGet(exId, role);
+      if (!rec?.blob || mediaURLs.has(key)) continue;
+      mediaURLs.set(key, URL.createObjectURL(rec.blob));
+    }
+    document.querySelectorAll(`img[data-media="${key}"]:not([src])`).forEach((x) => { x.src = mediaURLs.get(key); });
+  }
+}
+
+// GIF: tal cual (por canvas perdería la animación). PNG/JPG/WEBP: a 900 px de
+// lado como máximo, en WEBP 0,82 (o JPG si el navegador no hace WEBP).
+async function prepareImage(file) {
+  if (!/^image\//.test(file.type)) throw new Error("Ese archivo no es una imagen.");
+  if (file.type === "image/gif") {
+    if (file.size > MEDIA_MAX) throw new Error(MEDIA_TOO_BIG);
+    return file;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    // createImageBitmap no depende de que la página esté pintando; si no existe, <img>.
+    const img = window.createImageBitmap ? await createImageBitmap(file)
+      : await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const w = img.width, h = img.height;
+    const k = Math.min(1, 900 / Math.max(w, h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * k);
+    canvas.height = Math.round(h * k);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; // se muestran sobre blanco (--media-bg)
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const toBlob = (type) => new Promise((res) => canvas.toBlob(res, type, 0.82));
+    let blob = await toBlob("image/webp");
+    if (!blob || blob.type !== "image/webp") blob = await toBlob("image/jpeg");
+    if (!blob) throw new Error("No se pudo leer la imagen.");
+    if (blob.size > MEDIA_MAX) throw new Error(MEDIA_TOO_BIG);
+    return blob;
+  } catch (err) {
+    throw err?.message === MEDIA_TOO_BIG ? err : new Error("No se pudo leer la imagen.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function addExerciseImage(exId, role, file) {
+  let blob;
+  try { blob = await prepareImage(file); }
+  catch (err) { askAlert(err.message || "No se pudo leer la imagen."); return; }
+  try { await mediaPut(exId, role, blob); }
+  catch { askAlert("No se pudo guardar la imagen."); return; }
+  render();
+}
+
+// howTo.steps: arreglo de textos no vacíos, 12 como máximo; si no queda nada, se quita.
+function cleanHowTo(ex) {
+  if (!ex || ex.howTo == null) return ex;
+  const steps = (Array.isArray(ex.howTo.steps) ? ex.howTo.steps : [])
+    .filter((x) => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 12);
+  if (steps.length) ex.howTo = { steps }; else delete ex.howTo;
+  return ex;
+}
+
 // Autoguardado de la sesión EN CURSO (distinto de persistSessions, que solo
 // guarda sesiones ya finalizadas) — para sobrevivir a cerrar la pestaña sin
 // terminar/descartar. También sincroniza acá el cronómetro inline en curso
@@ -206,6 +341,7 @@ const ui = {
   sessionDetail: null,    // id de la sesión cuyo detalle está abierto (Historial), o null
   durationDialog: null,   // null | {mode: "finish"|"edit", rawSec, minutes, onSave} — ver durationDialogHTML
   sessionRpeEdit: false,  // en el detalle de sesión: mostrando los botones 1–10 para poner/cambiar el RPE
+  howToEdit: null,        // exId cuyos pasos de "Cómo se hace" se están editando (detalle de ejercicio)
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
   progressDetail: null,      // id del ejercicio cuyo detalle está abierto (desde Ejercicios o Progreso), o null
@@ -968,6 +1104,7 @@ function render() {
   runAnimHooks();
   if (ui.activeSession) persistActiveSession();
   tutorialSync();
+  if (settings.exerciseGuides) hydrateMedia();
 }
 
 /* ---------------------------------- Animaciones ----------------------------------
@@ -2917,6 +3054,7 @@ function exerciseDetailHTML() {
       <button class="vt-more-btn" data-a="sheet-open" data-kind="exercise" data-id="${exId}" aria-label="Opciones del ejercicio">${icon("more", 20)}</button>
     </header>
     ${exerciseMusclesHTML(ex)}
+    ${howToSectionHTML(ex)}
     ${!hasHistory ? `<p class="vt-muted vt-detail-empty">Sin registros todavía. Cuando lo entrenes, acá va a aparecer su gráfico.</p>` : `${strip}
     <section class="vt-section">
       <div class="vt-sec-head">
@@ -2948,6 +3086,46 @@ function exerciseDetailHTML() {
       </div></div>
       <button class="vt-btn-outline vt-flex-center vt-section-btn" data-a="pr-share" data-id="${exId}">${icon("share", 16)} Compartir récord</button>
     </section>`}`;
+}
+
+// "Cómo se hace" en el detalle de ejercicio (solo con las guías encendidas):
+// imagen principal, variante más fácil y pasos, todo editable desde acá.
+const mediaImgHTML = (exId, role, name) =>
+  `<figure class="vt-howto-img ${role === "easier" ? "is-easier" : ""}"><img data-media="${mediaKey(exId, role)}" alt="${role === "easier" ? "Variante más fácil" : "Cómo se hace"}: ${esc(name)}"></figure>`;
+const mediaFileHTML = (exId, role, label) =>
+  `<label class="vt-text-btn vt-howto-link">${label}<input type="file" accept="image/*" data-c="media-file" data-id="${exId}" data-role="${role}" autocomplete="off"></label>`;
+const howToStepsHTML = (steps) => `<ol class="vt-howto-steps">${steps.map((t, i) =>
+  `<li><span class="vt-howto-n">${i + 1}</span><span>${esc(t)}</span></li>`).join("")}</ol>`;
+
+function howToSectionHTML(ex) {
+  if (!settings.exerciseGuides) return "";
+  const steps = ex.howTo?.steps || [];
+  const main = hasMedia(ex.id, "main"), easier = hasMedia(ex.id, "easier");
+  const imgActions = (role) => `<div class="vt-howto-actions">
+      ${mediaFileHTML(ex.id, role, "Cambiar imagen")}
+      <button class="vt-text-btn vt-howto-link vt-howto-danger" data-a="media-remove" data-id="${ex.id}" data-role="${role}">Quitar</button>
+    </div>`;
+  const images = !mediaReady ? "" : `
+    ${main ? mediaImgHTML(ex.id, "main", ex.name) + imgActions("main") : mediaFileHTML(ex.id, "main", "+ Agregar imagen")}
+    ${easier ? `<p class="vt-howto-label">Variante más fácil</p>${mediaImgHTML(ex.id, "easier", ex.name)}${imgActions("easier")}`
+      : main ? mediaFileHTML(ex.id, "easier", "+ Agregar variante más fácil") : ""}`;
+  const stepsBlock = ui.howToEdit === ex.id
+    ? `<label class="vt-howto-edit">
+        <span class="vt-howto-label">Un paso por línea (máximo 12)</span>
+        <textarea class="vt-input vt-textarea" id="howto-text" rows="6" autocomplete="off">${esc(steps.join("\n"))}</textarea>
+      </label>
+      <div class="vt-howto-actions">
+        <button class="vt-text-btn vt-howto-link" data-a="howto-save" data-id="${ex.id}">Guardar pasos</button>
+        <button class="vt-text-btn vt-howto-link vt-howto-muted" data-a="howto-cancel">Cancelar</button>
+      </div>`
+    : steps.length
+      ? `${howToStepsHTML(steps)}<button class="vt-text-btn vt-howto-link" data-a="howto-edit" data-id="${ex.id}">Editar pasos</button>`
+      : `<button class="vt-text-btn vt-howto-link" data-a="howto-edit" data-id="${ex.id}">+ Agregar pasos</button>`;
+  return `<section class="vt-section vt-howto">
+    <p class="vt-section-eyebrow">Cómo se hace</p>
+    ${images}
+    ${stepsBlock}
+  </section>`;
 }
 
 /* --------------------------------- Vista principal de Progreso -------------------------------- */
@@ -3177,6 +3355,10 @@ function settingsHTML() {
     <label class="vt-settings-row">
       <div class="vt-settings-label">Vibración<small>Si tu teléfono lo permite</small></div>
       <input type="checkbox" class="vt-switch" ${settings.vibrate ? "checked" : ""} data-c="set-vibrate" autocomplete="off">
+    </label>
+    <label class="vt-settings-row">
+      <div class="vt-settings-label">Guías de ejercicios<small>Imágenes y pasos de cómo se hace cada ejercicio</small></div>
+      <input type="checkbox" class="vt-switch" ${settings.exerciseGuides ? "checked" : ""} data-c="set-guides" autocomplete="off">
     </label>
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
@@ -4628,7 +4810,15 @@ function processImportedData(data) {
   // archivos de antes de que existiera `kind` son todos completos).
   const isFull = Array.isArray(data.sessions) && (!data.kind || data.kind === "full");
   if (Array.isArray(data.sessions)) cleanImportedRpe(data.sessions);
-  if (Array.isArray(inExercises)) inExercises.forEach(cleanMuscles);
+  if (Array.isArray(inExercises)) inExercises.forEach((e) => { cleanMuscles(e); cleanHowTo(e); });
+  // Si el archivo trae guías (pasos o imágenes) y están apagadas, se encienden
+  // solas: a quien recibe la rutina le funciona sin configurar nada.
+  const bringsGuides = !!data["exercise-media"] || (Array.isArray(inExercises) && inExercises.some((e) => e?.howTo));
+  const enableGuides = () => {
+    if (!bringsGuides || settings.exerciseGuides) return "";
+    settings.exerciseGuides = true; persistSettings(); mediaLoadKeys();
+    return " Se activaron las guías de ejercicios (puedes apagarlas en Ajustes).";
+  };
 
   if (isFull) {
     askConfirm("Este archivo es un respaldo completo: trae también entrenamientos y 1RM. Se REEMPLAZARÁN todos los datos actuales. ¿Continuar?", () => {
@@ -4638,7 +4828,7 @@ function processImportedData(data) {
       if (Array.isArray(inExercises) && inExercises.length) { exercises = inExercises; persistExercises(); }
       if (Array.isArray(inGroups) && inGroups.length) { exerciseGroups = inGroups; migrateGroupColors(exerciseGroups); persistGroups(); } // un respaldo viejo trae los colores viejos
       if (data.settings) { settings = Object.assign(settings, data.settings); persistSettings(); }
-      askAlert("Respaldo restaurado ✔");
+      askAlert("Respaldo restaurado ✔" + enableGuides());
     }, { label: "Reemplazar datos", danger: true });
     return;
   }
@@ -4705,7 +4895,7 @@ function processImportedData(data) {
     if (Array.isArray(data.routines)) parts.push(`${nRt} rutina(s)`);
     if (withSessions) parts.push(`${nSes} entrenamiento(s)`);
     if (Array.isArray(inExercises)) parts.push(`${nEx} ejercicio(s)`);
-    askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.`);
+    askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.${enableGuides()}`);
   };
   if (!hasSessions) { apply(false); return; }
   const n = data.sessions.length;
@@ -5695,8 +5885,31 @@ document.addEventListener("click", (e) => {
       ui.progressDetail = id; ui.progressMetric = null;
       render(); window.scrollTo(0, 0);
       break;
+    case "media-remove": {
+      const { id: exId, role } = el.dataset;
+      askConfirm(role === "easier" ? "¿Quitar la imagen de la variante más fácil?" : "¿Quitar la imagen de este ejercicio?", async () => {
+        try { await mediaDelete(exId, role); } catch { askAlert("No se pudo quitar la imagen."); return; }
+        render();
+      }, { label: "Quitar imagen", danger: true });
+      break;
+    }
+    case "howto-edit": ui.howToEdit = id; render(); document.getElementById("howto-text")?.focus(); break;
+    case "howto-cancel": ui.howToEdit = null; render(); break;
+    case "howto-save": {
+      const ex = exercises.find((x) => x.id === id);
+      if (ex) {
+        ex.howTo = { steps: document.getElementById("howto-text").value.split("\n") };
+        cleanHowTo(ex);
+        persistExercises();
+      }
+      ui.howToEdit = null;
+      render();
+      break;
+    }
     case "prog-detail-close":
       ui.progressDetail = null;
+      ui.howToEdit = null;
+      releaseMediaURLs();
       render(); window.scrollTo(0, ui.detailReturnScroll || 0);
       ui.detailReturnScroll = 0;
       break;
@@ -6086,6 +6299,16 @@ document.addEventListener("change", (e) => {
   switch (el.dataset.c) {
     case "set-sound": settings.sound = el.checked; persistSettings(); break;
     case "set-vibrate": settings.vibrate = el.checked; persistSettings(); break;
+    case "set-guides": // apagarlas no borra nada: imágenes y pasos vuelven al encenderlas
+      settings.exerciseGuides = el.checked; persistSettings();
+      if (el.checked) mediaLoadKeys();
+      break;
+    case "media-file": {
+      const file = el.files?.[0];
+      el.value = "";
+      if (file) addExerciseImage(el.dataset.id, el.dataset.role, file);
+      break;
+    }
     case "exm-type": {
       // El 1RM y "unilateral" solo aplican a peso/corporal; se ocultan en
       // tipo tiempo (sin re-render).
@@ -6416,6 +6639,7 @@ if (settings.tutorialDone === undefined && !sessions.length && !routines.length 
 render();
 appReady = true;
 notifySaveFailure(); // por si save() ya falló durante la carga
+if (settings.exerciseGuides) mediaLoadKeys(); // apagadas: IndexedDB ni se abre
 if (restoreScrollY) requestAnimationFrame(() => window.scrollTo(0, restoreScrollY));
 
 // Pide al navegador que no borre los datos de la app por falta de espacio

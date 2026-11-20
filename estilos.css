@@ -65,6 +65,7 @@
   --muscle-2: #2F5BC2;
   --muscle-3: #3B6FE0;
   --muscle-4: #7FA3F2;
+  --media-bg: #fff; /* SOLO el fondo de las imágenes de "Cómo se hace" (los GIFs vienen sobre blanco) */
 
   /* Curva ÚNICA de las animaciones (ver "Animaciones" al final del archivo). */
   --ease: cubic-bezier(.2, .8, .2, 1);
@@ -1664,3 +1665,26 @@ input[type="file"] { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #tutorial-layer.is-moving .vt-tut-hole, .vt-tut-bubble { transition: none; }
 }
+
+/* "Cómo se hace" (guías de ejercicios): imagen sobre blanco, variante más
+   fácil más chica, links de texto y pasos numerados con divisor. */
+.vt-howto-img {
+  margin: 0; display: flex; justify-content: center;
+  background: var(--media-bg); border-radius: var(--r-md); overflow: hidden;
+}
+.vt-howto-img img { display: block; width: 100%; max-height: 320px; object-fit: contain; }
+.vt-howto-img.is-easier img { max-height: 200px; }
+.vt-howto-actions { display: flex; gap: var(--sp-4); }
+.vt-howto-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0; font-size: var(--fs-md); font-weight: 500; cursor: pointer; }
+.vt-howto-danger { color: var(--red-text); }
+.vt-howto-muted { color: var(--text-dim); }
+.vt-howto-label { display: block; margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-howto-steps { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+.vt-howto-steps li {
+  display: flex; gap: var(--sp-3); padding: var(--sp-3) 0;
+  font-size: var(--fs-md); line-height: 1.4; color: var(--text);
+}
+.vt-howto-steps li + li { border-top: 1px solid var(--line); }
+.vt-howto-n { flex: 0 0 auto; min-width: 1.2em; color: var(--blue-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vt-howto-edit { display: block; }
+.vt-howto-edit .vt-textarea { width: 100%; font-size: var(--fs-md); line-height: 1.4; }

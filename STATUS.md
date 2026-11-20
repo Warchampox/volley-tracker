@@ -1690,3 +1690,14 @@ Entradas nuevas al final. No reescribir lo anterior.
   arriba. Ahora tiene su propia columna (`.vt-col-pr`, también en el
   encabezado): 16px, centrado, a 12px del check o del cronómetro, ≥ 22px del
   número (con 112/112). Verificado a 360 y 390 px; falta en el teléfono.
+
+## 2026-11-20
+- Fase 1 (guías de ejercicios): interruptor "Guías de ejercicios" en Ajustes,
+  apagado por defecto; apagado, nada cambia e IndexedDB ni se abre. Encendido:
+  almacén de imágenes en IndexedDB (`vbprep-media`, solo imágenes), sección
+  "Cómo se hace" en el detalle de ejercicio con imagen principal, variante más
+  fácil y pasos editables (`howTo.steps`, ≤ 12). GIF tal cual; PNG/JPG a 900 px
+  en WEBP 0,82; > 4 MB se rechaza. Importar pasos con las guías apagadas las
+  enciende y lo avisa.
+- Verificado a 360 y 390 px con un GIF de Martín (385 KB, intacto) y un PNG de
+  3000×2000 (queda 900×600). Apagar no borra nada.
