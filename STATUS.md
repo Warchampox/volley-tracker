@@ -1701,3 +1701,9 @@ Entradas nuevas al final. No reescribir lo anterior.
   enciende y lo avisa.
 - Verificado a 360 y 390 px con un GIF de Martín (385 KB, intacto) y un PNG de
   3000×2000 (queda 900×600). Apagar no borra nada.
+- Fase 2: botón ⓘ (22px, área de 44px) al final del nombre en la sesión en
+  vivo, el editor y el detalle de sesión del Historial, solo si el ejercicio
+  tiene imagen o pasos. Abre la hoja "Cómo se hace": nota de la rutina,
+  imagen, pasos, variante más fácil y "Ver ejercicio completo" (no en la
+  sesión en vivo). Al cerrarla se revocan los object URL. El ⓘ está fuera del
+  long-press de Organizar. Verificado a 390 px; el GIF se anima en la hoja.

@@ -288,6 +288,14 @@ async function addExerciseImage(exId, role, file) {
   render();
 }
 
+// ¿El ejercicio tiene guía (imagen o pasos)? Solo con las guías encendidas.
+const hasGuide = (exId) => !!settings.exerciseGuides
+  && (hasMedia(exId, "main") || hasMedia(exId, "easier") || !!exMap()[exId]?.howTo?.steps?.length);
+// Botón ⓘ pegado al final del nombre del ejercicio. `ctx` + `idx` dicen de
+// dónde sacar la nota de la rutina al abrir la hoja (live, editor, history).
+const infoBtnHTML = (exId, name, ctx, idx) => !hasGuide(exId) ? ""
+  : `<button class="vt-info-btn" data-a="howto-open" data-id="${exId}" data-ctx="${ctx}" data-idx="${idx}" aria-label="Cómo se hace: ${esc(name)}">${icon("info", 22, 1.8)}</button>`;
+
 // howTo.steps: arreglo de textos no vacíos, 12 como máximo; si no queda nada, se quita.
 function cleanHowTo(ex) {
   if (!ex || ex.howTo == null) return ex;
@@ -342,6 +350,7 @@ const ui = {
   durationDialog: null,   // null | {mode: "finish"|"edit", rawSec, minutes, onSave} — ver durationDialogHTML
   sessionRpeEdit: false,  // en el detalle de sesión: mostrando los botones 1–10 para poner/cambiar el RPE
   howToEdit: null,        // exId cuyos pasos de "Cómo se hace" se están editando (detalle de ejercicio)
+  howToSheet: null,       // null | {exId, note, ctx} — hoja "Cómo se hace" (botón ⓘ)
   historyQuery: "",       // buscador del historial (dentro de Progreso), filtra por nombre de rutina/sesión
   historyRange: "todo",   // "todo" | "1m" | "3m" | "1a" — se aplica en conjunto (AND) con historyQuery
   progressDetail: null,      // id del ejercicio cuyo detalle está abierto (desde Ejercicios o Progreso), o null
@@ -422,6 +431,7 @@ const typePrefix = (t) => t === "warmup" ? "C" : t === "dropset" ? "D" : t === "
 /* ------------------------------------ Íconos ------------------------------------ */
 
 const PATHS = {
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6h.01"/>',
   barbell: '<path d="M6.5 5.5v13"/><path d="M17.5 5.5v13"/><path d="M3 8.5v7"/><path d="M21 8.5v7"/><path d="M6.5 12h11"/>',
   play: '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
   trend: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
@@ -467,8 +477,8 @@ const sepJoin = (parts) => parts.join(' <span class="vt-sep">·</span> ');
 // Valor de un token de estilos.css, para lo que no lee CSS (Chart.js, canvas).
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-const icon = (name, s = 18) =>
-  `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] || ""}</svg>`;
+const icon = (name, s = 18, sw = 2.2) =>
+  `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] || ""}</svg>`;
 
 /* --------------------------- Volumen, PRs y "última vez" -------------------------- */
 
@@ -1092,6 +1102,7 @@ function render() {
     ${ui.pasteJsonModal ? pasteJsonModalHTML() : ""}
     ${ui.shareText ? shareTextModalHTML() : ""}
     ${ui.creditsSheet ? creditsSheetHTML() : ""}
+    ${ui.howToSheet ? howToSheetHTML() : ""}
     ${ui.popover ? popoverHTML() : ""}`;
 
   updateRestBar();
@@ -1868,7 +1879,7 @@ function editorHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${blockAccentColor(ex, lbl)}" data-block-idx="${idx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}</h2>
+              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${infoBtnHTML(it.exerciseId, ex?.name || "", "editor", idx)}</h2>
             </div>
             <div class="vt-sets vt-targets">
               <div class="vt-set-caps">${caps}</div>
@@ -1950,7 +1961,7 @@ function trainActiveHTML() {
         return `<div class="vt-block ${lbl && !lbl.isLast ? "vt-linked-next" : ""}" style="border-left-color:${accent}" data-block-idx="${exIdx}" data-ex-block="${exIdx}">
           <div class="vt-block-body">
             <div class="vt-card-top">
-              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h2>
+              <h2>${lbl ? `<span class="vt-ss-badge">${lbl.letter}${lbl.pos}</span>` : ""}${esc(ex?.name || "(eliminado)")}${infoBtnHTML(e.exerciseId, ex?.name || "", "live", exIdx)}${e.target?.percent ? `<span class="vt-badge" style="margin-left:var(--sp-2)">@${e.target.percent}%</span>` : ""}</h2>
             </div>
             ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
             <div class="vt-ex-meta">
@@ -2262,7 +2273,7 @@ function historyListHTML() {
 // withNotes=true para mostrar también las notas (del entrenador, de la
 // sesión y de series puntuales).
 function doneListHTML(list, prIds, withNotes = false) {
-  return `<div class="vt-rows">${list.map((e) => {
+  return `<div class="vt-rows">${list.map((e, i) => {
     const setNotes = withNotes ? e.sets.filter((st) => st.note).map((st) => esc(st.note)) : [];
     const notes = !withNotes ? "" : `
       ${e.note ? `<p class="vt-coach-note">${esc(e.note)}</p>` : ""}
@@ -2270,7 +2281,7 @@ function doneListHTML(list, prIds, withNotes = false) {
       ${setNotes.length ? `<p class="vt-note-line">— ${setNotes.join(" · ")}</p>` : ""}`;
     return `<div class="vt-row-wrap">
       <div class="vt-row">
-        <span class="vt-row-name">${esc(exName(e.exerciseId))}${prIds.has(e.exerciseId) ? `<span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span>` : ""}</span>
+        <span class="vt-row-name">${esc(exName(e.exerciseId))}${withNotes ? infoBtnHTML(e.exerciseId, exName(e.exerciseId), "history", i) : ""}${prIds.has(e.exerciseId) ? `<span class="vt-pr vt-pr-inline">${icon("trophy", 12)}</span>` : ""}</span>
         <span class="vt-row-value">${esc(fmtDoneSets(e))}</span>
       </div>${notes}
     </div>`;
@@ -3126,6 +3137,32 @@ function howToSectionHTML(ex) {
     ${images}
     ${stepsBlock}
   </section>`;
+}
+
+// Hoja "Cómo se hace" (botón ⓘ): nota de la rutina, imagen, pasos y variante
+// más fácil. Sin "Ver ejercicio completo" en la sesión en vivo (no sacar a
+// nadie de la sesión). Al cerrarla se revocan los object URL.
+function howToSheetHTML() {
+  const { exId, note, ctx } = ui.howToSheet;
+  const ex = exMap()[exId];
+  if (!ex) return "";
+  const steps = ex.howTo?.steps || [];
+  return `
+    <div class="vt-modal-backdrop" data-a="howto-close">
+      <div class="vt-modal vt-howto-sheet" data-stop="1" aria-label="Cómo se hace: ${esc(ex.name)}">
+        <div class="vt-modal-head">
+          <div class="vt-howto-title"><h2 class="vt-modal-title">${esc(ex.name)}</h2><p class="vt-howto-sub">Cómo se hace</p></div>
+          <button class="vt-btn-ghost" data-a="howto-close" aria-label="Cerrar">${icon("x", 18)}</button>
+        </div>
+        <div class="vt-modal-body vt-howto-body">
+          ${note ? `<p class="vt-howto-label">Nota de la rutina</p><p class="vt-howto-note">${esc(note)}</p>` : ""}
+          ${hasMedia(exId, "main") ? mediaImgHTML(exId, "main", ex.name) : ""}
+          ${steps.length ? howToStepsHTML(steps) : ""}
+          ${hasMedia(exId, "easier") ? `<p class="vt-howto-label">Variante más fácil</p>${mediaImgHTML(exId, "easier", ex.name)}` : ""}
+          ${ctx === "live" ? "" : `<button class="vt-text-btn vt-howto-link" data-a="howto-full" data-id="${exId}">Ver ejercicio completo</button>`}
+        </div>
+      </div>
+    </div>`;
 }
 
 /* --------------------------------- Vista principal de Progreso -------------------------------- */
@@ -5201,7 +5238,7 @@ document.addEventListener("pointerdown", (e) => {
   if (ui.exerciseEditMode) return; // el long-press solo sirve para ENTRAR, no hace nada ya adentro
   if (!ui.editingRoutine && !ui.activeSession) return;
   const blockEl = e.target.closest("[data-block-idx]");
-  if (!blockEl || e.target.closest("input, textarea, button, .vt-check, .vt-settype-btn, .vt-timer-btn")) return;
+  if (!blockEl || e.target.closest("input, textarea, button, .vt-check, .vt-settype-btn, .vt-timer-btn, .vt-info-btn")) return;
   // Bloquea selección de texto/menú contextual/zoom del navegador sobre este
   // gesto — si no, le gana la carrera al temporizador de long-press de abajo.
   e.preventDefault();
@@ -5893,6 +5930,23 @@ document.addEventListener("click", (e) => {
       }, { label: "Quitar imagen", danger: true });
       break;
     }
+    case "howto-open": {
+      const i = +el.dataset.idx, ctx = el.dataset.ctx;
+      const item = ctx === "live" ? ui.activeSession?.exercises[i]
+        : ctx === "editor" ? ui.editingRoutine?.exercises[i]
+        : sessions.find((x) => x.id === ui.sessionDetail)?.exercises.filter((e) => e.sets.length)[i];
+      ui.howToSheet = { exId: id, note: item?.note || "", ctx };
+      render();
+      break;
+    }
+    case "howto-close": ui.howToSheet = null; releaseMediaURLs(); render(); break;
+    case "howto-full": // desde el editor o el historial: abre el detalle del ejercicio
+      ui.howToSheet = null; releaseMediaURLs();
+      if (ui.tab !== "progreso") ui.tab = "ejercicios";
+      ui.detailReturnScroll = window.scrollY;
+      ui.progressDetail = id; ui.progressMetric = null;
+      render(); window.scrollTo(0, 0);
+      break;
     case "howto-edit": ui.howToEdit = id; render(); document.getElementById("howto-text")?.focus(); break;
     case "howto-cancel": ui.howToEdit = null; render(); break;
     case "howto-save": {

@@ -1688,3 +1688,20 @@ input[type="file"] { display: none; }
 .vt-howto-n { flex: 0 0 auto; min-width: 1.2em; color: var(--blue-text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .vt-howto-edit { display: block; }
 .vt-howto-edit .vt-textarea { width: 100%; font-size: var(--fs-md); line-height: 1.4; }
+/* Botón ⓘ pegado al final del nombre del ejercicio: 22px visibles, 44px de
+   área táctil (los márgenes negativos no agrandan la línea del título). */
+.vt-info-btn {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  width: 44px; height: 44px; margin: -11px -11px -11px -7px; padding: 0;
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+}
+.vt-info-btn:active { color: var(--text); }
+/* Hoja "Cómo se hace": alta, con el nombre arriba y "Cómo se hace" debajo. */
+.vt-howto-sheet { max-height: 92vh; }
+.vt-howto-title { flex: 1; min-width: 0; }
+.vt-howto-title .vt-modal-title { font-size: var(--fs-xl); font-weight: 700; }
+.vt-howto-sub { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.vt-howto-body { padding: var(--sp-2) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+.vt-howto-body > .vt-howto-label:first-child { margin-top: 0; }
+.vt-howto-note { margin: 0 0 var(--sp-4); font-size: var(--fs-md); line-height: 1.4; color: var(--text); }
+.vt-howto-body .vt-howto-steps { margin-bottom: var(--sp-2); }
