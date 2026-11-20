@@ -1707,3 +1707,16 @@ Entradas nuevas al final. No reescribir lo anterior.
   imagen, pasos, variante más fácil y "Ver ejercicio completo" (no en la
   sesión en vivo). Al cerrarla se revocan los object URL. El ⓘ está fuera del
   long-press de Organizar. Verificado a 390 px; el GIF se anima en la hoja.
+- Fase 3: "Compartir carpeta" en el ⋯ de la carpeta y, al compartir rutina o
+  carpeta con imágenes, la elección "Con imágenes (N · X,X MB)" (solo
+  archivo, `exercise-media` en base64) o "Solo texto". La importación guarda
+  las imágenes validadas en IndexedDB y suma "N imagen(es)" al aviso; las
+  rutinas nuevas quedan en el orden del archivo (antes Día 2 salía arriba de
+  Día 1). Respaldo completo sin imágenes (nota en Ajustes); Borrar datos
+  personales tiene la opción "Imágenes de ejercicios". sw.js → vbprep-v43.
+- Verificado con primeros-pasos-con-imagenes.json de Martín en un perfil
+  limpio: carpeta, 2 rutinas, 18 con pasos, 17 con imagen + variante de la
+  flexión; importar 2 veces sin duplicados; compartir la carpeta con
+  imágenes (7,3 MB) y reimportarla en otro perfil limpio da lo mismo. Con
+  las guías apagadas, 11 pantallas comparadas contra la versión anterior:
+  idénticas salvo la fila nueva de Ajustes. Falta en los teléfonos.

@@ -215,11 +215,13 @@ async function mediaClear() {
   releaseMediaURLs();
 }
 // Carga una vez el Set de claves (al iniciar con las guías encendidas, o al encenderlas).
-async function mediaLoadKeys() {
-  if (mediaKeys) return;
-  mediaReady = !!(await mediaOpen());
-  mediaKeys = new Set(mediaReady ? await mediaAllKeys().catch(() => []) : []);
-  if (appReady) render();
+let mediaLoading = null;
+function mediaLoadKeys() {
+  return mediaLoading ??= (async () => {
+    mediaReady = !!(await mediaOpen());
+    mediaKeys = new Set(mediaReady ? await mediaAllKeys().catch(() => []) : []);
+    if (appReady) render();
+  })();
 }
 const hasMedia = (exId, role = "main") => !!mediaKeys?.has(mediaKey(exId, role));
 function dropMediaURL(key) {
@@ -295,6 +297,51 @@ const hasGuide = (exId) => !!settings.exerciseGuides
 // dónde sacar la nota de la rutina al abrir la hoja (live, editor, history).
 const infoBtnHTML = (exId, name, ctx, idx) => !hasGuide(exId) ? ""
   : `<button class="vt-info-btn" data-a="howto-open" data-id="${exId}" data-ctx="${ctx}" data-idx="${idx}" aria-label="Cómo se hace: ${esc(name)}">${icon("info", 22, 1.8)}</button>`;
+
+// "exercise-media" del JSON compartido: { exId: [{ role, type, data (base64) }] }.
+const blobToBase64 = (blob) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(",")[1] || "");
+  r.onerror = () => rej(r.error);
+  r.readAsDataURL(blob);
+});
+// Claves con imagen de esos ejercicios (solo con las guías encendidas).
+const mediaKeysFor = (exIds) => !settings.exerciseGuides || !mediaKeys ? []
+  : [...mediaKeys].filter((k) => exIds.has(k.split(":")[0]) && MEDIA_ROLES.includes(k.split(":")[1]));
+async function buildMediaPayload(exIds) {
+  const out = {};
+  for (const k of mediaKeysFor(exIds)) {
+    const [exId, role] = k.split(":");
+    const rec = await mediaGet(exId, role);
+    if (!rec?.blob) continue;
+    (out[exId] ??= []).push({ role, type: rec.blob.type || rec.type, data: await blobToBase64(rec.blob) });
+  }
+  return out;
+}
+// Al importar: solo ejercicios que existen (ya importado el catálogo), role
+// main/easier, tipo image/* y ≤ 4 MB decodificada. Reemplaza la que haya.
+async function importMedia(media) {
+  if (!media || typeof media !== "object") return 0;
+  await mediaLoadKeys();
+  if (!mediaReady) return 0;
+  const ids = new Set(exercises.map((e) => e.id));
+  let n = 0;
+  for (const [exId, list] of Object.entries(media)) {
+    if (!ids.has(exId) || !Array.isArray(list)) continue;
+    for (const it of list) {
+      if (!MEDIA_ROLES.includes(it?.role) || !/^image\//.test(it?.type || "") || typeof it.data !== "string") continue;
+      let bytes;
+      try {
+        const bin = atob(it.data);
+        if (bin.length > MEDIA_MAX) continue;
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } catch { continue; }
+      try { await mediaPut(exId, it.role, new Blob([bytes], { type: it.type })); n++; } catch { /* sigue con la próxima */ }
+    }
+  }
+  return n;
+}
 
 // howTo.steps: arreglo de textos no vacíos, 12 como máximo; si no queda nada, se quita.
 function cleanHowTo(ex) {
@@ -1683,7 +1730,9 @@ function actionsMenuHTML(p) {
     editor: [r("exercise-editmode-toggle", "grip", "Organizar ejercicios")],
     routine: [r("routine-edit", "pencil", "Editar"), r("routine-dup", "copy", "Duplicar"), r("sheet-open", "share", "Compartir", false, 'data-kind="share"'),
       r("routine-move", "folder", "Mover a carpeta"), r("routine-del", "trash", "Eliminar", true)],
-    folder: [r("folder-edit", "pencil", "Renombrar"), r("folder-del", "trash", "Eliminar", true)],
+    folder: [r("folder-edit", "pencil", "Renombrar"),
+      ...(settings.exerciseGuides ? [r("folder-share", "share", "Compartir carpeta")] : []),
+      r("folder-del", "trash", "Eliminar", true)],
     session: [r("hist-del", "trash", "Eliminar", true)],
     exercise: [r("ex-edit", "pencil", "Editar"), r("ex-del", "trash", "Eliminar", true)],
   }[p.sheet] || [];
@@ -1697,11 +1746,21 @@ function actionsMenuHTML(p) {
 function actionSheetHTML() {
   const { kind, id } = ui.actionSheet;
   let title, rows;
-  if (kind === "share") {
-    // Compartir UNA rutina: como texto (mensaje para pegar) o como archivo.
-    const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="routine-share" data-mode="${mode}" data-id="${id}">
+  if ((kind === "share" || kind === "share-folder") && ui.actionSheet.media) {
+    // Antes de compartir algo con imágenes: con ellas (solo como archivo) o sin.
+    const { n, bytes } = ui.actionSheet.media;
+    const mb = (bytes / 1048576).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const opt = (w, ic, label, sub) => `<button class="vt-modal-row" data-a="share-media" data-with="${w}" data-kind="${kind}" data-id="${id}">
       ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
-    title = `Compartir "${routines.find((r) => r.id === id)?.name || "rutina"}"`;
+    title = `Compartir "${kind === "share" ? routines.find((r) => r.id === id)?.name : routineFolders.find((f) => f.id === id)?.name}"`;
+    rows = opt("1", "download", `Con imágenes (${n} · ${mb} MB)`, "Como archivo .json, con las imágenes de cómo se hace")
+      + opt("0", "note", "Solo texto", "Sin imágenes: como mensaje o como archivo");
+  } else if (kind === "share" || kind === "share-folder") {
+    // Compartir UNA rutina o una carpeta: como texto (mensaje para pegar) o como archivo.
+    const a = kind === "share" ? "routine-share" : "folder-share-go";
+    const opt = (mode, ic, label, sub) => `<button class="vt-modal-row" data-a="${a}" data-mode="${mode}" data-id="${id}">
+      ${icon(ic, 16)}<span class="vt-modal-row-text">${label}<small>${sub}</small></span></button>`;
+    title = `Compartir "${kind === "share" ? routines.find((r) => r.id === id)?.name || "rutina" : routineFolders.find((f) => f.id === id)?.name || "carpeta"}"`;
     rows = opt("text", "note", "Como texto", "Un mensaje para WhatsApp; el otro lo copia y lo pega en VB Prep")
       + opt("file", "download", "Como archivo", "Un .json para importar desde Ajustes");
   } else if (kind === "reset") {
@@ -1711,8 +1770,10 @@ function actionSheetHTML() {
     const opt = (k, label, n, sub) => `<button class="vt-modal-row vt-modal-row-danger" data-a="reset-pick" data-kind="${k}" ${n ? "" : "disabled"}>
       ${icon("trash", 16)}<span class="vt-modal-row-text">${label}<small>${n ? sub : "No hay nada que borrar"}</small></span></button>`;
     title = "Borrar datos personales";
+    const nImg = mediaKeys?.size || 0;
     rows = opt("sessions", "Entrenamientos", nSes, `Las ${nSes} sesiones del historial, con sus récords y gráficos`)
-      + opt("onerm", "1RM", nRM, `El 1RM guardado de ${nRM} ejercicio${nRM !== 1 ? "s" : ""}`);
+      + opt("onerm", "1RM", nRM, `El 1RM guardado de ${nRM} ejercicio${nRM !== 1 ? "s" : ""}`)
+      + (settings.exerciseGuides ? opt("media", "Imágenes de ejercicios", nImg, `Las ${nImg} imágenes de cómo se hace; los pasos no se tocan`) : "");
   } else {
     title = "Exportar";
     rows = EXPORT_KINDS.map((k) => `<button class="vt-modal-row" data-a="export-pick" data-kind="${k.id}">
@@ -3399,7 +3460,8 @@ function settingsHTML() {
     </label>
     <p class="vt-section-eyebrow" style="margin-top:var(--sp-6)">Datos</p>
     <div class="vt-settings-row">
-      <div class="vt-settings-label">Exportar datos<small>Último respaldo: ${settings.lastExportAt ? fmtRelDate(settings.lastExportAt) : "nunca"}</small></div>
+      <div class="vt-settings-label">Exportar datos<small>Último respaldo: ${settings.lastExportAt ? fmtRelDate(settings.lastExportAt) : "nunca"}</small>${settings.exerciseGuides
+        ? "<small>Las imágenes de ejercicios no van en el respaldo; se comparten con la rutina.</small>" : ""}</div>
       <button class="vt-btn-icon" data-a="sheet-open" data-kind="export" aria-label="Exportar datos">${icon("download", 24)}</button>
     </div>
     <div class="vt-settings-row">
@@ -4735,6 +4797,78 @@ async function shareRoutine(routineId, mode) {
   render();
 }
 
+// Una carpeta entera: sus rutinas (con folderId), la carpeta misma y los
+// ejercicios que usan (con howTo, sin 1RM). Mismo formato que el parcial de
+// rutinas: la importación crea la carpeta y respeta el folderId.
+function buildFolderShare(folderId) {
+  const f = routineFolders.find((x) => x.id === folderId);
+  if (!f) return null;
+  const list = routines.filter((r) => r.folderId === f.id);
+  return {
+    app: "volley-tracker", version: 1, kind: "routines", exportedAt: new Date().toISOString(),
+    routines: list, "routine-folders": [{ id: f.id, name: f.name }],
+    ...exportableExercises(new Set(list.flatMap((r) => r.exercises.map((x) => x.exerciseId)))),
+  };
+}
+
+function folderShareText(data) {
+  const f = data["routine-folders"][0], n = data.routines.length;
+  return `Carpeta VB Prep: ${f.name}
+${n} rutina${n !== 1 ? "s" : ""}: ${data.routines.map((r) => r.name).join(" · ")}
+
+Para importarla: copia este mensaje completo y pégalo en VB Prep → Ajustes → Importar datos → botón de pegar.
+
+${JSON.stringify(data)}`;
+}
+
+async function shareFolder(folderId, mode) {
+  const data = buildFolderShare(folderId);
+  if (!data) return;
+  const name = data["routine-folders"][0].name;
+  if (mode === "file") {
+    try { await deliverJSONFile(data, `vbprep-carpeta-${slug(name)}.json`, `Carpeta VB Prep: ${name}`, true); }
+    catch (err) { askAlert("No se pudo generar el archivo."); }
+    return;
+  }
+  const text = folderShareText(data);
+  try {
+    if (navigator.share) { await navigator.share({ text }); return; }
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+  }
+  ui.shareText = { title: name, text };
+  render();
+}
+
+// Compartir (guías encendidas): si algún ejercicio involucrado tiene imagen,
+// primero se elige "Con imágenes" o "Solo texto" (ver actionSheetHTML).
+const shareExerciseIds = (data) => new Set(data["custom-exercises"].map((e) => e.id));
+async function openShare(kind, id) {
+  const data = kind === "folder" ? buildFolderShare(id) : buildRoutineShare(id);
+  if (!data) return;
+  await mediaLoadKeys();
+  const keys = mediaKeysFor(shareExerciseIds(data));
+  let media = null;
+  if (keys.length) {
+    let bytes = 0;
+    for (const k of keys) { const [exId, role] = k.split(":"); bytes += (await mediaGet(exId, role))?.blob?.size || 0; }
+    media = { n: keys.length, bytes };
+  }
+  ui.actionSheet = { kind: kind === "folder" ? "share-folder" : "share", id, media };
+  render();
+}
+
+// "Con imágenes": siempre como archivo (WhatsApp corta un mensaje tan largo).
+async function shareWithMedia(kind, id) {
+  const data = kind === "share-folder" ? buildFolderShare(id) : buildRoutineShare(id);
+  if (!data) return;
+  data["exercise-media"] = await buildMediaPayload(shareExerciseIds(data));
+  const name = kind === "share-folder" ? data["routine-folders"][0].name : data.routines[0].name;
+  const file = kind === "share-folder" ? `vbprep-carpeta-${slug(name)}.json` : `vbprep-rutina-${slug(name)}.json`;
+  try { await deliverJSONFile(data, file, `${kind === "share-folder" ? "Carpeta" : "Rutina"} VB Prep: ${name}`, true); }
+  catch (err) { askAlert("No se pudo generar el archivo."); }
+}
+
 // Saca el JSON de un texto pegado que puede traer algo antes o después (la
 // cabecera del mensaje de "compartir como texto", un saludo, etc.). Prueba
 // desde cada "{" hasta la última "}" y se queda con el primero que parsea.
@@ -4883,7 +5017,7 @@ function processImportedData(data) {
     askAlert("El archivo no tiene rutinas, entrenamientos, ejercicios ni un respaldo reconocible.");
     return;
   }
-  const apply = (withSessions) => {
+  const apply = async (withSessions) => {
     let nEx = 0, nRt = 0, nSes = 0;
     if (Array.isArray(inGroups)) {
       // Solo grupos que no existen (por nombre): no pisa los colores propios.
@@ -4911,12 +5045,14 @@ function processImportedData(data) {
       persistFolders();
     }
     if (Array.isArray(data.routines)) {
+      const added = [];
       for (const r of data.routines) {
         if (!r.id || !r.name || !Array.isArray(r.exercises)) continue;
         const i = routines.findIndex((x) => x.id === r.id);
         if (i >= 0) routines[i] = { ...r, folderId: r.folderId ?? routines[i].folderId ?? null }; // conserva la carpeta propia
-        else { routines.unshift(r); nRt++; }
+        else { added.push(r); nRt++; }
       }
+      routines.unshift(...added); // las nuevas arriba, en el orden del archivo (Día 1 antes que Día 2)
       persistRoutines();
     }
     if (withSessions) {
@@ -4932,7 +5068,10 @@ function processImportedData(data) {
     if (Array.isArray(data.routines)) parts.push(`${nRt} rutina(s)`);
     if (withSessions) parts.push(`${nSes} entrenamiento(s)`);
     if (Array.isArray(inExercises)) parts.push(`${nEx} ejercicio(s)`);
-    askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.${enableGuides()}`);
+    const guidesNote = enableGuides();
+    // Imágenes: recién ahora, con el catálogo ya importado (se validan contra él).
+    if (data["exercise-media"]) parts.push(`${await importMedia(data["exercise-media"])} imagen(es)`);
+    askAlert(`Importado ✔  Nuevos: ${parts.join(", ")}.${guidesNote}`);
   };
   if (!hasSessions) { apply(false); return; }
   const n = data.sessions.length;
@@ -5286,7 +5425,8 @@ document.addEventListener("click", (e) => {
 
   switch (a) {
     case "sheet-open":
-      if (MENU_KINDS.has(el.dataset.kind)) openPopover(el, { kind: "actions", sheet: el.dataset.kind, id });
+      if (el.dataset.kind === "share" && settings.exerciseGuides) openShare("routine", id); // puede preguntar por las imágenes
+      else if (MENU_KINDS.has(el.dataset.kind)) openPopover(el, { kind: "actions", sheet: el.dataset.kind, id });
       else { ui.actionSheet = { kind: el.dataset.kind, id }; render(); }
       break;
     case "popover-close": closePopover(); break;
@@ -6124,6 +6264,14 @@ document.addEventListener("click", (e) => {
     case "export": exportJSON(); break; // respaldo completo directo (banner de recordatorio)
     case "export-pick": exportJSON(el.dataset.kind); break;
     case "routine-share": render(); shareRoutine(id, el.dataset.mode); break; // render() cierra la hoja
+    case "folder-share": openShare("folder", id); break;
+    case "folder-share-go": render(); shareFolder(id, el.dataset.mode); break;
+    case "share-media": { // la hoja ya se cerró (arriba): con imágenes comparte, sin ellas vuelve a abrirse sin la pregunta
+      const kind = el.dataset.kind;
+      if (el.dataset.with === "1") { render(); shareWithMedia(kind, id); }
+      else { ui.actionSheet = { kind, id, media: null }; render(); }
+      break;
+    }
     case "share-text-close": ui.shareText = null; render(); break;
     case "share-text-copy": {
       const ta = document.getElementById("share-text");
@@ -6134,7 +6282,12 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "reset-pick": {
-      if (el.dataset.kind === "sessions") {
+      if (el.dataset.kind === "media") {
+        askConfirm("¿Borrar todas las imágenes de los ejercicios? Los pasos se mantienen. No se puede deshacer: para recuperarlas hay que volver a importar la rutina que las trae.", async () => {
+          try { await mediaClear(); } catch { askAlert("No se pudieron borrar las imágenes."); return; }
+          askAlert("Imágenes borradas.");
+        }, { label: "Borrar imágenes", danger: true });
+      } else if (el.dataset.kind === "sessions") {
         const n = sessions.length;
         askConfirm(`¿Borrar los ${n} entrenamientos del historial? Se van también los récords, gráficos y marcas que salen de ellos. Rutinas y ejercicios no se tocan. No se puede deshacer: si son tuyos, exporta un respaldo antes.`, () => {
           sessions = [];

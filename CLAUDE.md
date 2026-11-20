@@ -47,6 +47,9 @@
   settings). Sin backend. Sync entre dispositivos es manual, vía
   exportar/importar JSON — no proponer alternativas salvo pedido
   explícito.
+- Excepción aprobada (2026-11-20): IndexedDB SOLO para las imágenes de las
+  guías de ejercicios (base `vbprep-media`, store `media`), porque
+  localStorage no aguanta GIFs. Nada más va ahí. Ver "Guías de ejercicios".
 - Deploy: GitHub Pages vía GitHub Actions
   (.github/workflows/pages.yml, publica el repo tal cual, sin build).
   No usa el sistema viejo "Deploy from a branch" (Jekyll) — se cambió
@@ -109,6 +112,21 @@
   pega en Ajustes → Importar → pegar, y `extractJSON` ignora lo que
   venga antes o después del JSON. Mismo formato que el export parcial
   de rutinas (`kind: "routines"`), sin 1RM y sin carpeta.
+- Compartir carpeta (solo con las guías encendidas): ⋯ de la carpeta →
+  "Compartir carpeta" (`buildFolderShare`, `shareFolder`): `kind:
+  "routines"` con todas sus rutinas (con `folderId`), la carpeta en
+  `routine-folders` y sus ejercicios con `howTo`, sin 1RM. Como texto o
+  archivo `vbprep-carpeta-<slug>.json`. Al importar se crea la carpeta y las
+  rutinas nuevas quedan arriba en el orden del archivo.
+- `exercise.howTo = { steps: [textos] }`: pasos de "Cómo se hace" (≤ 12, sin
+  vacíos, `cleanHowTo` al importar y al editar). Viaja con el ejercicio en
+  todos los exports, se vea o no.
+- `"exercise-media"` (solo en rutinas o carpetas compartidas "Con
+  imágenes"): `{ "<exerciseId>": [{ "role": "main" | "easier", "type":
+  "image/gif", "data": "<base64>" }] }`. Al importar (`importMedia`) solo
+  entra si el ejercicio existe, el role es válido, el tipo es `image/*` y
+  pesa ≤ 4 MB; reemplaza la imagen que hubiera. El respaldo completo NUNCA
+  lleva imágenes.
 - Datos personales = entrenamientos (`sessions`, con su RPE) y 1RM.
   Solo el respaldo completo los restaura sin filtro. Un archivo
   parcial NUNCA importa 1RM (se descarta aunque venga) y los
@@ -480,6 +498,34 @@ Patrones (reutilizar, no inventar variantes):
 - Créditos en Ajustes: licencia MIT de los dibujos del cuerpo y atribución
   a Freepik por la silueta de saltos. Todo recurso de terceros que se
   agregue lleva su crédito ahí.
+
+## Guías de ejercicios (2026-11-20)
+- TODO detrás de `settings.exerciseGuides` (Ajustes → "Guías de
+  ejercicios"), apagado por defecto. Apagado, la app queda idéntica a como
+  era (sin ⓘ, sin "Cómo se hace", sin elegir imágenes al compartir, sin
+  "Compartir carpeta", sin la nota de Exportar ni la opción de borrar
+  imágenes) e IndexedDB ni se abre. Se enciende solo al importar un archivo
+  con `howTo` o `exercise-media`, y el aviso lo dice. Apagarlo no borra
+  nada; solo Ajustes → Borrar datos personales → Imágenes vacía IndexedDB.
+- Las imágenes (GIFs de bibliotecas comerciales, uso privado de Martín y sus
+  papás) NUNCA se suben al repo ni a GitHub Pages, que son públicos: viven
+  en el teléfono y viajan dentro del .json compartido.
+- Almacén: `mediaGet/Put/Delete/AllKeys/Clear`, clave `"<exId>:<role>"`
+  (`main` o `easier`, la "Variante más fácil"); `mediaKeys` es el Set en
+  memoria para saber sin esperar si hay imagen. GIF tal cual (por canvas
+  perdería la animación); PNG/JPG/WEBP a 900 px de lado en WEBP 0,82 (o JPG);
+  > 4 MB se rechaza. Las `<img data-media>` se llenan después de cada render
+  (`hydrateMedia`) con object URLs que se revocan al cerrar la hoja o el
+  detalle. Fondo `--media-bg` (#fff, los GIFs vienen sobre blanco).
+- Detalle de ejercicio: sección "Cómo se hace" después del mapa muscular
+  (imagen 320 px máx., variante 200 px, pasos numerados y "Editar pasos").
+- Botón ⓘ (22 px, trazo 1,8, área de 44) al final del nombre en la sesión
+  en vivo, el editor y el detalle de sesión del Historial, solo si hay
+  imagen o pasos. Abre la hoja "Cómo se hace" (nota de la rutina, imagen,
+  pasos, variante; "Ver ejercicio completo" salvo en la sesión en vivo).
+  Está fuera del long-press de Organizar.
+- Compartir con imágenes: si algún ejercicio tiene imagen, antes se elige
+  "Con imágenes (N · X,X MB)" (solo como archivo) o "Solo texto".
 
 ## Tutorial (2026-11-16)
 - Se aprende haciendo: una sesión de práctica de verdad con la "Rutina de
